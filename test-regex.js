@@ -1,0 +1,1 @@
+const Tesseract = require('tesseract.js'); Tesseract.recognize('C:/Users/vishw/Downloads/Testfolder/8730a6ac112fbf65733620f2c0de6778.jpg', 'eng').then((result) => { const text = result.data.text; console.log(JSON.stringify(text)); console.log('Regex match:', /\b\d{4}[-\s]\d{4}[-\s]\d{4}\b/.test(text)); }).catch(console.error);

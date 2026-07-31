@@ -1,0 +1,110 @@
+OCR Knowledge Base - Additional Government Documents
+
+============================================================ 17. OCI
+Card (Overseas Citizen of India)
+============================================================ Category:
+Government Identity / Immigration
+
+Required Keywords: overseas citizen of india oci oci card
+
+Optional Keywords: government of india ministry of home affairs life
+long visa multiple entry registration number card number passport number
+nationality foreign passport place of birth date of birth surname given
+name sex citizenship issued on valid till signature photograph
+
+Strong Indicators: overseas citizen of india oci card ministry of home
+affairs
+
+Weak Indicators: passport number nationality foreign passport
+citizenship
+
+Negative Keywords: passport visa application pan card aadhaar driving
+licence
+
+Regex: OCI card numbers vary by issuance. Passport numbers may appear:
+A-Z][0-9]{7}ommon OCR Mistakes: overseas citizen of india oversea
+citizen 0CI OCII ministry of horne affairs govemment of india
+
+Classification Notes: An OCI card almost always contains “Overseas
+Citizen of India”. If OCR finds OCI together with passport details and
+nationality, confidence should be very high.
+
+============================================================ 18. PIO
+Card (Person of Indian Origin)
+============================================================ Category:
+Government Identity / Immigration
+
+Required Keywords: person of indian origin pio pio card
+
+Optional Keywords: government of india ministry of home affairs passport
+number nationality country date of birth surname given name place of
+birth issued on valid till registration number signature photograph
+
+Strong Indicators: person of indian origin pio card
+
+Weak Indicators: passport number nationality
+
+Negative Keywords: oci passport aadhaar pan card
+
+Regex: Passport Number A-Z][0-9]{7}ommon OCR Mistakes: person of lndian
+origin plo pi0 govemment
+
+Classification Notes: PIO cards are older documents and may still exist.
+If both “Person of Indian Origin” and passport details appear, classify
+as PIO.
+
+============================================================ 19.
+Resident Certificate
+============================================================ Category:
+Government Certificate
+
+Required Keywords: resident certificate residence certificate
+
+Optional Keywords: resident residential address permanent resident state
+government district magistrate deputy commissioner tahsildar tehsildar
+village taluk district state certificate number issued on address father
+name mother name guardian applicant
+
+Strong Indicators: resident certificate residence certificate permanent
+resident
+
+Weak Indicators: district address certificate number
+
+Negative Keywords: domicile certificate income certificate caste
+certificate ration card
+
+Regex: Certificate numbers vary by state.
+
+Common OCR Mistakes: resident certiflcate resldence certificate
+perrnanent resident govemment
+
+Classification Notes: Resident Certificates mainly certify current
+residence. Unlike Domicile Certificates, they do not usually certify
+permanent state domicile rights.
+
+============================================================ 20. Family
+ID Card ============================================================
+Category: Government Identity
+
+Required Keywords: family id family identity family identification
+number
+
+Optional Keywords: family member head of family family head family
+details household household id member id family number government state
+government address mobile number relationship gender date of birth
+father name mother name spouse children
+
+Strong Indicators: family id family identification number household id
+
+Weak Indicators: family member head of family relationship
+
+Negative Keywords: ration card aadhaar voter id
+
+Regex: Family IDs are state-specific and have no single standard format.
+
+Common OCR Mistakes: famlly id family ld househoId head of famlly
+govemment
+
+Classification Notes: These cards usually list multiple family members
+in a table along with their relationship, gender, age or DOB, and a
+household/family ID.

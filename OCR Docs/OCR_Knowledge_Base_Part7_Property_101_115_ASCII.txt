@@ -1,0 +1,167 @@
+OCR Knowledge Base - Part 7 (Property Documents 101-115)
+
+101. Sale Deed
+Category: Property Ownership
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+102. Gift Deed
+Category: Property Ownership
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+103. Rental Agreement
+Category: Rental
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+104. Lease Agreement
+Category: Lease
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+105. Property Tax Receipt
+Category: Municipal Tax
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+106. Khata Certificate
+Category: Municipal Record
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+107. Khata Extract
+Category: Municipal Record
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+108. Encumbrance Certificate
+Category: Property Record
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+109. Occupancy Certificate
+Category: Construction
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+110. Possession Certificate
+Category: Property
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+111. Building Approval Plan
+Category: Construction
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+112. Mutation Certificate
+Category: Revenue Record
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+113. Land Record (RTC / Record of Rights)
+Category: Revenue Record
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+114. Survey Sketch
+Category: Survey
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+
+115. Property Registration
+Category: Registration
+Required Keywords: sale deed/property/registration/survey number/document number
+Optional Keywords: sub-registrar, stamp duty, property ID, municipality
+Strong Indicators: title, survey number, registration number
+Weak Indicators: owner name, village, ward
+Negative Keywords: invoice, receipt, medical, bank
+Regex: identifiers vary by state
+Common OCR Mistakes: registratlon, proparty, certiflcate, survay
+Classification Notes: classify using title and registration terminology.
+

@@ -1,0 +1,192 @@
+OCR Knowledge Base - Part 3B (Banking & Finance 46-55)
+
+============================================================ 46. Debit
+Card Statement
+============================================================ Category:
+Banking
+
+Required Keywords: debit card statement account statement
+
+Optional Keywords: debit card card number statement period transactions
+merchant debit available balance account number ifsc branch customer id
+
+Strong Indicators: debit card statement card number transaction summary
+
+Weak Indicators: statement period merchant
+
+Negative Keywords: credit limit minimum due reward points credit card
+statement
+
+Regex: Masked Card: Xx*]{4,}FSC: A-Z]{4}0[A-Z0-9]{6}ommon OCR Mistakes:
+deblt statemenl acc0unt
+
+Classification Notes: Unlike credit card statements, these do not
+contain credit limit or minimum amount due.
+
+============================================================ 47. Salary
+Slip ============================================================
+Category: Payroll
+
+Required Keywords: salary slip pay slip payslip
+
+Optional Keywords: employee id employee code employee name employer
+designation department gross salary net salary basic pay hra da special
+allowance bonus professional tax pf epf esi tds deduction pay period
+
+Strong Indicators: gross salary net salary employee id basic pay
+
+Weak Indicators: hra pf esi
+
+Negative Keywords: form 16 income tax return
+
+Regex: Employee ID: varies by organization
+
+Common OCR Mistakes: saiary gross saiary empioyee deductlon
+
+Classification Notes: Usually contains earnings and deductions in
+tabular format.
+
+============================================================ 48. Form 16
+============================================================ Category:
+Income Tax
+
+Required Keywords: form no.16 form 16 certificate under section 203
+
+Optional Keywords: income tax tax deducted at source tds assessment year
+financial year employer employee pan tan salary part a part b
+
+Strong Indicators: certificate under section 203 tan tds
+
+Weak Indicators: assessment year financial year
+
+Negative Keywords: form 26as itr acknowledgement
+
+Regex: PAN: A-Z]{5}[0-9]{4}[A-Z]AN:
+A-Z]{4}[0-9]{5}[A-Z]===========================================================
+49. Form 26AS
+============================================================ Category:
+Income Tax
+
+Required Keywords: form 26as tax credit statement
+
+Optional Keywords: tax deducted tax collected tds tcs pan assessment
+year financial year challan advance tax self assessment tax
+
+Strong Indicators: tax credit statement form 26as
+
+Weak Indicators: tds tcs
+
+Negative Keywords: form 16 salary slip
+
+Regex: PAN: A-Z]{5}[0-9]{4}[A-Z]lassification Notes: Generated from the
+Income Tax portal and contains tax credits.
+
+============================================================ 50. Income
+Tax Return ============================================================
+Category: Income Tax
+
+Required Keywords: income tax return itr itr acknowledgement
+
+Optional Keywords: acknowledgement number verification assessment year
+financial year efile e-filing pan gross total income total income refund
+tax payable
+
+Strong Indicators: itr acknowledgement acknowledgement number
+
+Weak Indicators: assessment year refund
+
+Negative Keywords: form 16 form 26as
+
+Regex: PAN:
+A-Z]{5}[0-9]{4}[A-Z]===========================================================
+51. GST Registration
+============================================================ Category:
+GST
+
+Required Keywords: gst registration certificate of registration goods
+and services tax
+
+Optional Keywords: gstin legal name trade name principal place of
+business registration number state jurisdiction centre jurisdiction date
+of registration
+
+Strong Indicators: certificate of registration gstin
+
+Weak Indicators: trade name principal place of business
+
+Negative Keywords: gst invoice gst return
+
+Regex: GSTIN:
+[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]===========================================================
+52. GST Invoice
+============================================================ Category:
+GST
+
+Required Keywords: tax invoice gst invoice
+
+Optional Keywords: invoice number invoice date gstin cgst sgst igst hsn
+sac taxable value place of supply reverse charge total amount
+
+Strong Indicators: cgst sgst igst gstin
+
+Weak Indicators: invoice number hsn
+
+Negative Keywords: payment receipt quotation
+
+Regex: GSTIN:
+[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]===========================================================
+53. GST Return
+============================================================ Category:
+GST
+
+Required Keywords: gst return gstr
+
+Optional Keywords: gstr-1 gstr-3b gstr-9 return period outward supplies
+inward supplies tax liability input tax credit gstin
+
+Strong Indicators: gstr-1 gstr-3b gstr-9
+
+Weak Indicators: return period input tax credit
+
+Negative Keywords: gst registration gst invoice
+
+Regex: GSTIN:
+[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]===========================================================
+54. UPI Receipt
+============================================================ Category:
+Digital Payment
+
+Required Keywords: upi upi transaction
+
+Optional Keywords: upi id utr transaction id paid to received from
+amount payment successful bank reference google pay phonepe paytm bhim
+amazon pay
+
+Strong Indicators: utr upi id transaction id
+
+Weak Indicators: paid to received from
+
+Negative Keywords: bank statement
+
+Regex: UTR formats vary by bank.
+
+============================================================ 55. Payment
+Receipt ============================================================
+Category: Financial Receipt
+
+Required Keywords: payment receipt receipt
+
+Optional Keywords: receipt number invoice number amount received
+received with thanks payment mode cash cheque upi card gst date customer
+vendor
+
+Strong Indicators: receipt number amount received received with thanks
+
+Weak Indicators: payment mode date
+
+Negative Keywords: tax invoice quotation
+
+Regex: Receipt numbers vary.
+
+Classification Notes: Typically acknowledges payment after an invoice or
+service and may reference the original invoice number.

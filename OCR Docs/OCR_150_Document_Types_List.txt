@@ -1,0 +1,201 @@
+OCR Document Types Reference (150+ Ready List)
+
+Government Identity
+
+1.  Aadhaar Card
+2.  PAN Card
+3.  Passport
+4.  Driving Licence
+5.  Learner’s Licence
+6.  Voter ID
+7.  Ration Card
+8.  Birth Certificate
+9.  Death Certificate
+10. Marriage Certificate
+11. Domicile Certificate
+12. Caste Certificate
+13. Income Certificate
+14. EWS Certificate
+15. Disability Certificate
+16. Senior Citizen Card
+17. OCI Card
+18. PIO Card
+19. Resident Certificate
+20. Family ID Card
+
+Vehicle
+
+21. Vehicle Registration Certificate (RC)
+22. Vehicle Insurance
+23. Pollution Under Control (PUC)
+24. Road Tax Receipt
+25. Vehicle Fitness Certificate
+26. National Permit
+27. State Permit
+28. FASTag Statement
+29. Vehicle Challan
+30. Driving Test Certificate
+31. Vehicle Transfer Form
+32. NOC for Vehicle
+33. Hypothecation Certificate
+34. Service Record
+35. Warranty Book
+
+Banking & Finance
+
+36. Bank Statement
+37. Bank Passbook
+38. Cheque
+39. Cancelled Cheque
+40. Demand Draft
+41. Fixed Deposit Receipt
+42. Recurring Deposit Receipt
+43. Loan Statement
+44. Loan Sanction Letter
+45. Credit Card Statement
+46. Debit Card Statement
+47. Salary Slip
+48. Form 16
+49. Form 26AS
+50. Income Tax Return
+51. GST Registration
+52. GST Invoice
+53. GST Return
+54. UPI Receipt
+55. Payment Receipt
+
+Medical
+
+56. Medical Prescription
+57. Medical Report
+58. Blood Test Report
+59. Urine Test Report
+60. X-Ray Report
+61. MRI Report
+62. CT Scan Report
+63. Ultrasound Report
+64. ECG Report
+65. Discharge Summary
+66. Vaccination Certificate
+67. COVID Certificate
+68. Health Insurance Card
+69. Medical Bill
+70. Lab Invoice
+
+Education
+
+71. School ID Card
+72. Student ID Card
+73. Marksheet
+74. Degree Certificate
+75. Diploma Certificate
+76. Transfer Certificate
+77. Migration Certificate
+78. Bonafide Certificate
+79. Character Certificate
+80. Hall Ticket
+81. Admit Card
+82. Fee Receipt
+83. Course Completion Certificate
+84. Provisional Certificate
+85. Rank Card
+
+Employment
+
+86. Resume / CV
+87. Offer Letter
+88. Appointment Letter
+89. Employment Contract
+90. Experience Letter
+91. Relieving Letter
+92. Promotion Letter
+93. Internship Certificate
+94. Employee ID Card
+95. Payslip
+96. Increment Letter
+97. Confirmation Letter
+98. Resignation Acceptance
+99. Background Verification
+100. NDA Agreement
+
+Property
+
+101. Sale Deed
+102. Gift Deed
+103. Rental Agreement
+104. Lease Agreement
+105. Property Tax Receipt
+106. Khata Certificate
+107. Khata Extract
+108. Encumbrance Certificate
+109. Occupancy Certificate
+110. Possession Certificate
+111. Building Approval Plan
+112. Mutation Certificate
+113. Land Record
+114. Survey Sketch
+115. Property Registration
+
+Travel
+
+116. Boarding Pass
+117. Flight Ticket
+118. Train Ticket
+119. Bus Ticket
+120. Hotel Invoice
+121. Hotel Booking
+122. Visa
+123. Travel Insurance
+124. Immigration Stamp
+125. Cruise Ticket
+
+Utility Bills
+
+126. Electricity Bill
+127. Water Bill
+128. Gas Bill
+129. Mobile Bill
+130. Broadband Bill
+131. Internet Bill
+132. Cable TV Bill
+133. Society Maintenance Bill
+134. Property Tax Bill
+135. Insurance Premium Receipt
+136. DTH Bill
+137. Sewerage Bill
+138. Garbage Tax Bill
+139. Telephone Bill
+140. Electricity Payment Receipt
+
+Business & Commerce
+
+141. Purchase Order
+142. Sales Order
+143. Quotation
+144. Proforma Invoice
+145. Tax Invoice
+146. Cash Memo
+147. Delivery Challan
+148. Goods Receipt Note
+149. Warranty Card
+150. AMC Contract
+151. Service Report
+152. Product Manual
+153. Packing List
+154. Credit Note
+155. Debit Note
+
+Legal
+
+156. Affidavit
+157. Power of Attorney
+158. Court Order
+159. Legal Notice
+160. FIR Copy
+161. Police Verification
+162. Will
+163. Trust Deed
+164. Partnership Deed
+165. Memorandum of Understanding
+
+Total Document Types Listed: 165

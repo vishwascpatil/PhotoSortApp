@@ -1,0 +1,108 @@
+OCR Knowledge Base - Part 10 (Business & Commerce Documents 141-155)
+
+141. Purchase Order Category: Business Procurement Required Keywords:
+     purchase order, PO Optional Keywords: supplier, buyer, PO number,
+     item, quantity, unit price, delivery date Strong Indicators:
+     purchase order, PO number Weak Indicators: supplier, quantity
+     Negative Keywords: invoice Regex: PO numbers vary by organization.
+     OCR Mistakes: purcha5e, quantlty, suppller Notes: Authorizes
+     procurement of goods or services.
+
+142. Sales Invoice Category: Business Billing Required Keywords: sales
+     invoice, invoice Optional Keywords: invoice number, customer,
+     GSTIN, taxable value, total amount Strong Indicators: invoice
+     number, GSTIN Weak Indicators: customer Negative Keywords: purchase
+     order Regex: Invoice numbers vary. OCR Mistakes: involce, custorner
+     Notes: Invoice issued to a customer.
+
+143. Quotation Category: Business Proposal Required Keywords: quotation,
+     quote Optional Keywords: quotation number, validity, unit price,
+     supplier Strong Indicators: quotation, validity Weak Indicators:
+     supplier Negative Keywords: invoice Regex: Quote numbers vary. OCR
+     Mistakes: quotatlon, valldity Notes: Price proposal before order
+     confirmation.
+
+144. Proforma Invoice Category: Business Billing Required Keywords:
+     proforma invoice Optional Keywords: estimate, invoice number,
+     supplier, customer Strong Indicators: proforma invoice Weak
+     Indicators: estimate Negative Keywords: tax invoice Regex: Invoice
+     numbers vary. OCR Mistakes: proforrna, involce Notes: Preliminary
+     invoice before final billing.
+
+145. Delivery Challan Category: Logistics Required Keywords: delivery
+     challan Optional Keywords: challan number, consignee, consignor,
+     dispatch date, quantity Strong Indicators: delivery challan,
+     challan number Weak Indicators: dispatch date Negative Keywords:
+     invoice Regex: Challan numbers vary. OCR Mistakes: challan,
+     dellvery Notes: Accompanies goods during transportation.
+
+146. Goods Receipt Note (GRN) Category: Inventory Required Keywords:
+     goods receipt note, GRN Optional Keywords: received by, supplier,
+     PO number, received quantity Strong Indicators: GRN, received
+     quantity Weak Indicators: supplier Negative Keywords: delivery
+     challan Regex: GRN numbers vary. OCR Mistakes: recelpt, quantlty
+     Notes: Confirms receipt of delivered goods.
+
+147. Inventory Report Category: Inventory Required Keywords: inventory
+     report Optional Keywords: SKU, stock, opening balance, closing
+     balance, warehouse Strong Indicators: SKU, stock quantity Weak
+     Indicators: warehouse Negative Keywords: purchase order Regex: SKU
+     formats vary. OCR Mistakes: invent0ry, wareh0use Notes: Snapshot of
+     available inventory.
+
+148. Stock Transfer Note Category: Inventory Required Keywords: stock
+     transfer Optional Keywords: source warehouse, destination
+     warehouse, quantity, transfer number Strong Indicators: transfer
+     number Weak Indicators: warehouse Negative Keywords: inventory
+     report Regex: Transfer numbers vary. OCR Mistakes: transfar,
+     wareh0use Notes: Documents stock movement between locations.
+
+149. Packing List Category: Logistics Required Keywords: packing list
+     Optional Keywords: carton, package, weight, dimensions, quantity
+     Strong Indicators: carton, package Weak Indicators: weight Negative
+     Keywords: invoice Regex: Package numbers vary. OCR Mistakes:
+     packlng, dimenslons Notes: Lists packed items for shipment.
+
+150. Bill of Lading Category: Shipping Required Keywords: bill of lading
+     Optional Keywords: shipper, consignee, vessel, port, container
+     Strong Indicators: bill of lading, container Weak Indicators:
+     vessel Negative Keywords: packing list Regex: BL numbers vary. OCR
+     Mistakes: ladlng, contalner Notes: Legal shipping document for
+     cargo.
+
+151. Export Invoice Category: International Trade Required Keywords:
+     export invoice Optional Keywords: exporter, importer, country of
+     origin, HS code, FOB Strong Indicators: exporter, HS code Weak
+     Indicators: importer Negative Keywords: domestic invoice Regex:
+     Invoice numbers vary. OCR Mistakes: exp0rt, irnporter Notes:
+     Invoice for international exports.
+
+152. Import Declaration Category: Customs Required Keywords: import
+     declaration Optional Keywords: customs, importer, HS code, duty,
+     bill of entry Strong Indicators: customs, bill of entry Weak
+     Indicators: duty Negative Keywords: export invoice Regex:
+     Declaration numbers vary. OCR Mistakes: declaratlon, custorns
+     Notes: Customs declaration for imported goods.
+
+153. Customs Declaration Category: Customs Required Keywords: customs
+     declaration Optional Keywords: customs, declaration number, goods,
+     value, tariff Strong Indicators: customs declaration Weak
+     Indicators: tariff Negative Keywords: GST invoice Regex:
+     Declaration numbers vary. OCR Mistakes: declaratlon, custorns
+     Notes: Official customs filing document.
+
+154. Business License Category: Business Registration Required Keywords:
+     business license Optional Keywords: registration number,
+     proprietor, company, municipality, validity Strong Indicators:
+     business license, registration number Weak Indicators: proprietor
+     Negative Keywords: GST certificate Regex: Registration numbers
+     vary. OCR Mistakes: llcense, reglstration Notes: Government-issued
+     license to operate a business.
+
+155. GST Registration Certificate Category: Tax Registration Required
+     Keywords: GST registration certificate, GSTIN Optional Keywords:
+     legal name, trade name, principal place of business, registration
+     date Strong Indicators: GSTIN, registration certificate Weak
+     Indicators: trade name Negative Keywords: GST tax invoice Regex:
+     GSTIN = 15 characters. OCR Mistakes: GSTlN, reglstration Notes:
+     Official GST registration document.

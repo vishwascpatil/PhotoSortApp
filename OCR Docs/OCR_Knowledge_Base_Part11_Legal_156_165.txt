@@ -1,0 +1,75 @@
+OCR Knowledge Base - Part 11 (Legal Documents 156-165)
+
+156. Court Order Category: Legal Required Keywords: court order, order
+     Optional Keywords: court, judge, petitioner, respondent, case
+     number, hearing, decree, date Strong Indicators: court order,
+     judge, case number Weak Indicators: petitioner, respondent Negative
+     Keywords: legal notice Regex: Case numbers vary by court. OCR
+     Mistakes: c0urt, judqe, responclent Notes: Official order issued by
+     a court.
+
+157. Legal Notice Category: Legal Required Keywords: legal notice
+     Optional Keywords: advocate, sender, recipient, demand, reply,
+     cause of action Strong Indicators: legal notice, advocate Weak
+     Indicators: recipient Negative Keywords: court order Regex:
+     Reference numbers vary. OCR Mistakes: notlce, adv0cate Notes:
+     Formal legal communication before litigation.
+
+158. Affidavit Category: Legal Required Keywords: affidavit Optional
+     Keywords: sworn, deponent, notary, oath, verification Strong
+     Indicators: affidavit, deponent, sworn Weak Indicators: notary
+     Negative Keywords: declaration form Regex: Notary references vary.
+     OCR Mistakes: affldavit, dep0nent Notes: Sworn written statement of
+     facts.
+
+159. Power of Attorney Category: Legal Required Keywords: power of
+     attorney Optional Keywords: principal, attorney, authorized
+     representative, execution, witness Strong Indicators: power of
+     attorney Weak Indicators: witness Negative Keywords: authorization
+     letter Regex: Registration numbers vary. OCR Mistakes: att0rney,
+     auth0rized Notes: Grants authority to another person.
+
+160. Will (Testament) Category: Estate Planning Required Keywords: last
+     will, testament, will Optional Keywords: testator, beneficiary,
+     executor, inheritance, witness Strong Indicators: last will,
+     testator Weak Indicators: executor Negative Keywords: gift deed
+     Regex: Registration varies. OCR Mistakes: testarnent, beneflciary
+     Notes: Specifies distribution of assets after death.
+
+161. Divorce Decree Category: Family Law Required Keywords: divorce
+     decree Optional Keywords: family court, petitioner, respondent,
+     marriage, dissolution Strong Indicators: divorce decree, family
+     court Weak Indicators: marriage Negative Keywords: marriage
+     certificate Regex: Case numbers vary. OCR Mistakes: div0rce, decree
+     Notes: Final court order dissolving a marriage.
+
+162. Marriage Certificate Category: Civil Registration Required
+     Keywords: marriage certificate Optional Keywords: bride, groom,
+     registration number, marriage date, registrar Strong Indicators:
+     marriage certificate, registrar Weak Indicators: bride, groom
+     Negative Keywords: divorce decree Regex: Registration numbers vary.
+     OCR Mistakes: marriaqe, certlficate Notes: Official proof of
+     marriage.
+
+163. Birth Certificate Category: Civil Registration Required Keywords:
+     birth certificate Optional Keywords: date of birth, place of birth,
+     child, father, mother, registrar Strong Indicators: birth
+     certificate, date of birth Weak Indicators: registrar Negative
+     Keywords: hospital discharge summary Regex: Registration numbers
+     vary. OCR Mistakes: blrth, certlficate Notes: Official record of
+     birth.
+
+164. Death Certificate Category: Civil Registration Required Keywords:
+     death certificate Optional Keywords: deceased, date of death, cause
+     of death, registrar Strong Indicators: death certificate Weak
+     Indicators: cause of death Negative Keywords: medical certificate
+     Regex: Registration numbers vary. OCR Mistakes: dea1h, certlficate
+     Notes: Official record of death.
+
+165. Notary Certificate Category: Legal Authentication Required
+     Keywords: notary, notarial certificate Optional Keywords: seal,
+     stamp, signature, oath, verification Strong Indicators: notary
+     seal, notarial certificate Weak Indicators: verification Negative
+     Keywords: affidavit Regex: Notary registration varies. OCR
+     Mistakes: n0tary, veriflcation Notes: Document authenticated by a
+     notary public.

@@ -1,0 +1,241 @@
+OCR Knowledge Base - Part 5 (Education Documents 71-85)
+
+============================================================ 71. School
+ID Card ============================================================
+Category: Education Identity
+
+Required Keywords: school identity card id card
+
+Optional Keywords: student name admission number roll number class
+section dob academic year principal school logo
+
+Strong Indicators: school admission number class
+
+Weak Indicators: section academic year
+
+Negative Keywords: college employee id
+
+Classification Notes: Usually contains photo, school logo and
+admission/class information.
+
+============================================================ 72. Student
+ID Card ============================================================
+Category: Education Identity
+
+Required Keywords: student id identity card
+
+Optional Keywords: college university student name roll number
+registration number department course valid upto library campus
+
+Strong Indicators: student id registration number department
+
+Weak Indicators: course validity
+
+Negative Keywords: employee id
+
+============================================================ 73.
+Marksheet ============================================================
+Category: Academic Record
+
+Required Keywords: marks statement marksheet statement of marks
+
+Optional Keywords: student name roll number register number subject
+internal marks external marks grade cgpa sgpa percentage result pass
+fail semester academic year
+
+Strong Indicators: statement of marks cgpa grade semester
+
+Weak Indicators: percentage result
+
+Negative Keywords: degree certificate
+
+Regex: Register numbers vary by board/university.
+
+============================================================ 74. Degree
+Certificate ============================================================
+Category: Academic Certificate
+
+Required Keywords: degree degree certificate
+
+Optional Keywords: bachelor master doctorate awarded convocation
+university vice chancellor registrar candidate faculty
+
+Strong Indicators: awarded degree convocation
+
+Weak Indicators: registrar faculty
+
+Negative Keywords: provisional certificate
+
+============================================================ 75. Diploma
+Certificate ============================================================
+Category: Academic Certificate
+
+Required Keywords: diploma
+
+Optional Keywords: polytechnic certificate course institution awarded
+successful completion board of technical education
+
+Strong Indicators: diploma successful completion
+
+Weak Indicators: institution
+
+Negative Keywords: degree
+
+============================================================ 76.
+Transfer Certificate
+============================================================ Category:
+Academic Administration
+
+Required Keywords: transfer certificate tc
+
+Optional Keywords: student name admission number date of leaving conduct
+class reason for leaving school principal
+
+Strong Indicators: transfer certificate date of leaving
+
+Weak Indicators: conduct
+
+Negative Keywords: migration certificate
+
+============================================================ 77.
+Migration Certificate
+============================================================ Category:
+Academic Administration
+
+Required Keywords: migration certificate
+
+Optional Keywords: board university institution student transfer
+enrollment registration
+
+Strong Indicators: migration certificate board university
+
+Weak Indicators: registration
+
+Negative Keywords: transfer certificate
+
+============================================================ 78.
+Bonafide Certificate
+============================================================ Category:
+Academic Administration
+
+Required Keywords: bonafide certificate
+
+Optional Keywords: certified student studying course academic year
+institution principal department
+
+Strong Indicators: bonafide certificate certified that
+
+Weak Indicators: course department
+
+Negative Keywords: character certificate
+
+============================================================ 79.
+Character Certificate
+============================================================ Category:
+Academic Administration
+
+Required Keywords: character certificate
+
+Optional Keywords: conduct discipline good moral character student
+institution principal headmaster
+
+Strong Indicators: good moral character conduct
+
+Weak Indicators: discipline
+
+Negative Keywords: bonafide certificate
+
+============================================================ 80. Hall
+Ticket ============================================================
+Category: Examination
+
+Required Keywords: hall ticket
+
+Optional Keywords: candidate exam exam centre seat number roll number
+registration number subject invigilator reporting time
+
+Strong Indicators: hall ticket exam centre seat number
+
+Weak Indicators: reporting time
+
+Negative Keywords: admit card
+
+============================================================ 81. Admit
+Card ============================================================
+Category: Examination
+
+Required Keywords: admit card admission ticket
+
+Optional Keywords: candidate roll number exam date exam centre
+instructions application number photograph signature
+
+Strong Indicators: admit card application number exam instructions
+
+Weak Indicators: roll number
+
+Negative Keywords: hall ticket
+
+============================================================ 82. Fee
+Receipt ============================================================
+Category: Finance
+
+Required Keywords: fee receipt receipt
+
+Optional Keywords: student name receipt number tuition fee exam fee
+hostel fee transport fee amount paid balance academic year
+
+Strong Indicators: fee receipt amount paid receipt number
+
+Weak Indicators: academic year
+
+Negative Keywords: salary slip
+
+============================================================ 83. Course
+Completion Certificate
+============================================================ Category:
+Certification
+
+Required Keywords: course completion certificate of completion
+
+Optional Keywords: completed training course name duration institution
+participant issued on
+
+Strong Indicators: certificate of completion completed successfully
+
+Weak Indicators: training
+
+Negative Keywords: degree certificate
+
+============================================================ 84.
+Provisional Certificate
+============================================================ Category:
+Academic Certificate
+
+Required Keywords: provisional certificate
+
+Optional Keywords: degree passed pending original certificate candidate
+university registrar course
+
+Strong Indicators: provisional certificate pending original certificate
+
+Weak Indicators: registrar
+
+Negative Keywords: degree certificate
+
+============================================================ 85. Rank
+Card ============================================================
+Category: Examination
+
+Required Keywords: rank card merit rank
+
+Optional Keywords: rank score percentile candidate exam category roll
+number all india rank state rank qualification status
+
+Strong Indicators: all india rank state rank percentile merit rank
+
+Weak Indicators: score qualification status
+
+Negative Keywords: marksheet
+
+Classification Notes: Frequently used in competitive examinations and
+entrance tests.

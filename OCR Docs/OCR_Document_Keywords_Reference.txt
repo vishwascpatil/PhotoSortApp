@@ -1,0 +1,198 @@
+OCR Document Classification Reference
+
+1. Aadhaar Card
+
+Keywords: aadhaar aadhar uidai unique identification authority unique
+identification authority of india government of india govt. of india dob
+date of birth year of birth male female address vid virtual id aadhaar
+number
+
+Regex: ??
+
+2. PAN Card
+
+Keywords: permanent account number income tax department income tax
+government of india pan father signature
+
+Regex: A-Z]{5}[0-9]{4}[A-Z]
+
+3. Passport
+
+Keywords: passport republic of india nationality passport no passport
+number surname given name place of birth date of birth date of issue
+date of expiry authority sex
+
+Regex: A-Z][0-9]{7}
+
+4. Driving Licence
+
+Keywords: driving licence driving license licence no license no dl no
+transport department government of valid from valid till date of issue
+motor cycle mcwg lmv transport non transport
+
+Regex: A-Z]{2}[0-9]{2}?[0-9]{11}
+
+5. Voter ID
+
+Keywords: election commission of india elector photo identity card epic
+voter elector assembly constituency part no serial no
+
+Regex: A-Z]{3}[0-9]{7}
+
+6. Birth Certificate
+
+birth certificate certificate of birth date of birth registration number
+registrar municipal corporation municipality child name father name
+mother name place of birth
+
+7. Death Certificate
+
+death certificate certificate of death date of death cause of death
+registrar municipality municipal corporation registration number
+
+8. Marriage Certificate
+
+marriage certificate certificate of marriage husband wife bride
+bridegroom marriage date registration no registrar of marriages
+
+9. Ration Card
+
+ration card food and civil supplies nfsa priority household family head
+ration number fair price shop
+
+10. Vehicle RC
+
+registration certificate vehicle registration owner name registration
+number engine number chassis number vehicle class fuel type maker
+hypothecation
+
+Regex: A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}
+
+11. Insurance Policy
+
+policy number policy no insured sum assured premium insurance nominee
+maturity
+
+12. Bank Passbook
+
+account number account no customer id ifsc branch bank balance
+transaction withdrawal deposit
+
+Regex: A-Z]{4}0[A-Z0-9]{6}
+
+13. Bank Statement
+
+statement opening balance closing balance debit credit withdrawal
+deposit transaction available balance ifsc account number
+
+14. Cheque
+
+pay bearer rupees ifsc account payee micr bank
+
+15. GST Invoice
+
+tax invoice invoice invoice number invoice date gst gstin cgst sgst igst
+hsn taxable value grand total
+
+Regex: [A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]
+
+16. Receipt
+
+receipt receipt no amount paid received with thanks payment cash upi gst
+
+17. Salary Slip
+
+salary slip salary statement employee id employee code gross salary net
+salary basic pay hra pf esi deduction
+
+18. Form 16
+
+form no.16 income tax tds assessment year certificate tax deducted
+employer employee
+
+19. Income Tax Return
+
+income tax return itr acknowledgement assessment year verification pan
+efile
+
+20. Medical Prescription
+
+prescription doctor dr hospital clinic patient diagnosis rx medicine
+tablet capsule
+
+21. Medical Report
+
+laboratory lab report pathology diagnostic reference range result sample
+specimen patient
+
+22. COVID Certificate
+
+cowin vaccination covid beneficiary dose certificate vaccine
+
+23. School Certificate
+
+school student roll number admission number class principal academic
+year
+
+24. College Marks Card
+
+marks card marksheet semester cgpa sgpa grade result register number
+hall ticket university
+
+25. Degree Certificate
+
+degree bachelor master doctor of philosophy university convocation
+certificate
+
+26. Admit Card
+
+hall ticket admit card candidate roll number exam centre exam date
+invigilator
+
+27. Property Document
+
+sale deed property survey number khata registration sub registrar owner
+schedule property stamp duty
+
+28. Electricity Bill
+
+electricity consumer number billing period units consumed due date bill
+amount kwh
+
+29. Water Bill
+
+water bill consumer id meter reading water charges billing period
+
+30. Gas Bill
+
+lpg gas connection consumer number bharat gas hp gas indan booking
+
+31. Telephone / Mobile Bill
+
+mobile number billing period plan usage postpaid invoice customer id
+
+32. Boarding Pass
+
+boarding pass gate seat flight boarding time pnr terminal departure
+arrival
+
+33. Train Ticket
+
+indian railways irctc pnr coach berth train number journey date
+
+34. Bus Ticket
+
+bus ticket boarding point drop point seat number operator pnr
+
+35. Hotel Invoice
+
+hotel check in check out room number guest invoice gstin
+
+36. Employment Offer Letter
+
+offer letter appointment letter joining date designation salary employee
+company
+
+37. Resume / CV
+
+resume curriculum vitae experience education skills projects objective

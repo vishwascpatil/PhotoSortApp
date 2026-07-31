@@ -1,0 +1,245 @@
+OCR Knowledge Base - Part 4 (Medical Documents 56-70)
+
+============================================================ 56. Medical
+Prescription
+============================================================ Category:
+Healthcare
+
+Required Keywords: prescription rx
+
+Optional Keywords: doctor physician consultant hospital clinic patient
+name age gender diagnosis complaints medicine tablet capsule syrup
+dosage twice daily once daily before food after food follow up
+registration number medical council
+
+Strong Indicators: rx prescription dosage
+
+Weak Indicators: tablet capsule follow up
+
+Negative Keywords: medical bill lab report
+
+Regex: Doctor registration numbers vary.
+
+Common OCR Mistakes: prescriptlon tabiet capsuie diag nosis
+
+Classification Notes: Usually includes doctor’s details, patient details
+and medicine instructions.
+
+============================================================ 57. Medical
+Report ============================================================
+Category: Healthcare
+
+Required Keywords: medical report
+
+Optional Keywords: patient hospital doctor diagnosis clinical findings
+impression remarks investigation report date
+
+Strong Indicators: medical report impression
+
+Weak Indicators: clinical findings
+
+Negative Keywords: prescription invoice
+
+============================================================ 58. Blood
+Test Report ============================================================
+Category: Laboratory
+
+Required Keywords: blood report blood test cbc
+
+Optional Keywords: hemoglobin hb wbc rbc platelet hematocrit mcv mch
+mchc neutrophils lymphocytes reference range result specimen
+
+Strong Indicators: cbc hemoglobin platelet reference range
+
+Weak Indicators: result specimen
+
+Negative Keywords: urine report
+
+============================================================ 59. Urine
+Test Report ============================================================
+Category: Laboratory
+
+Required Keywords: urine report urine examination
+
+Optional Keywords: urine routine ph protein glucose ketone bilirubin
+urobilinogen pus cells epithelial cells casts crystals specific gravity
+
+Strong Indicators: specific gravity pus cells protein
+
+Weak Indicators: glucose ph
+
+Negative Keywords: blood report
+
+============================================================ 60. X-Ray
+Report ============================================================
+Category: Radiology
+
+Required Keywords: x-ray radiology report
+
+Optional Keywords: chest spine pelvis fracture impression findings
+radiologist ap view lateral view
+
+Strong Indicators: x-ray radiologist impression
+
+Weak Indicators: findings
+
+Negative Keywords: mri ct scan
+
+============================================================ 61. MRI
+Report ============================================================
+Category: Radiology
+
+Required Keywords: mri magnetic resonance imaging
+
+Optional Keywords: brain spine contrast findings impression sequence
+radiologist lesion
+
+Strong Indicators: magnetic resonance imaging mri
+
+Weak Indicators: contrast sequence
+
+Negative Keywords: ct scan x-ray
+
+============================================================ 62. CT Scan
+Report ============================================================
+Category: Radiology
+
+Required Keywords: ct scan computed tomography
+
+Optional Keywords: plain scan contrast study findings impression brain
+abdomen thorax radiologist
+
+Strong Indicators: computed tomography ct scan
+
+Weak Indicators: contrast findings
+
+Negative Keywords: mri
+
+============================================================ 63.
+Ultrasound Report
+============================================================ Category:
+Imaging
+
+Required Keywords: ultrasound usg sonography
+
+Optional Keywords: fetus gestation uterus ovary liver kidney gall
+bladder impression measurements doppler
+
+Strong Indicators: sonography usg gestation
+
+Weak Indicators: measurements doppler
+
+Negative Keywords: mri ct scan
+
+============================================================ 64. ECG
+Report ============================================================
+Category: Cardiology
+
+Required Keywords: ecg electrocardiogram
+
+Optional Keywords: heart rate rhythm pr interval qrs qt qtc st segment
+interpretation bpm
+
+Strong Indicators: electrocardiogram heart rate qrs
+
+Weak Indicators: bpm rhythm
+
+Negative Keywords: echo report
+
+============================================================ 65.
+Discharge Summary
+============================================================ Category:
+Hospital
+
+Required Keywords: discharge summary
+
+Optional Keywords: admission date discharge date hospital diagnosis
+treatment procedure condition at discharge follow up consultant
+medication
+
+Strong Indicators: discharge summary admission date discharge date
+
+Weak Indicators: procedure follow up
+
+Negative Keywords: prescription
+
+============================================================ 66.
+Vaccination Certificate
+============================================================ Category:
+Immunization
+
+Required Keywords: vaccination immunization
+
+Optional Keywords: vaccine dose beneficiary batch number date
+administered healthcare worker certificate
+
+Strong Indicators: vaccination certificate dose
+
+Weak Indicators: batch number
+
+Negative Keywords: covid certificate
+
+============================================================ 67. COVID
+Certificate ============================================================
+Category: Immunization
+
+Required Keywords: covid cowin covid-19
+
+Optional Keywords: vaccination certificate beneficiary dose 1 dose 2
+precaution dose certificate id vaccine covishield covaxin sputnik cowin
+portal
+
+Strong Indicators: cowin covid-19 vaccination certificate id
+
+Weak Indicators: dose beneficiary
+
+Negative Keywords: general vaccination
+
+============================================================ 68. Health
+Insurance Card
+============================================================ Category:
+Insurance
+
+Required Keywords: health insurance health card
+
+Optional Keywords: policy number member id cashless network hospital
+insured validity claim tpa policy holder
+
+Strong Indicators: policy number member id cashless
+
+Weak Indicators: validity
+
+Negative Keywords: medical bill
+
+============================================================ 69. Medical
+Bill ============================================================
+Category: Billing
+
+Required Keywords: medical bill hospital bill
+
+Optional Keywords: invoice patient consultation pharmacy room charges
+doctor fee gst amount bill number discount total
+
+Strong Indicators: hospital bill bill number total amount
+
+Weak Indicators: gst consultation
+
+Negative Keywords: lab invoice
+
+============================================================ 70. Lab
+Invoice ============================================================
+Category: Laboratory Billing
+
+Required Keywords: lab invoice laboratory invoice diagnostic invoice
+
+Optional Keywords: invoice number patient sample test pathology
+diagnostics gst amount collection date report date
+
+Strong Indicators: laboratory invoice pathology invoice number
+
+Weak Indicators: sample diagnostics
+
+Negative Keywords: medical report
+
+Classification Notes: Usually accompanies diagnostic tests and
+references one or more laboratory investigations.

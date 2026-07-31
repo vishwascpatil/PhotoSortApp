@@ -1,0 +1,190 @@
+OCR Knowledge Base - Part 3A (Banking & Finance 36-45)
+
+============================================================ 36. Bank
+Statement ============================================================
+Category: Banking
+
+Required Keywords: bank statement statement of account
+
+Optional Keywords: account number account no customer id ifsc branch
+opening balance closing balance debit credit transaction transaction
+date available balance withdrawal deposit cheque no upi neft rtgs imps
+
+Strong Indicators: statement of account opening balance closing balance
+debit credit
+
+Weak Indicators: ifsc branch account number
+
+Negative Keywords: salary slip gst invoice passbook
+
+Regex: IFSC: A-Z]{4}0[A-Z0-9]{6}ccount Number: ommon OCR Mistakes:
+statemenl acc0unt credlt deblt transactlon ifsc->if5c
+
+Classification Notes: Usually tabular with many transactions, balances
+and dates.
+
+============================================================ 37. Bank
+Passbook ============================================================
+Category: Banking
+
+Required Keywords: passbook bank passbook
+
+Optional Keywords: account holder account number branch ifsc customer id
+opening balance closing balance transactions deposit withdrawal nominee
+
+Strong Indicators: passbook account holder
+
+Weak Indicators: branch customer id
+
+Negative Keywords: bank statement cheque
+
+Regex: IFSC: A-Z]{4}0[A-Z0-9]{6}ommon OCR Mistakes: passb0ok acc0unt
+branch
+
+Classification Notes: Usually contains printed customer details followed
+by transaction history.
+
+============================================================ 38. Cheque
+============================================================ Category:
+Banking Instrument
+
+Required Keywords: pay rupees
+
+Optional Keywords: account payee bearer ifsc micr date amount payee bank
+branch signature
+
+Strong Indicators: micr account payee bearer
+
+Weak Indicators: rupees date
+
+Negative Keywords: statement passbook
+
+Regex: IFSC: A-Z]{4}0[A-Z0-9]{6}ICR: lassification Notes: Contains MICR
+line at bottom.
+
+============================================================ 39.
+Cancelled Cheque
+============================================================ Category:
+Banking Instrument
+
+Required Keywords: cancelled cancelled cheque
+
+Optional Keywords: account payee micr ifsc account number bank
+
+Strong Indicators: cancelled written across cheque
+
+Weak Indicators: ifsc micr
+
+Negative Keywords: demand draft
+
+Regex: MICR: lassification Notes: Often has “CANCELLED” handwritten or
+printed diagonally.
+
+============================================================ 40. Demand
+Draft ============================================================
+Category: Banking Instrument
+
+Required Keywords: demand draft dd
+
+Optional Keywords: payable at drawee drawer bank branch amount issue
+date draft number
+
+Strong Indicators: demand draft draft number
+
+Weak Indicators: payable at
+
+Negative Keywords: cheque
+
+Regex: Draft numbers vary by bank.
+
+============================================================ 41. Fixed
+Deposit Receipt
+============================================================ Category:
+Investment
+
+Required Keywords: fixed deposit fd receipt
+
+Optional Keywords: deposit amount maturity amount maturity date interest
+rate deposit date customer id receipt number principal tenure
+
+Strong Indicators: fixed deposit maturity amount
+
+Weak Indicators: interest rate
+
+Negative Keywords: recurring deposit
+
+Regex: Receipt numbers vary.
+
+============================================================ 42.
+Recurring Deposit Receipt
+============================================================ Category:
+Investment
+
+Required Keywords: recurring deposit rd
+
+Optional Keywords: monthly installment deposit period maturity value
+interest rate account number customer id
+
+Strong Indicators: recurring deposit monthly installment
+
+Weak Indicators: interest rate
+
+Negative Keywords: fixed deposit
+
+Regex: Account:
+=========================================================== 43. Loan
+Statement ============================================================
+Category: Loan
+
+Required Keywords: loan statement
+
+Optional Keywords: loan account emi principal outstanding interest
+installment disbursement balance repayment schedule sanction amount
+
+Strong Indicators: loan account emi principal outstanding
+
+Weak Indicators: interest repayment
+
+Negative Keywords: loan sanction letter
+
+Regex: Loan account:
+=========================================================== 44. Loan
+Sanction Letter
+============================================================ Category:
+Loan
+
+Required Keywords: loan sanction sanction letter
+
+Optional Keywords: sanction amount loan amount borrower interest rate
+tenure emi processing fee conditions bank
+
+Strong Indicators: loan sanctioned sanction amount
+
+Weak Indicators: interest rate tenure
+
+Negative Keywords: loan statement
+
+Regex: Loan ref numbers vary.
+
+============================================================ 45. Credit
+Card Statement
+============================================================ Category:
+Credit Card
+
+Required Keywords: credit card statement
+
+Optional Keywords: card number statement period minimum due total due
+available credit credit limit payment due date reward points
+transactions merchant
+
+Strong Indicators: minimum due credit limit available credit
+
+Weak Indicators: reward points statement period
+
+Negative Keywords: debit card statement
+
+Regex: Masked card: Xx*]{4,}ommon OCR Mistakes: credlt statemenl
+available credlt
+
+Classification Notes: Contains card summary, transaction list and
+payment information.

@@ -1,0 +1,105 @@
+OCR Knowledge Base - Part 9 (Utility Bills & Service Documents 126-140)
+
+126. Electricity Bill Category: Utility Bill Required Keywords:
+     electricity bill, consumer number Optional Keywords: meter number,
+     billing period, units consumed, tariff, due date, amount, utility
+     company Strong Indicators: consumer number, meter reading, kWh Weak
+     Indicators: due date, bill date Negative Keywords: water bill
+     Regex: Consumer numbers vary by provider. OCR Mistakes:
+     electriclty, consurner, meter readlng Notes: Monthly electricity
+     usage and payment bill.
+
+127. Water Bill Category: Utility Bill Required Keywords: water bill
+     Optional Keywords: consumer ID, meter reading, water charges,
+     sewerage, due date Strong Indicators: water charges, meter reading
+     Weak Indicators: consumer ID Negative Keywords: electricity bill
+     Regex: Consumer IDs vary. OCR Mistakes: watar, meter readlng Notes:
+     Municipal or private water utility bill.
+
+128. Gas Bill Category: Utility Bill Required Keywords: gas bill, LPG
+     Optional Keywords: customer ID, connection number, cylinder,
+     billing period Strong Indicators: LPG, connection number Weak
+     Indicators: customer ID Negative Keywords: electricity bill Regex:
+     Customer IDs vary. OCR Mistakes: cyllnder, connectlon Notes:
+     Domestic or commercial gas billing.
+
+129. Internet Bill Category: Utility Bill Required Keywords: broadband,
+     internet bill Optional Keywords: account number, plan, bandwidth,
+     invoice, due date Strong Indicators: broadband, fiber, account
+     number Weak Indicators: invoice number Negative Keywords: mobile
+     bill Regex: Account numbers vary. OCR Mistakes: broadbamd, internet
+     Notes: Internet service invoice.
+
+130. Mobile Phone Bill Category: Telecom Required Keywords: mobile bill,
+     postpaid Optional Keywords: mobile number, account number, usage,
+     data, SMS, voice Strong Indicators: mobile number, postpaid Weak
+     Indicators: invoice Negative Keywords: internet bill Regex: Mobile
+     numbers typically 10 digits. OCR Mistakes: moblle, postpald Notes:
+     Telecom billing statement.
+
+131. Landline Bill Category: Telecom Required Keywords: landline bill
+     Optional Keywords: telephone number, call charges, rental, account
+     number Strong Indicators: telephone number Weak Indicators: call
+     charges Negative Keywords: mobile bill Regex: Telephone number
+     formats vary. OCR Mistakes: teleph0ne, landllne Notes: Fixed-line
+     telephone bill.
+
+132. Cable TV Bill Category: Entertainment Utility Required Keywords:
+     cable TV, DTH Optional Keywords: subscriber ID, package, recharge,
+     invoice Strong Indicators: DTH, subscriber ID Weak Indicators:
+     package Negative Keywords: internet bill Regex: Subscriber IDs
+     vary. OCR Mistakes: subscrlber, cab1e Notes: Television
+     subscription invoice.
+
+133. Property Maintenance Bill Category: Housing Required Keywords:
+     maintenance bill Optional Keywords: apartment, association,
+     maintenance charges, flat number, society Strong Indicators:
+     maintenance charges Weak Indicators: flat number Negative Keywords:
+     property tax Regex: Flat numbers vary. OCR Mistakes: malntenance,
+     assoclation Notes: Housing society maintenance invoice.
+
+134. Sewage Bill Category: Utility Bill Required Keywords: sewage,
+     sewerage Optional Keywords: sanitation, consumer ID, charges Strong
+     Indicators: sewerage charges Weak Indicators: sanitation Negative
+     Keywords: water bill Regex: Consumer IDs vary. OCR Mistakes:
+     sewerage, sanltation Notes: Sewer service bill.
+
+135. Waste Collection Bill Category: Utility Bill Required Keywords:
+     waste collection Optional Keywords: garbage, solid waste,
+     sanitation fee Strong Indicators: waste collection Weak Indicators:
+     sanitation fee Negative Keywords: property tax Regex: Reference
+     numbers vary. OCR Mistakes: garbage, collectlon Notes: Municipal
+     waste collection charges.
+
+136. GST Tax Invoice Category: Tax Document Required Keywords: tax
+     invoice, GSTIN Optional Keywords: CGST, SGST, IGST, invoice number,
+     HSN, taxable value Strong Indicators: GSTIN, HSN, tax invoice Weak
+     Indicators: invoice date Negative Keywords: purchase order Regex:
+     GSTIN = 15 characters. OCR Mistakes: GSTlN, lnvoice Notes:
+     GST-compliant tax invoice.
+
+137. Purchase Receipt Category: Retail Receipt Required Keywords:
+     receipt Optional Keywords: total, cashier, payment, items, tax, POS
+     Strong Indicators: receipt, total amount Weak Indicators: POS
+     Negative Keywords: tax invoice Regex: Receipt numbers vary. OCR
+     Mistakes: recelpt, tota1 Notes: Proof of retail purchase.
+
+138. Warranty Card Category: Product Warranty Required Keywords:
+     warranty Optional Keywords: serial number, purchase date, dealer,
+     product model Strong Indicators: warranty period Weak Indicators:
+     dealer stamp Negative Keywords: invoice Regex: Serial numbers vary.
+     OCR Mistakes: warranty, serlal Notes: Warranty registration card.
+
+139. Service Report Category: Service Document Required Keywords:
+     service report Optional Keywords: technician, complaint,
+     inspection, repair, remarks Strong Indicators: technician signature
+     Weak Indicators: remarks Negative Keywords: invoice Regex: Report
+     numbers vary. OCR Mistakes: technlcian, repalr Notes: Service
+     completion or inspection report.
+
+140. Repair Invoice Category: Service Billing Required Keywords: repair
+     invoice Optional Keywords: labor charges, spare parts, invoice
+     number, service center Strong Indicators: labor charges, spare
+     parts Weak Indicators: service center Negative Keywords: service
+     report Regex: Invoice numbers vary. OCR Mistakes: lab0r, repalr
+     Notes: Invoice issued after repair work.

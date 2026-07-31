@@ -1,0 +1,592 @@
+import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
+import { basename, join, extname } from 'path'
+import { existsSync, copyFileSync } from 'fs'
+import { app } from 'electron'
+import {
+  getPhotos, getGeoPhotos, getPhotoById, getExifByPhotoId, toggleFavorite, batchFavorite,
+  setArchived, setTrashed, deletePermanently, getTimeline,
+  getStats, getPhotoCount, insertPhotoBatch, updatePhotoThumbnails,
+  createAlbum, getAlbums, getAlbumById, updateAlbum, deleteAlbum,
+  addPhotosToAlbum, removePhotosFromAlbum,
+  addImportedFolder, getImportedFolders, removeImportedFolder,
+  getPeople, createPerson, updatePersonName, deletePerson, addPhotoToPerson, getPhotosByPerson, mergePeople,
+  getAllFaceDescriptors, saveFaceDescriptor, getUnscannedPhotos, markPhotoScanned, resetFaceScanData, getMergeSuggestions,
+  resetLocationScanData, resetDocumentScanData, resetUtilityScanData,
+  getUnanalyzedPhotos, savePhotoAnalysis, getUtilitiesData, getUnscannedDocuments, saveDocumentScan,
+  PhotoFilter
+} from './database'
+import { scanDirectory, processFiles } from './importer'
+import { generateThumbnailBatch, generateThumbnail, applyEdits, pauseVideoQueue, resumeVideoQueue } from './thumbnails'
+import { syncFolder, syncAllTrackedFolders } from './syncer'
+import { scanLocations, stopLocationScanning } from './location-scanner'
+import { startFastDocScan, stopFastDocScan, getOcrBuffer } from './fast-doc-scanner'
+import { logErrorToFile } from './logger'
+
+export function registerIpcHandlers(): void {
+  // ─── Import ──────────────────────────────────────────────────────────
+  ipcMain.handle('photos:import-folder', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return { success: false, count: 0 }
+
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory', 'multiSelections'],
+      title: 'Import Photos from Folder'
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, count: 0 }
+    }
+
+    const selectedDirs = result.filePaths.map(p => p.replace(/\\/g, '/'))
+    for (const dirPath of selectedDirs) {
+      addImportedFolder(dirPath)
+    }
+
+    event.sender.send('import:status', { stage: 'scanning', message: 'Scanning for photos...', total: 0, completed: 0 })
+
+    // Scan for files across all selected folders
+    pauseVideoQueue()
+    let filePaths: string[] = []
+    for (const dirPath of selectedDirs) {
+      const scanned = await scanDirectory(dirPath)
+      filePaths.push(...scanned)
+    }
+    filePaths = Array.from(new Set(filePaths)) // Deduplicate
+
+    if (filePaths.length === 0) {
+      resumeVideoQueue()
+      event.sender.send('import:status', {
+        stage: 'done',
+        message: 'No supported media files found',
+        total: 0,
+        completed: 0
+      })
+      return { success: true, count: 0, message: 'No supported images found' }
+    }
+
+    event.sender.send('import:status', {
+      stage: 'processing',
+      message: `Found ${filePaths.length} photos. Processing metadata...`,
+      total: filePaths.length,
+      completed: 0
+    })
+
+    // Process files (extract metadata) with throttled IPC updates
+    let lastProcessSent = 0
+    const importedFiles = await processFiles(filePaths, (completed, total, currentFile) => {
+      const now = Date.now()
+      if (now - lastProcessSent > 120 || completed === total) {
+        lastProcessSent = now
+        event.sender.send('import:status', {
+          stage: 'processing',
+          message: `Processing ${basename(currentFile)}... (${completed}/${total})`,
+          total,
+          completed
+        })
+      }
+    })
+
+    importedFiles.forEach(f => {
+      const filePathStr = f?.photo?.file_path || ''
+      const normPath = filePathStr.replace(/\\/g, '/')
+      const matchedDir = selectedDirs.find(d => normPath.startsWith(d))
+      f.photo.source_folder_path = matchedDir || (normPath.includes('/') ? normPath.substring(0, normPath.lastIndexOf('/')) : normPath)
+    })
+
+    // Insert into database
+    event.sender.send('import:status', {
+      stage: 'saving',
+      message: 'Saving photos to library database...',
+      total: importedFiles.length,
+      completed: importedFiles.length
+    })
+
+    const insertedItems = insertPhotoBatch(importedFiles)
+
+    // Generate thumbnails for newly imported photos
+    if (insertedItems.length > 0) {
+      event.sender.send('import:status', {
+        stage: 'thumbnails',
+        message: 'Generating thumbnails...',
+        total: insertedItems.length,
+        completed: 0
+      })
+
+      let lastSent = 0
+      await generateThumbnailBatch(
+        insertedItems,
+        (completed, total, id, thumbnailPath, previewPath) => {
+          if (thumbnailPath || previewPath) {
+            updatePhotoThumbnails(id, thumbnailPath || previewPath, previewPath || thumbnailPath)
+          }
+          const now = Date.now()
+          if (now - lastSent > 30 || completed === total) {
+            lastSent = now
+            event.sender.send('import:status', {
+              stage: 'thumbnails',
+              message: `Generating thumbnails... ${completed}/${total}`,
+              total,
+              completed
+            })
+          }
+        }
+      )
+    }
+
+    event.sender.send('import:status', {
+      stage: 'done',
+      message: `Successfully imported ${insertedItems.length} photos`,
+      total: insertedItems.length,
+      completed: insertedItems.length
+    })
+
+    resumeVideoQueue()
+    return { success: true, count: insertedItems.length }
+  })
+
+  ipcMain.handle('photos:import-files', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return { success: false, count: 0 }
+
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openFile', 'multiSelections'],
+      title: 'Import Photos',
+      filters: [
+        { name: 'Images & Videos', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'avif', 'mp4', 'mov', 'avi', 'mkv', 'webm'] }
+      ]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, count: 0 }
+    }
+
+    pauseVideoQueue()
+    const filePaths = result.filePaths
+    event.sender.send('import:status', {
+      stage: 'processing',
+      message: `Processing ${filePaths.length} photos...`,
+      total: filePaths.length,
+      completed: 0
+    })
+
+    const importedFiles = await processFiles(filePaths, (completed, total, currentFile) => {
+      event.sender.send('import:status', {
+        stage: 'processing',
+        message: `Processing ${basename(currentFile)}...`,
+        total,
+        completed
+      })
+    })
+
+    const insertedItems = insertPhotoBatch(importedFiles)
+
+    // Generate thumbnails
+    if (insertedItems.length > 0) {
+      let lastSent = 0
+      await generateThumbnailBatch(
+        insertedItems,
+        (completed, total, id, thumbnailPath, previewPath) => {
+          if (thumbnailPath || previewPath) {
+            updatePhotoThumbnails(id, thumbnailPath || previewPath, previewPath || thumbnailPath)
+          }
+          const now = Date.now()
+          if (now - lastSent > 150 || completed === total) {
+            lastSent = now
+            event.sender.send('import:status', {
+              stage: 'thumbnails',
+              message: `Generating thumbnails... ${completed}/${total}`,
+              total,
+              completed
+            })
+          }
+        }
+      )
+    }
+
+    event.sender.send('import:status', {
+      stage: 'done',
+      message: `Successfully imported ${insertedItems.length} photos`,
+      total: insertedItems.length,
+      completed: insertedItems.length
+    })
+
+    resumeVideoQueue()
+    return { success: true, count: insertedItems.length }
+  })
+
+  // ─── Photos CRUD ─────────────────────────────────────────────────────
+  ipcMain.handle('photos:get-all', (_event, filter: PhotoFilter) => {
+    return getPhotos(filter)
+  })
+
+  ipcMain.handle('photos:get-geo', () => {
+    return getGeoPhotos()
+  })
+
+  ipcMain.handle('photos:get-by-id', (_event, id: number) => {
+    const photo = getPhotoById(id)
+    const exif = photo ? getExifByPhotoId(id) : undefined
+    return { photo, exif }
+  })
+
+  ipcMain.handle('photos:get-count', (_event, filter: PhotoFilter) => {
+    return getPhotoCount(filter)
+  })
+
+  ipcMain.handle('photos:toggle-favorite', (_event, id: number) => {
+    return toggleFavorite(id)
+  })
+
+  ipcMain.handle('photos:batch-favorite', (_event, ids: number[], favorite: boolean) => {
+    batchFavorite(ids, favorite)
+    return true
+  })
+
+  ipcMain.handle('photos:archive', (_event, ids: number[]) => {
+    setArchived(ids, true)
+    return true
+  })
+
+  ipcMain.handle('photos:scan-documents', () => {
+    const { scanDocuments } = require('./document-scanner')
+    scanDocuments()
+    return true
+  })
+
+  ipcMain.handle('photos:stop-document-scan', () => {
+    const { stopDocumentScanning } = require('./document-scanner')
+    stopDocumentScanning()
+    return true
+  })
+
+  // ─── Location Scanner ────────────────────────────────────────────────
+  ipcMain.handle('photos:start-location-scan', () => {
+    scanLocations()
+    return true
+  })
+
+  ipcMain.handle('photos:stop-location-scan', () => {
+    stopLocationScanning()
+    return true
+  })
+
+  ipcMain.handle('photos:unarchive', (_event, ids: number[]) => {
+    setArchived(ids, false)
+    return true
+  })
+
+  ipcMain.handle('photos:lock', (_event, ids: number[], locked: boolean) => {
+    const { setLocked } = require('./database')
+    setLocked(ids, locked)
+    return true
+  })
+
+  ipcMain.handle('photos:update-metadata', (_event, id: number, data: { description?: string; created_at?: string }) => {
+    const { updatePhotoMetadata } = require('./database')
+    updatePhotoMetadata(id, data)
+    return true
+  })
+
+  ipcMain.handle('photos:trash', (_event, ids: number[]) => {
+    setTrashed(ids, true)
+    return true
+  })
+
+  ipcMain.handle('photos:restore', (_event, ids: number[]) => {
+    setTrashed(ids, false)
+    return true
+  })
+
+  ipcMain.handle('photos:delete-permanently', (_event, ids: number[]) => {
+    deletePermanently(ids)
+    return true
+  })
+
+  ipcMain.handle('photos:empty-trash', () => {
+    const db = require('./database').getDb()
+    const trashed = db.prepare("SELECT id FROM photos WHERE is_trashed = 1").all() as { id: number }[]
+    if (trashed.length > 0) {
+      deletePermanently(trashed.map((r: any) => r.id))
+    }
+    return true
+  })
+
+  ipcMain.handle('photos:get-timeline', () => {
+    return getTimeline()
+  })
+
+  ipcMain.handle('photos:get-stats', () => {
+    return getStats()
+  })
+
+  ipcMain.handle('photos:search', (_event, query: string) => {
+    return getPhotos({ search: query })
+  })
+
+  ipcMain.handle('photos:open-in-explorer', (_event, filePath: string) => {
+    shell.showItemInFolder(filePath)
+  })
+
+  ipcMain.handle('photos:get-utilities-data', () => {
+    return getUtilitiesData()
+  })
+
+  ipcMain.handle('photos:scan-duplicates', async (event) => {
+    const { scanPerceptualHashesBatch } = await import('./database')
+    await scanPerceptualHashesBatch((scanned, total) => {
+      event.sender.send('duplicate-scan:progress', { scanned, total })
+    })
+    return getUtilitiesData()
+  })
+
+  ipcMain.handle('photos:get-unanalyzed', () => {
+    return getUnanalyzedPhotos()
+  })
+
+  ipcMain.handle('photos:save-analysis', (_event, photoId: number, blurScore: number, perceptualHash: string) => {
+    savePhotoAnalysis(photoId, blurScore, perceptualHash)
+    return true
+  })
+
+  ipcMain.handle('photos:get-unscanned-docs', () => {
+    return getUnscannedDocuments()
+  })
+
+  ipcMain.handle('photos:save-document-scan', (_event, photoId: number, text: string, isDocument: boolean, category: string | null) => {
+    saveDocumentScan(photoId, text, isDocument, category)
+    return true
+  })
+
+  // ─── Fast Document Scanner (Two-Phase) ──────────────────────────────
+  ipcMain.handle('docs:fast-prefilter', async () => {
+    return await startFastDocScan()
+  })
+
+  ipcMain.handle('docs:stop-fast-scan', () => {
+    stopFastDocScan()
+    return true
+  })
+
+  ipcMain.handle('docs:get-ocr-buffer', async (_event, photoId: number) => {
+    const photos = getUnscannedDocuments()
+    const photo = photos.find(p => p.id === photoId)
+    if (!photo) {
+      // Photo might already be scanned, try getting it by ID
+      const allPhotos = getPhotos({})
+      const p = allPhotos.find(x => x.id === photoId)
+      if (!p) return null
+      const buf = await getOcrBuffer(p)
+      return buf ? buf.toString('base64') : null
+    }
+    const buf = await getOcrBuffer(photo)
+    return buf ? buf.toString('base64') : null
+  })
+
+  ipcMain.handle('docs:save-batch', (_event, results: Array<{ id: number, text: string, isDocument: boolean, category: string | null }>) => {
+    for (const r of results) {
+      saveDocumentScan(r.id, r.text, r.isDocument, r.category)
+    }
+    return true
+  })
+
+  // ─── Photo Editing ───────────────────────────────────────────────────
+  ipcMain.handle('photos:edit', async (_event, id: number, edits: Record<string, unknown>) => {
+    const photo = getPhotoById(id)
+    if (!photo) return { success: false }
+
+    const ext = extname(photo.file_path)
+    const editedDir = join(app.getPath('userData'), 'edited')
+    if (!existsSync(editedDir)) {
+      const { mkdirSync } = require('fs')
+      mkdirSync(editedDir, { recursive: true })
+    }
+
+    const outputPath = join(editedDir, `${id}_edited${ext}`)
+    try {
+      await applyEdits(photo.file_path, outputPath, edits as Parameters<typeof applyEdits>[2])
+
+      // Re-generate thumbnails for the edited photo
+      const thumbResult = await generateThumbnail(outputPath)
+      updatePhotoThumbnails(id, thumbResult.thumbnailPath, thumbResult.previewPath)
+
+      return { success: true, path: outputPath }
+    } catch (err) {
+      console.error('Edit failed:', err)
+      return { success: false, error: String(err) }
+    }
+  })
+
+  // ─── Albums ──────────────────────────────────────────────────────────
+  ipcMain.handle('albums:create', (_event, name: string) => {
+    const id = createAlbum(name)
+    return getAlbumById(id)
+  })
+
+  ipcMain.handle('albums:get-all', () => {
+    return getAlbums()
+  })
+
+  ipcMain.handle('albums:get-by-id', (_event, id: number) => {
+    return getAlbumById(id)
+  })
+
+  ipcMain.handle('albums:update', (_event, id: number, name: string) => {
+    updateAlbum(id, name)
+    return getAlbumById(id)
+  })
+
+  ipcMain.handle('albums:delete', (_event, id: number) => {
+    deleteAlbum(id)
+    return true
+  })
+
+  ipcMain.handle('albums:add-photos', (_event, albumId: number, photoIds: number[]) => {
+    addPhotosToAlbum(albumId, photoIds)
+    return getAlbumById(albumId)
+  })
+
+  ipcMain.handle('albums:remove-photos', (_event, albumId: number, photoIds: number[]) => {
+    removePhotosFromAlbum(albumId, photoIds)
+    return getAlbumById(albumId)
+  })
+
+  // ─── People & Face Grouping ──────────────────────────────────────────
+  ipcMain.handle('people:get-all', () => {
+    return getPeople()
+  })
+
+  ipcMain.handle('people:create', (_event, name: string, coverPhotoId?: number, faceBase64?: string) => {
+    const id = createPerson(name, coverPhotoId, faceBase64)
+    return id
+  })
+
+  ipcMain.handle('people:update-name', (_event, personId: number, name: string) => {
+    updatePersonName(personId, name)
+    return true
+  })
+
+  ipcMain.handle('people:delete', (_event, personId: number) => {
+    deletePerson(personId)
+    return true
+  })
+
+  ipcMain.handle('people:add-photo', (_event, personId: number, photoId: number) => {
+    addPhotoToPerson(personId, photoId)
+    return true
+  })
+
+  ipcMain.handle('people:merge', (_event, primaryId: number, secondaryId: number) => {
+    mergePeople(primaryId, secondaryId)
+    return true
+  })
+
+  ipcMain.handle('people:get-photos', (_event, personId: number) => {
+    return getPhotosByPerson(personId)
+  })
+
+  // ─── Face Recognition ──────────────────────────────────────────────────
+  ipcMain.handle('faces:get-all', () => {
+    return getAllFaceDescriptors()
+  })
+
+  ipcMain.handle('faces:save', (_event, photoId: number, personId: number, descriptor: number[]) => {
+    saveFaceDescriptor(photoId, personId, descriptor)
+    return true
+  })
+
+  ipcMain.handle('faces:get-unscanned', () => {
+    return getUnscannedPhotos()
+  })
+
+  ipcMain.handle('faces:mark-scanned', (_event, photoId: number) => {
+    markPhotoScanned(photoId)
+    return true
+  })
+
+  ipcMain.handle('faces:reset', (_event) => {
+    resetFaceScanData()
+    return true
+  })
+
+  ipcMain.handle('locations:reset', (_event) => {
+    resetLocationScanData()
+    return true
+  })
+
+  ipcMain.handle('docs:reset', (_event) => {
+    resetDocumentScanData()
+    return true
+  })
+
+  ipcMain.handle('analysis:reset', (_event) => {
+    resetUtilityScanData()
+    return true
+  })
+
+  ipcMain.handle('faces:get-merge-suggestions', (_event) => {
+    return getMergeSuggestions()
+  })
+
+  // ─── Folders & Disk Sync ─────────────────────────────────────────────
+  ipcMain.handle('folders:get-all', () => {
+    return getImportedFolders()
+  })
+
+  ipcMain.handle('folders:sync', async (event, folderPath: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return syncFolder(folderPath, (status) => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('sync:status', { folderPath, ...status })
+      }
+    })
+  })
+
+  ipcMain.handle('folders:sync-all', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return syncAllTrackedFolders(win || undefined)
+  })
+
+  ipcMain.handle('folders:remove', (_event, folderId: number) => {
+    removeImportedFolder(folderId)
+    return true
+  })
+
+  // ─── System ──────────────────────────────────────────────────────────
+  ipcMain.handle('system:get-platform', () => {
+    return process.platform
+  })
+
+  ipcMain.handle('system:log-error', (_event, type: string, message: string) => {
+    logErrorToFile(type, message)
+    return true
+  })
+
+  // ─── Window Controls ─────────────────────────────────────────────────
+  ipcMain.handle('window:minimize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.minimize()
+    return true
+  })
+
+  ipcMain.handle('window:maximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+    if (win.isMaximized()) {
+      win.unmaximize()
+    } else {
+      win.maximize()
+    }
+    return win.isMaximized()
+  })
+
+  ipcMain.handle('window:close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.close()
+    return true
+  })
+
+  ipcMain.handle('window:is-maximized', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return win?.isMaximized() ?? false
+  })
+}

@@ -1,0 +1,264 @@
+OCR Document Knowledge Base - Part 1 (Government Documents)
+
+============================================================ 1. Aadhaar
+Card ============================================================
+Category: Government ID
+
+Required Keywords: aadhaar aadhar uidai
+
+Optional Keywords: unique identification authority unique identification
+authority of india government of india govt. of india dob date of birth
+year of birth male female address vid virtual id aadhaar number
+enrolment no qr code
+
+Strong Indicators: uidai aadhaar unique identification authority of
+india
+
+Weak Indicators: male female address dob year of birth
+
+Negative Keywords: passport income tax gstin invoice bank statement
+
+Regex: ??ommon OCR Mistakes: aadhar adhar aadhar uidal uidal govemment
+govt of india
+
+============================================================ 2. PAN Card
+============================================================ Category:
+Government ID
+
+Required Keywords: permanent account number income tax department
+
+Optional Keywords: income tax government of india pan father signature
+date of birth name
+
+Strong Indicators: permanent account number income tax department
+
+Weak Indicators: father signature
+
+Negative Keywords: uidai passport driving licence
+
+Regex: A-Z]{5}[0-9]{4}[A-Z]ommon OCR Mistakes: permanent acount number
+incorne tax govemment pan
+
+============================================================ 3. Passport
+============================================================ Category:
+Government ID
+
+Required Keywords: passport republic of india
+
+Optional Keywords: nationality passport no passport number surname given
+name place of birth date of birth date of issue date of expiry authority
+sex
+
+Strong Indicators: passport passport number republic of india
+
+Weak Indicators: surname given name nationality
+
+Negative Keywords: uidai pan driving licence
+
+Regex: A-Z][0-9]{7}ommon OCR Mistakes: passporl pass port republic of
+lndia
+
+============================================================ 4. Driving
+Licence ============================================================
+Category: Government ID
+
+Required Keywords: driving licence driving license
+
+Optional Keywords: dl no licence no license no transport department
+valid from valid till issue date lmv mcwg transport non transport
+
+Strong Indicators: driving licence dl no
+
+Weak Indicators: valid till lmv mcwg
+
+Negative Keywords: passport uidai pan
+
+Regex: A-Z]{2}[0-9]{2}?[0-9]{11}ommon OCR Mistakes: driving licence
+driving license licence license dlno
+
+============================================================ 5.
+Learner’s Licence
+============================================================ Category:
+Government ID
+
+Required Keywords: learner licence learner license
+
+Optional Keywords: llr learner transport department valid till issue
+date learner’s licence
+
+Strong Indicators: learner licence llr
+
+Weak Indicators: learner valid till
+
+Negative Keywords: passport pan aadhaar
+
+Regex: Same as state DL formats (varies by state)
+
+============================================================ 6. Voter ID
+============================================================ Category:
+Government ID
+
+Required Keywords: election commission of india elector photo identity
+card
+
+Optional Keywords: epic voter elector assembly constituency part no
+serial no
+
+Strong Indicators: election commission epic
+
+Weak Indicators: voter elector
+
+Negative Keywords: uidai passport pan
+
+Regex:
+A-Z]{3}[0-9]{7}===========================================================
+7. Ration Card
+============================================================ Category:
+Government ID
+
+Required Keywords: ration card food and civil supplies
+
+Optional Keywords: nfsa priority household family head ration number
+fair price shop food security
+
+Strong Indicators: ration card nfsa
+
+Weak Indicators: family head ration number
+
+Negative Keywords: passport bank statement
+
+Regex: State specific
+
+============================================================ 8. Birth
+Certificate ============================================================
+Category: Government Record
+
+Required Keywords: birth certificate
+
+Optional Keywords: certificate of birth date of birth registration
+number registrar municipality municipal corporation father name mother
+name child name place of birth
+
+Strong Indicators: birth certificate certificate of birth
+
+Weak Indicators: registrar place of birth
+
+Negative Keywords: death certificate
+
+Regex: Registration number varies by state
+
+============================================================ 9. Death
+Certificate ============================================================
+Category: Government Record
+
+Required Keywords: death certificate
+
+Optional Keywords: certificate of death date of death registration
+number cause of death registrar municipality
+
+Strong Indicators: death certificate
+
+Weak Indicators: cause of death
+
+Negative Keywords: birth certificate
+
+Regex: Registration number varies
+
+============================================================ 10.
+Marriage Certificate
+============================================================ Category:
+Government Record
+
+Required Keywords: marriage certificate
+
+Optional Keywords: certificate of marriage husband wife bride bridegroom
+marriage date registration number registrar of marriages
+
+Strong Indicators: marriage certificate
+
+Weak Indicators: husband wife
+
+Negative Keywords: birth certificate
+
+Regex: Registration number varies
+
+============================================================ 11.
+Domicile Certificate
+============================================================ Category:
+Government Certificate
+
+Required Keywords: domicile certificate residence certificate
+
+Optional Keywords: resident permanent resident state government district
+magistrate tehsildar
+
+Strong Indicators: domicile certificate
+
+Weak Indicators: resident
+
+Negative Keywords: income certificate
+
+============================================================ 12. Caste
+Certificate ============================================================
+Category: Government Certificate
+
+Required Keywords: caste certificate
+
+Optional Keywords: scheduled caste scheduled tribe other backward class
+sc st obc issuing authority
+
+Strong Indicators: caste certificate scheduled caste scheduled tribe
+
+Negative Keywords: income certificate
+
+============================================================ 13. Income
+Certificate ============================================================
+Category: Government Certificate
+
+Required Keywords: income certificate
+
+Optional Keywords: annual income family income issuing authority
+tehsildar revenue department
+
+Strong Indicators: income certificate annual income
+
+Negative Keywords: salary slip form 16
+
+============================================================ 14. EWS
+Certificate ============================================================
+Category: Government Certificate
+
+Required Keywords: ews certificate economically weaker section
+
+Optional Keywords: income assets government eligibility
+
+Strong Indicators: economically weaker section
+
+Negative Keywords: caste certificate
+
+============================================================ 15.
+Disability Certificate
+============================================================ Category:
+Government Certificate
+
+Required Keywords: disability certificate
+
+Optional Keywords: person with disability pwd medical board percentage
+of disability benchmark disability
+
+Strong Indicators: disability certificate medical board
+
+Negative Keywords: medical prescription
+
+============================================================ 16. Senior
+Citizen Card
+============================================================ Category:
+Government ID
+
+Required Keywords: senior citizen senior citizen card
+
+Optional Keywords: date of birth age government identity card elderly
+
+Strong Indicators: senior citizen card
+
+Negative Keywords: student id employee id

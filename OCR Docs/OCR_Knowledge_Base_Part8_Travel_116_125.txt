@@ -1,0 +1,196 @@
+OCR Knowledge Base - Part 8 (Travel Documents 116-125)
+
+============================================================ 116.
+Boarding Pass
+============================================================ Category:
+Air Travel
+
+Required Keywords: - boarding pass
+
+Optional Keywords: - flight - gate - boarding time - seat - PNR -
+passenger - terminal - zone - barcode - QR code - departure - arrival
+
+Strong Indicators: - boarding pass - gate - seat - boarding time
+
+Weak Indicators: - terminal - zone
+
+Negative Keywords: - flight ticket
+
+Regex / Identifier Guidance: - Airline PNR: typically 6 alphanumeric
+characters
+
+Common OCR Mistakes: - boardlng - fl1ght - terrninal
+
+Classification Notes: Issued after check-in and required for boarding.
+
+============================================================ 117. Flight
+Ticket ============================================================
+Category: Air Travel
+
+Required Keywords: - flight ticket - e-ticket - itinerary receipt
+
+Optional Keywords: - booking reference - PNR - flight number - airline -
+departure - arrival - passenger - travel date - fare
+
+Strong Indicators: - e-ticket - PNR - flight number
+
+Weak Indicators: - airline - travel date
+
+Negative Keywords: - boarding pass
+
+Regex: Flight Number: [A-Z]{2} PNR: 6 alphanumeric characters
+
+Classification Notes: Travel itinerary issued before check-in.
+
+============================================================ 118. Train
+Ticket ============================================================
+Category: Rail Travel
+
+Required Keywords: - train ticket - IRCTC - Indian Railways
+
+Optional Keywords: - PNR - train number - coach - berth - seat -
+reservation - boarding - journey date - quota
+
+Strong Indicators: - IRCTC - PNR - train number
+
+Weak Indicators: - coach - berth
+
+Negative Keywords: - bus ticket
+
+Regex: Indian Railways PNR: 10 digits
+
+Classification Notes: Rail reservation document.
+
+============================================================ 119. Bus
+Ticket ============================================================
+Category: Road Travel
+
+Required Keywords: - bus ticket
+
+Optional Keywords: - operator - boarding point - drop point - seat -
+ticket number - journey - bus number
+
+Strong Indicators: - bus ticket - boarding point - seat
+
+Weak Indicators: - operator
+
+Negative Keywords: - train ticket
+
+Regex: Ticket numbers vary by operator.
+
+Classification Notes: Ticket for local or intercity bus travel.
+
+============================================================ 120. Hotel
+Invoice ============================================================
+Category: Hospitality Billing
+
+Required Keywords: - hotel invoice - tax invoice
+
+Optional Keywords: - hotel - guest - room - check in - check out -
+invoice number - GST - room charges - amount
+
+Strong Indicators: - hotel invoice - room charges - check out
+
+Weak Indicators: - GST
+
+Negative Keywords: - hotel booking
+
+Regex: GSTIN when applicable.
+
+Classification Notes: Final bill issued after hotel stay.
+
+============================================================ 121. Hotel
+Booking ============================================================
+Category: Hospitality
+
+Required Keywords: - booking confirmation - reservation confirmation
+
+Optional Keywords: - booking ID - hotel - guest - check in - check out -
+room type - confirmation
+
+Strong Indicators: - reservation confirmation - booking ID
+
+Weak Indicators: - room type
+
+Negative Keywords: - hotel invoice
+
+Regex: Booking IDs vary.
+
+Classification Notes: Reservation confirmation before stay.
+
+============================================================ 122. Visa
+============================================================ Category:
+Travel Authorization
+
+Required Keywords: - visa
+
+Optional Keywords: - passport - visa number - issue date - expiry date -
+entries - nationality - category - country
+
+Strong Indicators: - visa - visa number - entries
+
+Weak Indicators: - nationality
+
+Negative Keywords: - passport
+
+Regex: Visa numbers vary by country.
+
+Classification Notes: Official travel authorization.
+
+============================================================ 123. Travel
+Insurance ============================================================
+Category: Insurance
+
+Required Keywords: - travel insurance
+
+Optional Keywords: - policy number - insured - trip - coverage -
+emergency assistance - baggage - medical - insurer
+
+Strong Indicators: - travel insurance - policy number
+
+Weak Indicators: - coverage
+
+Negative Keywords: - health insurance card
+
+Regex: Policy numbers vary.
+
+Classification Notes: Insurance coverage during travel.
+
+============================================================ 124.
+Immigration Stamp
+============================================================ Category:
+Border Control
+
+Required Keywords: - arrival - departure
+
+Optional Keywords: - immigration - entry - exit - passport - airport -
+country - date - seal
+
+Strong Indicators: - immigration - entry - exit - seal
+
+Weak Indicators: - airport
+
+Negative Keywords: - visa
+
+Regex: Date formats vary.
+
+Classification Notes: Passport stamp issued by immigration.
+
+============================================================ 125. Cruise
+Ticket ============================================================
+Category: Cruise Travel
+
+Required Keywords: - cruise ticket - cruise
+
+Optional Keywords: - voyage - cabin - ship - embarkation -
+disembarkation - booking number - guest - port
+
+Strong Indicators: - cruise - voyage - cabin
+
+Weak Indicators: - ship
+
+Negative Keywords: - boarding pass
+
+Regex: Booking numbers vary.
+
+Classification Notes: Passenger ticket for cruise travel.

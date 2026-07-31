@@ -1,0 +1,251 @@
+OCR Knowledge Base - Vehicle Documents (21-35)
+
+============================================================ 21. Vehicle
+Registration Certificate (RC)
+============================================================ Category:
+Vehicle Registration
+
+Required Keywords: registration certificate certificate of registration
+rc vehicle registration
+
+Optional Keywords: registration number owner name father name address
+engine number chassis number vehicle class maker model fuel type color
+cubic capacity seating capacity registration date registration validity
+hypothecation financier rto transport department
+
+Strong Indicators: registration certificate certificate of registration
+engine number chassis number
+
+Weak Indicators: owner name fuel type vehicle class
+
+Negative Keywords: driving licence insurance policy pollution
+certificate
+
+Regex: Vehicle No: A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}ommon OCR
+Mistakes: registratlon certificate englne number chassls number vehicie
+
+Classification Notes: Presence of engine number + chassis number +
+vehicle registration almost guarantees RC.
+
+============================================================ 22. Vehicle
+Insurance ============================================================
+Category: Vehicle Insurance
+
+Required Keywords: insurance policy number insured vehicle
+
+Optional Keywords: insurer premium idv own damage third party policy
+period claim sum insured vehicle number engine number chassis number
+nominee coverage
+
+Strong Indicators: policy number idv third party
+
+Weak Indicators: premium claim
+
+Negative Keywords: registration certificate service record
+
+Regex: Policy numbers vary by insurer.
+
+============================================================ 23.
+Pollution Under Control (PUC)
+============================================================ Category:
+Compliance
+
+Required Keywords: pollution under control puc
+
+Optional Keywords: emission co hc valid upto certificate number vehicle
+number testing center pollution certificate
+
+Strong Indicators: pollution under control puc
+
+Weak Indicators: co hc valid upto
+
+Negative Keywords: fitness certificate insurance
+
+============================================================ 24. Road
+Tax Receipt ============================================================
+Category: Tax
+
+Required Keywords: road tax tax receipt
+
+Optional Keywords: receipt number vehicle number tax paid transport
+department rto payment date valid upto owner name
+
+Strong Indicators: road tax tax paid
+
+Weak Indicators: receipt number
+
+Negative Keywords: challan invoice
+
+============================================================ 25. Vehicle
+Fitness Certificate
+============================================================ Category:
+Vehicle Compliance
+
+Required Keywords: fitness certificate
+
+Optional Keywords: fitness inspection valid till transport vehicle
+certificate number inspection date vehicle number rto
+
+Strong Indicators: fitness certificate inspection
+
+Weak Indicators: valid till
+
+Negative Keywords: puc insurance
+
+============================================================ 26.
+National Permit
+============================================================ Category:
+Commercial Permit
+
+Required Keywords: national permit
+
+Optional Keywords: goods carriage permit number validity issuing
+authority transport authority vehicle number authorized states
+
+Strong Indicators: national permit goods carriage
+
+Weak Indicators: permit number
+
+Negative Keywords: state permit
+
+============================================================ 27. State
+Permit ============================================================
+Category: Commercial Permit
+
+Required Keywords: state permit
+
+Optional Keywords: permit number state transport authority validity
+route vehicle number commercial vehicle
+
+Strong Indicators: state permit
+
+Weak Indicators: route
+
+Negative Keywords: national permit
+
+============================================================ 28. FASTag
+Statement ============================================================
+Category: Toll Payment
+
+Required Keywords: fastag
+
+Optional Keywords: toll plaza wallet tag id vehicle number transaction
+balance recharge debit credit closing balance opening balance
+
+Strong Indicators: fastag tag id toll plaza
+
+Weak Indicators: wallet balance
+
+Negative Keywords: bank statement
+
+============================================================ 29. Vehicle
+Challan ============================================================
+Category: Traffic Violation
+
+Required Keywords: challan traffic violation echallan e-challan
+
+Optional Keywords: fine offence violation vehicle number challan number
+traffic police payment status court
+
+Strong Indicators: challan number offence fine
+
+Weak Indicators: traffic police
+
+Negative Keywords: road tax
+
+============================================================ 30. Driving
+Test Certificate
+============================================================ Category:
+Driver Licensing
+
+Required Keywords: driving test test certificate
+
+Optional Keywords: candidate test date examiner pass fail llr driving
+school transport department
+
+Strong Indicators: driving test pass fail
+
+Weak Indicators: candidate
+
+Negative Keywords: driving licence
+
+============================================================ 31. Vehicle
+Transfer Form
+============================================================ Category:
+Ownership Transfer
+
+Required Keywords: transfer of ownership form 29 form 30
+
+Optional Keywords: seller purchaser vehicle number engine number chassis
+number signature owner
+
+Strong Indicators: form 29 form 30 transfer of ownership
+
+Weak Indicators: seller purchaser
+
+Negative Keywords: sale invoice
+
+============================================================ 32. NOC for
+Vehicle ============================================================
+Category: Clearance Certificate
+
+Required Keywords: no objection certificate noc
+
+Optional Keywords: vehicle number financier transport authority
+clearance rto transfer migration
+
+Strong Indicators: no objection certificate noc
+
+Weak Indicators: clearance
+
+Negative Keywords: hypothecation
+
+============================================================ 33.
+Hypothecation Certificate
+============================================================ Category:
+Vehicle Finance
+
+Required Keywords: hypothecation
+
+Optional Keywords: financier bank loan account loan closure termination
+vehicle number engine number chassis number
+
+Strong Indicators: hypothecation financier
+
+Weak Indicators: loan account
+
+Negative Keywords: insurance
+
+============================================================ 34. Service
+Record ============================================================
+Category: Vehicle Maintenance
+
+Required Keywords: service record service history
+
+Optional Keywords: service advisor job card kilometers next service
+engine oil service date dealer inspection
+
+Strong Indicators: service history job card
+
+Weak Indicators: dealer kilometers
+
+Negative Keywords: warranty
+
+============================================================ 35.
+Warranty Book
+============================================================ Category:
+Vehicle Warranty
+
+Required Keywords: warranty warranty book
+
+Optional Keywords: dealer purchase date service schedule owner vehicle
+model chassis number engine number terms and conditions free service
+
+Strong Indicators: warranty free service service schedule
+
+Weak Indicators: dealer
+
+Negative Keywords: service invoice
+
+Classification Notes: Often accompanies a new vehicle and includes
+scheduled maintenance intervals.
