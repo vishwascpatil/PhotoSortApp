@@ -283,7 +283,7 @@ export default function DuplicatesPage() {
       setSelectedIds(new Set())
       showToast(`Moved ${idsToDelete.length} duplicates to Trash (${formatFileSize(selectedSavingsBytes || totalStats.recoverableBytes)} reclaimed)`, async () => {
         await window.photoVault.restore(idsToDelete)
-        refreshPhotos()
+        loadPhotos({})
         fetchDuplicates()
       })
       fetchDuplicates()

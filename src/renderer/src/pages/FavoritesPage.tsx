@@ -9,10 +9,11 @@ export default function FavoritesPage() {
   const { state, loadPhotos } = usePhotos()
 
   useEffect(() => {
-    if (state.photos.length === 0) {
+    const isSpecialFilter = state.activeFilter && (state.activeFilter.isTrashed || state.activeFilter.isArchived || state.activeFilter.isLocked || state.activeFilter.search)
+    if (isSpecialFilter || state.photos.length === 0) {
       loadPhotos({})
     }
-  }, [loadPhotos, state.photos.length])
+  }, [loadPhotos, state.activeFilter, state.photos.length])
 
   // Instant in-memory filtering (0ms)
   const favorites = useMemo(() => {

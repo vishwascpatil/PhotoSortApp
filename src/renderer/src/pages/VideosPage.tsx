@@ -11,10 +11,11 @@ export default function VideosPage() {
   const { state: photoState, loadPhotos, refreshPhotos } = usePhotos()
 
   useEffect(() => {
-    if (photoState.photos.length === 0) {
+    const isSpecialFilter = photoState.activeFilter && (photoState.activeFilter.isTrashed || photoState.activeFilter.isArchived || photoState.activeFilter.isLocked || photoState.activeFilter.search)
+    if (isSpecialFilter || photoState.photos.length === 0) {
       loadPhotos({})
     }
-  }, [loadPhotos, photoState.photos.length])
+  }, [loadPhotos, photoState.activeFilter, photoState.photos.length])
 
   // Listen for import completion to auto refresh
   useEffect(() => {

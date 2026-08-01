@@ -35,6 +35,7 @@ interface PhotoState {
   editingPhotoId: number | null
   isLoading: boolean
   totalCount: number
+  activeFilter: Record<string, unknown>
 }
 
 type PhotoAction =
@@ -55,6 +56,7 @@ type PhotoAction =
   | { type: 'SET_EDITING'; payload: number | null }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_TOTAL_COUNT'; payload: number }
+  | { type: 'SET_ACTIVE_FILTER'; payload: Record<string, unknown> }
 
 const initialState: PhotoState = {
   photos: [],
@@ -64,7 +66,8 @@ const initialState: PhotoState = {
   viewerPhotos: null,
   editingPhotoId: null,
   isLoading: false,
-  totalCount: 0
+  totalCount: 0,
+  activeFilter: {}
 }
 
 function photoReducer(state: PhotoState, action: PhotoAction): PhotoState {
@@ -142,6 +145,8 @@ function photoReducer(state: PhotoState, action: PhotoAction): PhotoState {
       return { ...state, isLoading: action.payload }
     case 'SET_TOTAL_COUNT':
       return { ...state, totalCount: action.payload }
+    case 'SET_ACTIVE_FILTER':
+      return { ...state, activeFilter: action.payload }
     default:
       return state
   }
@@ -156,14 +161,12 @@ interface PhotoContextType {
 
 const PhotoContext = createContext<PhotoContextType | null>(null)
 
-let lastFilter: Record<string, unknown> = {}
-
 export function PhotoProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(photoReducer, initialState)
 
   const loadPhotos = useCallback(async (filter: Record<string, unknown> = {}) => {
     dispatch({ type: 'SET_LOADING', payload: true })
-    lastFilter = filter
+    dispatch({ type: 'SET_ACTIVE_FILTER', payload: filter })
     try {
       const photos = await window.photoVault.getPhotos(filter as any)
       dispatch({ type: 'SET_PHOTOS', payload: photos })
@@ -177,8 +180,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshPhotos = useCallback(async () => {
-    await loadPhotos(lastFilter)
-  }, [loadPhotos])
+    await loadPhotos(state.activeFilter || {})
+  }, [loadPhotos, state.activeFilter])
 
   // Pre-fetch photos on app start so in-memory navigation across tabs is 0ms instant
   useEffect(() => {

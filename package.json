@@ -1,33 +1,71 @@
 {
-  "name": "photovault",
+  "name": "photosort",
   "version": "1.0.0",
-  "description": "An offline Google Photos clone for desktop",
+  "description": "PhotoSort — All your memories, organized beautifully. An intelligent offline desktop photo manager.",
   "main": "./out/main/index.js",
-  "author": "PhotoVault",
+  "author": "PhotoSort",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "start": "electron-vite preview"
+    "start": "electron-vite preview",
+    "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac --publish never",
+    "dist:all": "electron-vite build && electron-builder --win --mac --publish never"
   },
   "build": {
-    "appId": "com.photovault.app",
-    "productName": "PhotoVault",
+    "appId": "com.photosort.app",
+    "productName": "PhotoSort",
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "!node_modules/**/build/Release/.deps",
+      "!node_modules/**/build/Release/obj*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/sharp/**/*",
+      "node_modules/sql.js/**/*",
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/tesseract.js/**/*",
+      "node_modules/tesseract.js-core/**/*"
+    ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
-      ]
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "sign": false,
+      "signDlls": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false
     },
     "mac": {
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
       ],
-      "category": "public.app-category.photography"
+      "category": "public.app-category.photography",
+      "icon": "build/icon.icns"
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     }
   },
   "dependencies": {
