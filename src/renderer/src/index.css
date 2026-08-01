@@ -6308,7 +6308,7 @@ a {
   background: var(--bg-secondary, #ffffff);
   border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
   border-radius: 22px;
-  padding: 16px;
+  padding: 14px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.06);
@@ -6322,44 +6322,76 @@ a {
 .apple-folder-card:hover {
   transform: translateY(-4px);
   border-color: rgba(99, 102, 241, 0.3);
-  box-shadow: 0 18px 36px -10px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.18);
 }
 
-.apple-folder-preview-box {
+.apple-folder-hero-box {
   width: 100%;
   aspect-ratio: 16/10;
-  border-radius: 14px;
-  background: var(--bg-hover, #f1f5f9);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
   overflow: hidden;
   position: relative;
   margin-bottom: 14px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 2px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
 }
 
-.apple-folder-preview-thumb {
+.apple-folder-hero-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.apple-folder-card:hover .apple-folder-hero-img {
+  transform: scale(1.06);
+}
+
+.apple-folder-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.65) 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.apple-folder-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.apple-folder-hero-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.apple-folder-count-pill-floating {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .apple-folder-preview-empty {
-  grid-column: span 2;
-  grid-row: span 2;
+  width: 100%;
+  height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   color: #6366f1;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
-}
-
-.apple-folder-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
 }
 
 .apple-folder-icon-badge {
@@ -6371,7 +6403,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
 }
 
 .apple-folder-actions {
@@ -6384,9 +6416,11 @@ a {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
-  background: var(--bg-primary, #ffffff);
-  color: var(--text-secondary, #64748b);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6395,14 +6429,14 @@ a {
 }
 
 .apple-folder-action-btn:hover {
-  background: var(--bg-hover, #f8fafc);
-  color: var(--text-primary, #0f172a);
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
 }
 
 .apple-folder-action-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.8);
+  color: #ffffff;
+  border-color: rgba(239, 68, 68, 0.9);
 }
 
 .apple-folder-name {
@@ -6421,7 +6455,7 @@ a {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .apple-folder-card-footer {
@@ -6429,7 +6463,7 @@ a {
   align-items: center;
   justify-content: space-between;
   font-size: 11px;
-  padding-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
 }
 
