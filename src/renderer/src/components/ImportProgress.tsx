@@ -25,26 +25,34 @@ export default function ImportProgress() {
     : 0
 
   return (
-    <div className="import-progress">
+    <div className="import-progress-hud">
       <div className="import-progress-header">
         <span className="import-progress-title">
-          {importStatus.stage === 'scanning' ? 'Scanning...' :
-           importStatus.stage === 'processing' ? 'Processing photos...' :
-           importStatus.stage === 'thumbnails' ? 'Generating thumbnails...' :
-           importStatus.stage === 'saving' ? 'Saving...' :
-           importStatus.stage === 'done' ? 'Import Complete!' : 'Importing...'}
+          {importStatus.stage === 'done' ? (
+            <span style={{ color: '#34d399' }}>✓ Import Complete</span>
+          ) : (
+            <>
+              <span className="badge-dot" style={{ background: '#6366f1' }} />
+              {importStatus.stage === 'scanning' ? 'Scanning Folder...' :
+               importStatus.stage === 'processing' ? 'Extracting Metadata...' :
+               importStatus.stage === 'thumbnails' ? 'Generating Previews...' :
+               importStatus.stage === 'saving' ? 'Saving Library...' : 'Importing...'}
+            </>
+          )}
         </span>
-        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-          {importStatus.completed}/{importStatus.total}
+        <span className="import-progress-count">
+          {importStatus.total > 0 ? `${importStatus.completed} / ${importStatus.total}` : ''}
         </span>
       </div>
-      <div className="import-progress-bar">
+      <div className="import-progress-bar-track">
         <div
           className="import-progress-bar-fill"
           style={{ width: `${progress}%` }}
         />
       </div>
-      <div className="import-progress-message">{importStatus.message}</div>
+      <div className="import-progress-subtext" title={importStatus.message}>
+        {importStatus.message || 'Processing photo & video media...'}
+      </div>
     </div>
   )
 }

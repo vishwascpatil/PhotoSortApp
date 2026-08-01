@@ -18,12 +18,13 @@ export default function PhotosPage() {
   const { showToast } = useApp()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; photoId: number } | null>(null)
 
+  const filterKey = JSON.stringify(state.activeFilter)
   useEffect(() => {
     const isSpecialFilter = state.activeFilter && (state.activeFilter.isTrashed || state.activeFilter.isArchived || state.activeFilter.isLocked || state.activeFilter.search)
     if (isSpecialFilter || state.photos.length === 0) {
       loadPhotos({})
     }
-  }, [loadPhotos, state.activeFilter, state.photos.length])
+  }, [loadPhotos, filterKey, state.photos.length])
 
   // Listen for import done to refresh
   useEffect(() => {

@@ -10,12 +10,13 @@ const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v']
 export default function VideosPage() {
   const { state: photoState, loadPhotos, refreshPhotos } = usePhotos()
 
+  const filterKey = JSON.stringify(photoState.activeFilter)
   useEffect(() => {
     const isSpecialFilter = photoState.activeFilter && (photoState.activeFilter.isTrashed || photoState.activeFilter.isArchived || photoState.activeFilter.isLocked || photoState.activeFilter.search)
     if (isSpecialFilter || photoState.photos.length === 0) {
       loadPhotos({})
     }
-  }, [loadPhotos, photoState.activeFilter, photoState.photos.length])
+  }, [loadPhotos, filterKey, photoState.photos.length])
 
   // Listen for import completion to auto refresh
   useEffect(() => {

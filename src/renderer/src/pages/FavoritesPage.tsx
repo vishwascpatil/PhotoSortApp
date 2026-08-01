@@ -8,12 +8,13 @@ import EmptyState from '../components/EmptyState'
 export default function FavoritesPage() {
   const { state, loadPhotos } = usePhotos()
 
+  const filterKey = JSON.stringify(state.activeFilter)
   useEffect(() => {
     const isSpecialFilter = state.activeFilter && (state.activeFilter.isTrashed || state.activeFilter.isArchived || state.activeFilter.isLocked || state.activeFilter.search)
     if (isSpecialFilter || state.photos.length === 0) {
       loadPhotos({})
     }
-  }, [loadPhotos, state.activeFilter, state.photos.length])
+  }, [loadPhotos, filterKey, state.photos.length])
 
   // Instant in-memory filtering (0ms)
   const favorites = useMemo(() => {

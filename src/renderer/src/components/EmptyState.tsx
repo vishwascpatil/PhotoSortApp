@@ -10,17 +10,21 @@ interface EmptyStateProps {
 
 export default function EmptyState({ icon, title, description, actionLabel, onAction }: EmptyStateProps) {
   return (
-    <div className="empty-state">
-      <div className="empty-state-icon">
-        {icon}
+    <div className="apple-empty-state-wrapper">
+      <div className="apple-empty-state-card">
+        <div className="apple-empty-icon-glow">
+          <div className="apple-empty-icon-inner">
+            {icon}
+          </div>
+        </div>
+        <h2 className="apple-empty-title">{title}</h2>
+        <p className="apple-empty-desc">{description}</p>
+        {actionLabel && onAction && (
+          <button type="button" className="apple-empty-action-btn" onClick={onAction}>
+            <span>{actionLabel}</span>
+          </button>
+        )}
       </div>
-      <h2 className="empty-state-title">{title}</h2>
-      <p className="empty-state-text">{description}</p>
-      {actionLabel && onAction && (
-        <button className="empty-state-btn" onClick={onAction}>
-          {actionLabel}
-        </button>
-      )}
     </div>
   )
 }

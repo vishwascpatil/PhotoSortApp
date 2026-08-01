@@ -146,6 +146,7 @@ function photoReducer(state: PhotoState, action: PhotoAction): PhotoState {
     case 'SET_TOTAL_COUNT':
       return { ...state, totalCount: action.payload }
     case 'SET_ACTIVE_FILTER':
+      if (JSON.stringify(state.activeFilter) === JSON.stringify(action.payload)) return state
       return { ...state, activeFilter: action.payload }
     default:
       return state
