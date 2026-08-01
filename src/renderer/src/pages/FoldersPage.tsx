@@ -135,6 +135,16 @@ export default function FoldersPage() {
   }
 
   // ─── Render Selected Folder Photos View ────────────────────────────────
+  // Compute cover previews for folders
+  const folderCovers = React.useMemo(() => {
+    const map: Record<number, Photo[]> = {}
+    folders.forEach(f => {
+      map[f.id] = photoState.photos.filter(p => p.source_folder_path === f.folder_path || (p.file_path && p.file_path.startsWith(f.folder_path))).slice(0, 4)
+    })
+    return map
+  }, [folders, photoState.photos])
+
+  // ─── Render Selected Folder Photos View ────────────────────────────────
   if (selectedFolder) {
     return (
       <div className="folders-page-container">
@@ -145,12 +155,14 @@ export default function FoldersPage() {
               className="btn-back-folders"
               title="Back to all folders"
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={16} />
               <span>All Folders</span>
             </button>
             <div>
               <h1 className="folder-detail-title">
-                <Folder className="icon-blue" size={22} />
+                <div className="apple-folder-icon-badge">
+                  <Folder size={20} />
+                </div>
                 {selectedFolder.folder_name}
               </h1>
               <p className="folder-detail-path">{selectedFolder.folder_path}</p>
@@ -171,7 +183,10 @@ export default function FoldersPage() {
 
         <div className="folder-detail-content">
           {loadingFolderPhotos ? (
-            <div className="folders-loading-state">Loading photos...</div>
+            <div className="folders-loading-state" style={{ padding: '40px', textAlign: 'center' }}>
+              <RefreshCw size={24} className="spin-icon" style={{ color: '#6366f1' }} />
+              <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--text-secondary)' }}>Loading folder photos...</p>
+            </div>
           ) : folderPhotos.length === 0 ? (
             <EmptyState
               icon={<Folder size={48} />}
@@ -195,7 +210,9 @@ export default function FoldersPage() {
       <div className="folders-header">
         <div>
           <h1 className="folders-page-title">
-            <HardDrive className="icon-blue" size={24} />
+            <div className="apple-folder-icon-badge">
+              <HardDrive size={20} />
+            </div>
             Imported Folders
           </h1>
           <p className="folders-page-subtitle">
@@ -222,7 +239,7 @@ export default function FoldersPage() {
 
       {/* Syncing Status Notification Bar */}
       {isSyncing && (
-        <div className="sync-status-banner">
+        <div className="sync-status-banner" style={{ margin: '0 0 20px 0', padding: '12px 18px', borderRadius: '16px', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.2)', color: '#6366f1', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: 600 }}>
           <RefreshCw size={16} className="spin-icon" />
           <span>{syncMessage || 'Syncing tracked folders with physical disk...'}</span>
         </div>
@@ -239,52 +256,76 @@ export default function FoldersPage() {
         />
       ) : (
         <div className="folders-card-grid">
-          {folders.map((folder) => (
-            <div
-              key={folder.id}
-              onClick={() => handleSelectFolder(folder)}
-              className="folder-card"
-            >
-              <div className="folder-card-top">
-                <div className="folder-card-icon">
-                  <Folder size={22} />
+          {folders.map((folder) => {
+            const covers = folderCovers[folder.id] || []
+
+            return (
+              <div
+                key={folder.id}
+                onClick={() => handleSelectFolder(folder)}
+                className="apple-folder-card"
+              >
+                {/* 4-Tile Photo Preview Box */}
+                <div className="apple-folder-preview-box">
+                  {covers.length > 0 ? (
+                    covers.map((photo, i) => (
+                      <img
+                        key={photo.id || i}
+                        src={photo.thumbnail_path || photo.file_path}
+                        alt="Folder media"
+                        className="apple-folder-preview-thumb"
+                      />
+                    ))
+                  ) : (
+                    <div className="apple-folder-preview-empty">
+                      <Folder size={32} />
+                    </div>
+                  )}
                 </div>
 
-                <div className="folder-card-actions">
-                  <button
-                    onClick={(e) => handleSyncSingleFolder(e, folder)}
-                    disabled={isSyncing}
-                    className="folder-action-btn"
-                    title="Sync this folder"
-                  >
-                    <RefreshCw size={15} className={isSyncing ? 'spin-icon' : ''} />
-                  </button>
-                  <button
-                    onClick={(e) => handleRemoveFolder(e, folder.id)}
-                    className="folder-action-btn danger"
-                    title="Untrack folder"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                <div className="apple-folder-card-header">
+                  <div className="apple-folder-icon-badge">
+                    <Folder size={18} />
+                  </div>
+
+                  <div className="apple-folder-actions">
+                    <button
+                      type="button"
+                      onClick={(e) => handleSyncSingleFolder(e, folder)}
+                      disabled={isSyncing}
+                      className="apple-folder-action-btn"
+                      title="Sync this folder"
+                    >
+                      <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleRemoveFolder(e, folder.id)}
+                      className="apple-folder-action-btn danger"
+                      title="Untrack folder"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="apple-folder-name" title={folder.folder_name}>{folder.folder_name}</h3>
+                  <p className="apple-folder-path" title={folder.folder_path}>{folder.folder_path}</p>
+                </div>
+
+                <div className="apple-folder-card-footer">
+                  <span className="apple-folder-count-pill">
+                    {folder.photo_count} photos
+                  </span>
+                  <span className="apple-folder-sync-time">
+                    <CheckCircle2 size={12} style={{ color: '#10b981' }} />
+                    {new Date(folder.last_synced_at).toLocaleDateString()}
+                  </span>
                 </div>
               </div>
-
-              <div className="folder-card-body">
-                <h3 className="folder-card-name">{folder.folder_name}</h3>
-                <p className="folder-card-path" title={folder.folder_path}>{folder.folder_path}</p>
-              </div>
-
-              <div className="folder-card-footer">
-                <span className="folder-count-badge">
-                  {folder.photo_count} photos
-                </span>
-                <span className="folder-synced-time">
-                  <CheckCircle2 size={12} className="icon-green" />
-                  Synced {new Date(folder.last_synced_at).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
