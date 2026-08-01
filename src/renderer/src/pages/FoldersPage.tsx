@@ -135,56 +135,44 @@ export default function FoldersPage() {
   }
 
   // ─── Render Selected Folder Photos View ────────────────────────────────
-  // Compute cover previews for folders
-  const folderCovers = React.useMemo(() => {
-    const map: Record<number, Photo[]> = {}
-    folders.forEach(f => {
-      map[f.id] = photoState.photos.filter(p => p.source_folder_path === f.folder_path || (p.file_path && p.file_path.startsWith(f.folder_path))).slice(0, 4)
-    })
-    return map
-  }, [folders, photoState.photos])
-
-  // ─── Render Selected Folder Photos View ────────────────────────────────
   if (selectedFolder) {
     return (
       <div className="folders-page-container">
-        <div className="folder-detail-header">
-          <div className="folder-detail-left">
+        <div className="apple-folder-detail-bar">
+          <div className="folder-detail-left-compact">
             <button
+              type="button"
               onClick={() => setSelectedFolder(null)}
-              className="btn-back-folders"
+              className="apple-icon-circle-btn"
               title="Back to all folders"
             >
-              <ArrowLeft size={16} />
-              <span>All Folders</span>
+              <ArrowLeft size={18} />
             </button>
-            <div>
-              <h1 className="folder-detail-title">
-                <div className="apple-folder-icon-badge">
-                  <Folder size={20} />
-                </div>
-                {selectedFolder.folder_name}
-              </h1>
-              <p className="folder-detail-path">{selectedFolder.folder_path}</p>
+            <div className="folder-detail-title-group">
+              <h1 className="folder-detail-name">{selectedFolder.folder_name}</h1>
+              <span className="folder-detail-path-badge" title={selectedFolder.folder_path}>
+                {selectedFolder.folder_path}
+              </span>
             </div>
           </div>
 
-          <div className="folder-detail-right">
+          <div className="folder-detail-actions">
             <button
+              type="button"
               onClick={(e) => handleSyncSingleFolder(e, selectedFolder)}
               disabled={isSyncing}
-              className="btn-primary"
+              className="apple-primary-btn"
             >
-              <RefreshCw size={15} className={isSyncing ? 'spin-icon' : ''} />
-              {isSyncing ? 'Syncing...' : 'Sync Disk Changes'}
+              <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync Disk Changes'}</span>
             </button>
           </div>
         </div>
 
         <div className="folder-detail-content">
           {loadingFolderPhotos ? (
-            <div className="folders-loading-state" style={{ padding: '40px', textAlign: 'center' }}>
-              <RefreshCw size={24} className="spin-icon" style={{ color: '#6366f1' }} />
+            <div className="folders-loading-state" style={{ padding: '60px', textAlign: 'center' }}>
+              <RefreshCw size={26} className="spin-icon" style={{ color: '#6366f1' }} />
               <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--text-secondary)' }}>Loading folder photos...</p>
             </div>
           ) : folderPhotos.length === 0 ? (
@@ -210,29 +198,25 @@ export default function FoldersPage() {
       <div className="folders-header">
         <div>
           <h1 className="folders-page-title">
-            <div className="apple-folder-icon-badge">
-              <HardDrive size={20} />
-            </div>
+            <HardDrive size={24} style={{ color: '#6366f1' }} />
             Imported Folders
           </h1>
-          <p className="folders-page-subtitle">
-            Tracked directories automatically synced with your physical disk.
-          </p>
         </div>
 
         <div className="folders-header-actions">
           <button
+            type="button"
             onClick={handleSyncAll}
             disabled={isSyncing || folders.length === 0}
-            className="btn-secondary"
+            className="apple-secondary-btn"
           >
-            <RefreshCw size={15} className={isSyncing ? 'spin-icon' : ''} />
-            {isSyncing ? 'Syncing All...' : 'Sync All Folders'}
+            <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+            <span>{isSyncing ? 'Syncing All...' : 'Sync All Folders'}</span>
           </button>
 
-          <button onClick={handleImportNewFolder} className="btn-primary">
+          <button type="button" onClick={handleImportNewFolder} className="apple-primary-btn">
             <Plus size={16} />
-            Import Folder
+            <span>Import Folder</span>
           </button>
         </div>
       </div>
@@ -256,86 +240,54 @@ export default function FoldersPage() {
         />
       ) : (
         <div className="folders-card-grid">
-          {folders.map((folder) => {
-            const covers = folderCovers[folder.id] || []
-            const heroCover = covers[0]
-
-            return (
-              <div
-                key={folder.id}
-                onClick={() => handleSelectFolder(folder)}
-                className="apple-folder-card"
-              >
-                {/* Single Hero Cover Box with Gradient Overlay */}
-                <div className="apple-folder-hero-box">
-                  {heroCover ? (
-                    <>
-                      <img
-                        src={heroCover.thumbnail_path || heroCover.file_path}
-                        alt={folder.folder_name}
-                        className="apple-folder-hero-img"
-                      />
-                      <div className="apple-folder-hero-overlay">
-                        <div className="apple-folder-hero-top">
-                          <div className="apple-folder-icon-badge">
-                            <Folder size={18} />
-                          </div>
-
-                          <div className="apple-folder-actions">
-                            <button
-                              type="button"
-                              onClick={(e) => handleSyncSingleFolder(e, folder)}
-                              disabled={isSyncing}
-                              className="apple-folder-action-btn"
-                              title="Sync this folder"
-                            >
-                              <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => handleRemoveFolder(e, folder.id)}
-                              className="apple-folder-action-btn danger"
-                              title="Untrack folder"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="apple-folder-hero-bottom">
-                          <span className="apple-folder-count-pill-floating">
-                            {folder.photo_count} {folder.photo_count === 1 ? 'item' : 'items'}
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="apple-folder-preview-empty">
-                      <div className="apple-folder-icon-badge" style={{ width: '48px', height: '48px', borderRadius: '14px', marginBottom: '8px' }}>
-                        <Folder size={24} />
-                      </div>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>No Photos Yet</span>
-                    </div>
-                  )}
+          {folders.map((folder) => (
+            <div
+              key={folder.id}
+              onClick={() => handleSelectFolder(folder)}
+              className="apple-clean-folder-card"
+            >
+              <div className="apple-folder-card-top">
+                <div className="apple-folder-icon-circle">
+                  <Folder size={22} />
                 </div>
 
-                <div>
-                  <h3 className="apple-folder-name" title={folder.folder_name}>{folder.folder_name}</h3>
-                  <p className="apple-folder-path" title={folder.folder_path}>{folder.folder_path}</p>
-                </div>
-
-                <div className="apple-folder-card-footer">
-                  <span className="apple-folder-count-pill">
-                    Tracked Folder
-                  </span>
-                  <span className="apple-folder-sync-time">
-                    <CheckCircle2 size={12} style={{ color: '#10b981' }} />
-                    Synced {new Date(folder.last_synced_at).toLocaleDateString()}
-                  </span>
+                <div className="apple-folder-card-actions">
+                  <button
+                    type="button"
+                    onClick={(e) => handleSyncSingleFolder(e, folder)}
+                    disabled={isSyncing}
+                    className="apple-card-action-btn"
+                    title="Sync this folder"
+                  >
+                    <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleRemoveFolder(e, folder.id)}
+                    className="apple-card-action-btn danger"
+                    title="Untrack folder"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
-            )
-          })}
+
+              <div className="apple-folder-card-body">
+                <h3 className="apple-folder-name" title={folder.folder_name}>{folder.folder_name}</h3>
+                <p className="apple-folder-path" title={folder.folder_path}>{folder.folder_path}</p>
+              </div>
+
+              <div className="apple-folder-card-footer">
+                <span className="apple-folder-count-pill">
+                  {folder.photo_count} {folder.photo_count === 1 ? 'photo' : 'photos'}
+                </span>
+                <span className="apple-folder-sync-time">
+                  <CheckCircle2 size={12} style={{ color: '#10b981' }} />
+                  Synced {new Date(folder.last_synced_at).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
