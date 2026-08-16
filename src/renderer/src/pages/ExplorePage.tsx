@@ -10,6 +10,7 @@ import SelectionBar from '../components/SelectionBar'
 import { scanPhotosForFaces, stopScanning, ScanProgress, subscribeToFaceScan, setOnPersonFound } from '../services/FaceScanner'
 import { analyzePhotos, stopAnalyzing, AnalysisProgress } from '../services/PhotoAnalyzer'
 import { scanDocuments, stopDocumentScanning, DocumentScanProgress, subscribeToDocScan, setOnDocumentFound } from '../services/DocumentScanner'
+import { isScreenshot } from '../utils/screenshotDetector'
 
 
 interface GeoPhoto {
@@ -28,10 +29,20 @@ interface Person {
   cover_face_base64?: string | null
 }
 
-export default function ExplorePage() {
+interface ExplorePageProps {
+  initialTab?: 'map' | 'people' | 'screenshots' | 'documents' | 'utilities'
+}
+
+export default function ExplorePage({ initialTab = 'map' }: ExplorePageProps = {}) {
   const { state, refreshPhotos } = usePhotos()
   const { showToast } = useApp()
-  const [tab, setTab] = useState<'map' | 'people' | 'screenshots' | 'documents' | 'utilities'>('map')
+  const [tab, setTab] = useState<'map' | 'people' | 'screenshots' | 'documents' | 'utilities'>(initialTab)
+
+  useEffect(() => {
+    if (initialTab) {
+      setTab(initialTab)
+    }
+  }, [initialTab])
 
   // Places state
   const [geoPhotos, setGeoPhotos] = useState<GeoPhoto[]>([])
@@ -352,31 +363,7 @@ export default function ExplorePage() {
     showToast('Screenshots refreshed!')
   }
 
-  const screenshots = state.photos.filter(p => {
-    if (!p.filename) return false
-    const lowerName = p.filename.toLowerCase()
-    
-    // Explicit filename match
-    if (
-      lowerName.includes('screenshot') ||
-      lowerName.includes('capture') ||
-      lowerName.includes('screen') ||
-      lowerName.includes('screencap')
-    ) {
-      return true
-    }
-
-    // Heuristic: Mobile screenshots (like iOS) are often PNGs with a very tall/wide aspect ratio (e.g. 19.5:9 => ~2.16, 16:9 => ~1.77)
-    if (lowerName.endsWith('.png') && p.width && p.height) {
-      const aspectRatio = p.height > p.width ? p.height / p.width : p.width / p.height
-      // Standard photos are 4:3 (1.33) or 3:2 (1.5). Screenshots are usually 16:9 (1.77) or taller.
-      if (aspectRatio >= 1.7) {
-        return true
-      }
-    }
-
-    return false
-  })
+  const screenshots = state.photos.filter(isScreenshot)
 
   const documents = state.photos.filter(p =>
     p.is_document === 1 ||

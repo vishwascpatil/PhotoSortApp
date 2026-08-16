@@ -15,6 +15,7 @@ import TrashPage from './pages/TrashPage'
 import SearchPage from './pages/SearchPage'
 import ExplorePage from './pages/ExplorePage'
 import DuplicatesPage from './pages/DuplicatesPage'
+import ScreenshotsPage from './pages/ScreenshotsPage'
 
 import FoldersPage from './pages/FoldersPage'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
@@ -103,9 +104,23 @@ function AppContent() {
         return <VideosPage />
       case 'explore':
         return <ExplorePage />
+      case 'people':
+        return <ExplorePage initialTab="people" />
+      case 'places':
+      case 'tags':
+        return <ExplorePage initialTab="map" />
+      case 'documents':
+        return <ExplorePage initialTab="documents" />
       case 'duplicates':
+      case 'similar':
         return <DuplicatesPage />
+      case 'screenshots':
+        return <ScreenshotsPage />
+      case 'large-files':
+      case 'whatsapp':
+        return <ExplorePage initialTab="utilities" />
       case 'folders':
+      case 'google-photos':
         return <FoldersPage />
       case 'favorites':
         return <FavoritesPage />

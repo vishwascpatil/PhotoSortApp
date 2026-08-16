@@ -21,6 +21,7 @@ import { syncFolder, syncAllTrackedFolders } from './syncer'
 import { scanLocations, stopLocationScanning } from './location-scanner'
 import { startFastDocScan, stopFastDocScan, getOcrBuffer } from './fast-doc-scanner'
 import { getOrGenerateHighResPreview, prefetchHighResPreviews } from './highres'
+import { classifyScreenshot, classifyScreenshotBatch } from './services/screenshot/screenshotDetector'
 import { logErrorToFile } from './logger'
 
 export function registerIpcHandlers(): void {
@@ -573,6 +574,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('folders:remove', (_event, folderId: number) => {
     removeImportedFolder(folderId)
     return true
+  })
+
+  // ─── Screenshot Classifier ────────────────────────────────────────────
+  ipcMain.handle('screenshots:classify', (_event, filePath: string) => {
+    return classifyScreenshot(filePath)
+  })
+
+  ipcMain.handle('screenshots:classify-batch', (_event, filePaths: string[]) => {
+    return classifyScreenshotBatch(filePaths)
   })
 
   // ─── System ──────────────────────────────────────────────────────────

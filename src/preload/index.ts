@@ -198,6 +198,12 @@ const api = {
   removeImportedFolder: (folderId: number): Promise<boolean> =>
     ipcRenderer.invoke('folders:remove', folderId),
 
+  // Screenshot Classifier
+  classifyScreenshot: (filePath: string): Promise<{ classification: string; score: number; matchedSignals: string[] }> =>
+    ipcRenderer.invoke('screenshots:classify', filePath),
+  classifyScreenshotBatch: (filePaths: string[]): Promise<Map<string, { classification: string; score: number; matchedSignals: string[] }>> =>
+    ipcRenderer.invoke('screenshots:classify-batch', filePaths),
+
   // System ──────────────────────────────────────────────────────────
   getPlatform: (): Promise<string> =>
     ipcRenderer.invoke('system:get-platform'),
