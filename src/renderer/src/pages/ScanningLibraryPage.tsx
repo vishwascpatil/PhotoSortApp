@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Pause, Play, Image, FileText, Sparkles, Folder, Check, Loader2
+  Pause, Play, FileText, Sparkles, Folder, Check, Loader2
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { usePhotos } from '../contexts/PhotoContext'
@@ -83,34 +83,30 @@ export default function ScanningLibraryPage() {
   const folderName = activeFolder ? activeFolder.folder_name : 'Imported Media'
   const folderPath = activeFolder ? activeFolder.folder_path : 'Selected Folder'
 
-  // Pipeline Stage 1: Finding Photos & Videos
-  const stage1Pct = importStatus.stage === 'scanning' ? 50 : 100
-  const stage1CountStr = total > 0 ? `${total.toLocaleString()} items found` : 'Scanning...'
-
-  // Pipeline Stage 2: Extracting Metadata
-  let stage2Pct = 0
-  let stage2CountStr = 'Waiting...'
-  let isStage2Processing = false
+  // Pipeline Stage 1: Extracting Metadata
+  let stage1Pct = 0
+  let stage1CountStr = 'Waiting...'
+  let isStage1Processing = false
   if (!isImporting && total > 0) {
-    stage2Pct = 100
-    stage2CountStr = `${total.toLocaleString()} / ${total.toLocaleString()}`
+    stage1Pct = 100
+    stage1CountStr = `${total.toLocaleString()} / ${total.toLocaleString()}`
   } else if (importStatus.stage === 'scanning') {
-    stage2Pct = 0
-    stage2CountStr = 'Waiting...'
+    stage1Pct = 0
+    stage1CountStr = 'Waiting...'
   } else if (importStatus.stage === 'processing') {
-    isStage2Processing = true
-    stage2Pct = Math.round((completed / Math.max(1, total)) * 100)
-    stage2CountStr = `${completed.toLocaleString()} / ${total.toLocaleString()}`
+    isStage1Processing = true
+    stage1Pct = Math.round((completed / Math.max(1, total)) * 100)
+    stage1CountStr = `${completed.toLocaleString()} / ${total.toLocaleString()}`
   } else {
-    stage2Pct = 100
-    stage2CountStr = `${total.toLocaleString()} / ${total.toLocaleString()}`
+    stage1Pct = 100
+    stage1CountStr = `${total.toLocaleString()} / ${total.toLocaleString()}`
   }
 
-  // Pipeline Stage 3: Generating Thumbnails & Previews
+  // Pipeline Stage 2: Generating Thumbnails & Previews
   const isThumbnailStage = importStatus.stage === 'thumbnails'
-  const stage3Done = !isImporting || importStatus.stage === 'done' || (stage1Pct === 100 && stage2Pct === 100 && !isThumbnailStage)
-  const stage3Pct = stage3Done ? 100 : (isThumbnailStage ? Math.round((completed / Math.max(1, total)) * 100) : 0)
-  const stage3CountStr = stage3Done
+  const stage2Done = !isImporting || importStatus.stage === 'done' || (stage1Pct === 100 && !isThumbnailStage)
+  const stage2Pct = stage2Done ? 100 : (isThumbnailStage ? Math.round((completed / Math.max(1, total)) * 100) : 0)
+  const stage2CountStr = stage2Done
     ? `${total.toLocaleString()} / ${total.toLocaleString()}`
     : (isThumbnailStage ? `${completed.toLocaleString()} / ${total.toLocaleString()}` : 'Waiting...')
 
@@ -130,9 +126,6 @@ export default function ScanningLibraryPage() {
     animId = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(animId)
   }, [percent])
-
-  // Live preview photo stream
-  const recentPhotos = photoState.photos.slice(0, 9)
 
   // Circular progress SVG calculations
   const radius = 140
@@ -230,34 +223,14 @@ export default function ScanningLibraryPage() {
           </div>
         </div>
 
-        {/* Right Column: 3 Fast Pipeline Stages */}
+        {/* Right Column: Pipeline Stages */}
         <div className="scanning-right-col">
-          {/* Stage 1: Finding Photos & Videos */}
+          {/* Stage 1: Extracting Metadata */}
           <div className="scan-stage-item">
-            <div className={`stage-icon-wrapper ${stage1Pct === 100 ? 'stage-green-done' : 'stage-blue'}`}>
-              {stage1Pct === 100 ? <Check size={18} /> : <Image size={18} />}
-            </div>
-            <div className="stage-content">
-              <div className="stage-header-row">
-                <span className="stage-title">Finding Photos & Videos</span>
-                <div className="stage-right-stats">
-                  <span className="stage-counts">{stage1CountStr}</span>
-                  <span className="stage-pct blue-pct">{stage1Pct}%</span>
-                </div>
-              </div>
-              <span className="stage-subtitle">{stage1Pct === 100 ? 'Folder scan complete' : 'Scanning files and folders...'}</span>
-              <div className="stage-bar-track">
-                <div className="stage-bar-fill blue-bar" style={{ width: `${stage1Pct}%` }} />
-              </div>
-            </div>
-          </div>
-
-          {/* Stage 2: Extracting Metadata */}
-          <div className="scan-stage-item">
-            <div className={`stage-icon-wrapper ${stage2Pct === 100 ? 'stage-green-done' : 'stage-green'}`}>
-              {isStage2Processing ? (
+            <div className={`stage-icon-wrapper ${stage1Pct === 100 ? 'stage-green-done' : 'stage-green'}`}>
+              {isStage1Processing ? (
                 <Loader2 size={18} className="animate-spin" />
-              ) : stage2Pct === 100 ? (
+              ) : stage1Pct === 100 ? (
                 <Check size={18} />
               ) : (
                 <FileText size={18} />
@@ -267,25 +240,25 @@ export default function ScanningLibraryPage() {
               <div className="stage-header-row">
                 <span className="stage-title">Extracting Metadata</span>
                 <div className="stage-right-stats">
-                  <span className="stage-counts">{stage2CountStr}</span>
-                  <span className="stage-pct green-pct">{stage2Pct}%</span>
+                  <span className="stage-counts">{stage1CountStr}</span>
+                  <span className="stage-pct green-pct">{stage1Pct}%</span>
                 </div>
               </div>
               <span className="stage-subtitle">
-                {stage2Pct === 100 ? 'Metadata extraction complete' : (isStage2Processing ? 'Reading file metadata...' : 'Waiting for scan...')}
+                {stage1Pct === 100 ? 'Metadata extraction complete' : (isStage1Processing ? 'Reading file metadata...' : 'Waiting for scan...')}
               </span>
               <div className="stage-bar-track">
-                <div className="stage-bar-fill green-bar" style={{ width: `${stage2Pct}%` }} />
+                <div className="stage-bar-fill green-bar" style={{ width: `${stage1Pct}%` }} />
               </div>
             </div>
           </div>
 
-          {/* Stage 3: Generating Thumbnails & Media Previews */}
+          {/* Stage 2: Generating Thumbnails & Media Previews */}
           <div className="scan-stage-item">
-            <div className={`stage-icon-wrapper ${stage3Done ? 'stage-green-done' : 'stage-purple'}`}>
+            <div className={`stage-icon-wrapper ${stage2Done ? 'stage-green-done' : 'stage-purple'}`}>
               {isThumbnailStage ? (
                 <Loader2 size={18} className="animate-spin" />
-              ) : stage3Done ? (
+              ) : stage2Done ? (
                 <Check size={18} />
               ) : (
                 <Sparkles size={18} />
@@ -295,51 +268,20 @@ export default function ScanningLibraryPage() {
               <div className="stage-header-row">
                 <span className="stage-title">Generating Thumbnails & Previews</span>
                 <div className="stage-right-stats">
-                  <span className="stage-counts">{stage3CountStr}</span>
-                  <span className="stage-pct purple-pct">{stage3Pct}%</span>
+                  <span className="stage-counts">{stage2CountStr}</span>
+                  <span className="stage-pct purple-pct">{stage2Pct}%</span>
                 </div>
               </div>
               <span className="stage-subtitle">
-                {stage3Done ? 'Library thumbnails ready!' : (isThumbnailStage ? 'Generating thumbnails & media previews...' : 'Almost done...')}
+                {stage2Done ? 'Library thumbnails ready!' : (isThumbnailStage ? 'Generating thumbnails & media previews...' : 'Almost done...')}
               </span>
               <div className="stage-bar-track">
-                <div className="stage-bar-fill purple-bar" style={{ width: `${stage3Pct}%` }} />
+                <div className="stage-bar-fill purple-bar" style={{ width: `${stage2Pct}%` }} />
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Live Preview Container at Bottom */}
-      <section className="scanning-live-preview-box">
-        <div className="preview-header-box">
-          <div className="preview-title-row">
-            <span className="blue-dot" />
-            <h3 className="preview-title">Live Preview</h3>
-          </div>
-          <p className="preview-subtitle">
-            Moments from your library are starting to appear...
-          </p>
-        </div>
-
-        <div className="preview-thumbs-row">
-          {recentPhotos.length > 0 ? (
-            recentPhotos.map((photo) => (
-              <div key={photo.id} className="preview-thumb-tile">
-                <img 
-                  src={photo.thumbnail_path || photo.file_path} 
-                  alt="Scanned Media" 
-                  className="preview-thumb-img" 
-                />
-              </div>
-            ))
-          ) : (
-            Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="preview-thumb-placeholder" />
-            ))
-          )}
-        </div>
-      </section>
     </div>
   )
 }

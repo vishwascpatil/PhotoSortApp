@@ -5,7 +5,7 @@ import { app } from 'electron'
 import {
   getPhotos, getGeoPhotos, getPhotoById, getExifByPhotoId, toggleFavorite, batchFavorite,
   setArchived, setTrashed, deletePermanently, getTimeline,
-  getStats, getPhotoCount, insertPhotoBatch, updatePhotoThumbnails,
+  getStats, getPhotoCount, insertPhotoBatch, updatePhotoThumbnails, updatePhotoThumbnailsBatch,
   createAlbum, getAlbums, getAlbumById, updateAlbum, deleteAlbum,
   addPhotosToAlbum, removePhotosFromAlbum,
   addImportedFolder, getImportedFolders, removeImportedFolder,
@@ -20,6 +20,7 @@ import { generateThumbnailBatch, generateThumbnail, applyEdits, pauseVideoQueue,
 import { syncFolder, syncAllTrackedFolders } from './syncer'
 import { scanLocations, stopLocationScanning } from './location-scanner'
 import { startFastDocScan, stopFastDocScan, getOcrBuffer } from './fast-doc-scanner'
+import { getOrGenerateHighResPreview, prefetchHighResPreviews } from './highres'
 import { logErrorToFile } from './logger'
 
 export function registerIpcHandlers(): void {
@@ -152,7 +153,7 @@ export function registerIpcHandlers(): void {
       properties: ['openFile', 'multiSelections'],
       title: 'Import Photos',
       filters: [
-        { name: 'Images & Videos', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'avif', 'mp4', 'mov', 'avi', 'mkv', 'webm'] }
+        { name: 'Images & Videos', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'avif', 'heic', 'heif', 'dng', 'cr2', 'nef', 'arw', 'raw', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'm4v', '3gp'] }
       ]
     })
 
@@ -183,15 +184,25 @@ export function registerIpcHandlers(): void {
     // Generate thumbnails
     if (insertedItems.length > 0) {
       let lastSent = 0
+      const pendingUpdates: { id: number; thumbnailPath: string; previewPath: string }[] = []
+
       await generateThumbnailBatch(
         insertedItems,
         (completed, total, id, thumbnailPath, previewPath) => {
           if (thumbnailPath || previewPath) {
-            updatePhotoThumbnails(id, thumbnailPath || previewPath, previewPath || thumbnailPath)
+            pendingUpdates.push({
+              id,
+              thumbnailPath: thumbnailPath || previewPath,
+              previewPath: previewPath || thumbnailPath
+            })
           }
+
           const now = Date.now()
           if (now - lastSent > 150 || completed === total) {
             lastSent = now
+            if (pendingUpdates.length > 0) {
+              updatePhotoThumbnailsBatch(pendingUpdates.splice(0, pendingUpdates.length))
+            }
             event.sender.send('import:status', {
               stage: 'thumbnails',
               message: `Generating thumbnails... ${completed}/${total}`,
@@ -201,6 +212,10 @@ export function registerIpcHandlers(): void {
           }
         }
       )
+
+      if (pendingUpdates.length > 0) {
+        updatePhotoThumbnailsBatch(pendingUpdates)
+      }
     }
 
     event.sender.send('import:status', {
@@ -227,6 +242,15 @@ export function registerIpcHandlers(): void {
     const photo = getPhotoById(id)
     const exif = photo ? getExifByPhotoId(id) : undefined
     return { photo, exif }
+  })
+
+  ipcMain.handle('photos:get-highres-preview', async (_event, filePath: string) => {
+    return await getOrGenerateHighResPreview(filePath)
+  })
+
+  ipcMain.handle('photos:prefetch-highres', (_event, filePaths: string[]) => {
+    prefetchHighResPreviews(filePaths)
+    return true
   })
 
   ipcMain.handle('photos:get-count', (_event, filter: PhotoFilter) => {
@@ -335,7 +359,7 @@ export function registerIpcHandlers(): void {
     const { scanPerceptualHashesBatch } = await import('./database')
     await scanPerceptualHashesBatch((scanned, total) => {
       event.sender.send('duplicate-scan:progress', { scanned, total })
-    })
+    }, true)
     return getUtilitiesData()
   })
 

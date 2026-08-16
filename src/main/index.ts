@@ -7,7 +7,16 @@ import { setupLogger } from './logger'
 import { ensureThumbnailDir, queueMissingVideoThumbnails, generateThumbnailBatch } from './thumbnails'
 import { syncAllTrackedFolders } from './syncer'
 
+// Explicitly enforce 'photosort' userData directory name
+app.setName('photosort')
+
+// Enable native Hardware HEVC / H.265 / 4K video playback for iPhone .MOV & MP4 files
+app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport,HardwareAcceleratedVideoDecode')
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
+
 export { generateThumbnailBatch, ensureThumbnailDir }
+export { getOrGenerateHighResPreview, prefetchHighResPreviews } from './highres'
 
 let mainWindow: BrowserWindow | null = null
 

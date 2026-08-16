@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { Photo, usePhotos } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
-import { getThumbnailUrl, getOriginalUrl, formatDateFull, formatFileSize } from '../utils/helpers'
+import { getThumbnailUrl, getOriginalUrl, getVideoUrl, formatDateFull, formatFileSize, isBrowserNativeImage, isVideoFile } from '../utils/helpers'
 
 export default function PhotoViewer() {
   const { state, dispatch } = usePhotos()
@@ -92,34 +92,85 @@ export default function PhotoViewer() {
     dragStart.current = null
   }
 
+  const [videoError, setVideoError] = useState(false)
+
   const activePhotos = state.viewerPhotos || state.photos
   const currentIndex = activePhotos.findIndex(p => p.id === state.viewerPhotoId)
   const photo = currentIndex >= 0 ? activePhotos[currentIndex] : null
 
+  const isVideo = photo ? (
+    photo.mime_type?.startsWith('video') ||
+    ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp'].some(ext => photo.file_path?.toLowerCase().endsWith(ext))
+  ) : false
+
   useEffect(() => {
     if (!photo) return
-    // Start with preview, then load original
-    const previewUrl = getThumbnailUrl(photo.preview_path)
-    const originalUrl = getOriginalUrl(photo.file_path)
+    setVideoError(false)
+    let isCancelled = false
 
-    const isVideo = photo.mime_type?.startsWith('video')
-
-    // For videos, use the original file directly; for images, start with preview then load original
-    setImgSrc(isVideo ? originalUrl : (previewUrl || originalUrl))
-
-    // Load full res after preview (skip for video)
-    if (previewUrl && !isVideo) {
-      const img = new Image()
-      img.onload = () => setImgSrc(originalUrl)
-      img.src = originalUrl
+    // Handle Video files
+    if (isVideo) {
+      const videoUrl = getVideoUrl(photo.file_path)
+      setImgSrc(videoUrl)
+      return
     }
 
-    // Load EXIF
+    const previewUrl = getThumbnailUrl(photo.preview_path || photo.thumbnail_path)
+    const originalUrl = getOriginalUrl(photo.file_path)
+    const isNative = isBrowserNativeImage(photo.file_path)
+
+    // 1. Instantly display the fast thumbnail/preview so there is 0ms blank delay
+    setImgSrc(previewUrl || originalUrl)
+
+    // 2. Load full-resolution image
+    if (isNative) {
+      // Browser-native format (.jpg, .png, .webp): load original file directly
+      const img = new Image()
+      img.onload = () => {
+        if (!isCancelled) setImgSrc(originalUrl)
+      }
+      img.src = originalUrl
+    } else if (typeof window.photoVault?.getHighResPreview === 'function') {
+      // Non-browser format (.dng, .heic, .cr2, .nef, .arw, .raw, .tiff): request on-demand 4K/full-res preview
+      window.photoVault.getHighResPreview(photo.file_path).then((highResPath) => {
+        if (isCancelled || !highResPath) return
+        const highResUrl = getThumbnailUrl(highResPath)
+        const img = new Image()
+        img.onload = () => {
+          if (!isCancelled) setImgSrc(highResUrl)
+        }
+        img.src = highResUrl
+      }).catch((err) => {
+        console.error('[PhotoViewer] Failed to load high-res preview:', err)
+      })
+    }
+
+    // 3. Predictive Prefetching for adjacent photos in the filmstrip
+    if (activePhotos && activePhotos.length > 1 && typeof window.photoVault?.prefetchHighRes === 'function') {
+      const adjacentPhotos = activePhotos.slice(
+        Math.max(0, currentIndex - 2),
+        Math.min(activePhotos.length, currentIndex + 3)
+      )
+      const pathsToPrefetch = adjacentPhotos
+        .map(p => p.file_path)
+        .filter(fp => fp && !isBrowserNativeImage(fp) && !isVideoFile(fp))
+      
+      if (pathsToPrefetch.length > 0) {
+        window.photoVault.prefetchHighRes(pathsToPrefetch).catch?.(() => {})
+      }
+    }
+
+    // 4. Load EXIF
     window.photoVault.getPhotoById(photo.id).then(data => {
-      if (data.exif) setExifData(data.exif)
+      if (isCancelled) return
+      if (data && data.exif) setExifData(data.exif)
       else setExifData(null)
     })
-  }, [photo])
+
+    return () => {
+      isCancelled = true
+    }
+  }, [photo, isVideo, currentIndex, activePhotos])
 
   // Keyboard navigation
   useEffect(() => {
@@ -272,14 +323,18 @@ export default function PhotoViewer() {
           </button>
         )}
 
-        {photo.mime_type?.startsWith('video') ? (
-          <video
-            src={imgSrc}
-            controls
-            autoPlay
-            className="photo-viewer-image"
-            style={{ maxWidth: '90%', maxHeight: '85%' }}
-          />
+        {isVideo ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', maxWidth: '90%', maxHeight: '85%' }}>
+            <video
+              key={photo.id}
+              src={imgSrc}
+              controls
+              autoPlay
+              playsInline
+              className="photo-viewer-image"
+              style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '12px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}
+            />
+          </div>
         ) : (
             <img
               ref={imageRef}
@@ -300,7 +355,7 @@ export default function PhotoViewer() {
             />
         )}
 
-        {currentIndex < state.photos.length - 1 && (
+        {currentIndex < activePhotos.length - 1 && (
           <button className="photo-viewer-nav next" onClick={() => navigate(1)}>
             <ChevronRight size={28} />
           </button>

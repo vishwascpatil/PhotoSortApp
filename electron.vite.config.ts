@@ -7,6 +7,10 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'heic-worker': resolve(__dirname, 'src/main/heic-worker.js')
+        },
         external: ['sql.js', 'sharp']
       }
     }

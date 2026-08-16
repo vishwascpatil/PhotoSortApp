@@ -23,6 +23,7 @@ export default function TrashPage() {
     await window.photoVault.deletePermanently(ids)
     dispatch({ type: 'SET_PHOTOS', payload: [] })
     setShowEmptyConfirm(false)
+    setShowDeleteSelectedConfirm(false)
     showToast(`${ids.length} items permanently deleted (${formatFileSize(bytesDeleted)} freed)`)
   }
 
@@ -52,6 +53,7 @@ export default function TrashPage() {
     await window.photoVault.deletePermanently(ids)
     dispatch({ type: 'REMOVE_PHOTOS', payload: ids })
     setShowDeleteSelectedConfirm(false)
+    setShowEmptyConfirm(false)
     showToast(`${ids.length} items permanently deleted (${formatFileSize(bytesDeleted)} freed)`)
   }
 
@@ -73,7 +75,14 @@ export default function TrashPage() {
           <button className="btn btn-ghost" onClick={handleRestoreAll}>
             <RotateCcw size={16} /> Restore all
           </button>
-          <button className="btn btn-danger" onClick={() => setShowEmptyConfirm(true)}>
+          <button
+            className="btn btn-danger"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowDeleteSelectedConfirm(false)
+              setShowEmptyConfirm(true)
+            }}
+          >
             <Trash2 size={16} /> Empty trash
           </button>
         </div>
@@ -88,14 +97,22 @@ export default function TrashPage() {
         <div className="selection-bar">
           <div className="selection-bar-count">
             <button className="selection-bar-btn" onClick={() => dispatch({ type: 'DESELECT_ALL' })}>
-              ✕
+              <X size={14} />
             </button>
             {state.selectedIds.size} selected
           </div>
           <button className="selection-bar-btn" onClick={handleRestoreSelected} title="Restore">
             <RotateCcw size={20} />
           </button>
-          <button className="selection-bar-btn" onClick={() => setShowDeleteSelectedConfirm(true)} title="Delete permanently">
+          <button
+            className="selection-bar-btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowEmptyConfirm(false)
+              setShowDeleteSelectedConfirm(true)
+            }}
+            title="Delete permanently"
+          >
             <Trash2 size={20} />
           </button>
         </div>
@@ -109,7 +126,7 @@ export default function TrashPage() {
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
             <div className="modal-header">
               <h3 className="modal-title">Empty Trash?</h3>
-              <button className="modal-close" onClick={() => setShowEmptyConfirm(false)}>
+              <button className="modal-close" onClick={() => setShowEmptyConfirm(false)} title="Close">
                 <X size={18} />
               </button>
             </div>
@@ -136,7 +153,7 @@ export default function TrashPage() {
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
             <div className="modal-header">
               <h3 className="modal-title">Delete permanently?</h3>
-              <button className="modal-close" onClick={() => setShowDeleteSelectedConfirm(false)}>
+              <button className="modal-close" onClick={() => setShowDeleteSelectedConfirm(false)} title="Close">
                 <X size={18} />
               </button>
             </div>

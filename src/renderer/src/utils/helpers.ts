@@ -70,7 +70,36 @@ export function getThumbnailUrl(path: string | null, fallbackFilePath?: string):
 export function getOriginalUrl(filePath: string): string {
   if (!filePath) return ''
   if (filePath.startsWith('file://')) return filePath
-  return `file://${filePath.replace(/\\/g, '/')}`
+  const normalized = filePath.replace(/\\/g, '/')
+  const parts = normalized.split('/')
+  const encodedParts = parts.map((part, index) => {
+    if (index === 0 && part.endsWith(':')) return part
+    return encodeURIComponent(part)
+  })
+  const encodedPath = encodedParts.join('/')
+  return encodedPath.startsWith('/') ? `file://${encodedPath}` : `file:///${encodedPath}`
+}
+
+export function getVideoUrl(filePath: string): string {
+  return getOriginalUrl(filePath)
+}
+
+export function isVideoFile(filePath: string): boolean {
+  if (!filePath) return false
+  const lastDot = filePath.lastIndexOf('.')
+  if (lastDot === -1) return false
+  const ext = filePath.slice(lastDot).toLowerCase()
+  const videoExts = new Set(['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.m4v', '.3gp', '.flv'])
+  return videoExts.has(ext)
+}
+
+export function isBrowserNativeImage(filePath: string): boolean {
+  if (!filePath) return true
+  const lastDot = filePath.lastIndexOf('.')
+  if (lastDot === -1) return true
+  const ext = filePath.slice(lastDot).toLowerCase()
+  const nativeExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif', '.svg'])
+  return nativeExts.has(ext)
 }
 
 export function getBestDisplayUrl(photo: any): string {

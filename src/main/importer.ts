@@ -16,8 +16,9 @@ function convertDMSToDecimal(dms: number[] | undefined, ref: string | undefined)
 
 const SUPPORTED_EXTENSIONS = new Set([
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif',
-  '.avif', '.svg',
-  '.mp4', '.mov', '.avi', '.mkv', '.webm',
+  '.avif', '.svg', '.heic', '.heif',
+  '.dng', '.cr2', '.nef', '.arw', '.raw', '.orf', '.rw2', '.pef', '.raf',
+  '.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.m4v', '.3gp', '.flv', '.mts', '.m2ts',
   '.pdf', '.txt', '.doc', '.docx'
 ])
 
@@ -32,11 +33,21 @@ const MIME_TYPES: Record<string, string> = {
   '.tif': 'image/tiff',
   '.avif': 'image/avif',
   '.svg': 'image/svg+xml',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  '.dng': 'image/x-adobe-dng',
+  '.cr2': 'image/x-canon-cr2',
+  '.nef': 'image/x-nikon-nef',
+  '.arw': 'image/x-sony-arw',
+  '.raw': 'image/x-panasonic-raw',
   '.mp4': 'video/mp4',
   '.mov': 'video/quicktime',
   '.avi': 'video/x-msvideo',
   '.mkv': 'video/x-matroska',
   '.webm': 'video/webm',
+  '.wmv': 'video/x-ms-wmv',
+  '.m4v': 'video/x-m4v',
+  '.3gp': 'video/3gpp',
   '.pdf': 'application/pdf',
   '.txt': 'text/plain',
   '.doc': 'application/msword',

@@ -83,6 +83,10 @@ const api = {
     ipcRenderer.invoke('photos:export', ids, destination),
   getPhotoById: (id: number): Promise<{ photo: PhotoRow; exif?: ExifData }> =>
     ipcRenderer.invoke('photos:get-by-id', id),
+  getHighResPreview: (filePath: string): Promise<string> =>
+    ipcRenderer.invoke('photos:get-highres-preview', filePath),
+  prefetchHighRes: (filePaths: string[]): Promise<boolean> =>
+    ipcRenderer.invoke('photos:prefetch-highres', filePaths),
   getPhotoCount: (filter?: PhotoFilter): Promise<number> =>
     ipcRenderer.invoke('photos:get-count', filter || {}),
   toggleFavorite: (id: number): Promise<boolean> =>

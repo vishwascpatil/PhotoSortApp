@@ -31,6 +31,7 @@ export default function DuplicatesPage() {
     similar: []
   })
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [minConfidence, setMinConfidence] = useState<number>(75)
   const [activeTab, setActiveTab] = useState<'all' | 'exact' | 'similar' | 'videos'>('all')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
 
@@ -73,7 +74,7 @@ export default function DuplicatesPage() {
   // Trigger manual 100% Pixel Density Duplicate Scan
   const handleStartScan = async () => {
     setIsScanning(true)
-    showToast('Computing 64-bit visual pixel-density hashes across library...')
+    showToast('Running multi-stage duplicate detection engine across library...')
     try {
       if (window.photoVault?.scanDuplicates) {
         const data = await window.photoVault.scanDuplicates()
@@ -81,21 +82,24 @@ export default function DuplicatesPage() {
           duplicates: data.duplicates || [],
           similar: data.similar || []
         })
+        showToast('Duplicate detection pipeline complete!')
       }
     } catch (err) {
-      console.error('Scan duplicates error:', err)
+      console.error('Scan failed:', err)
+      showToast('Scan failed to complete')
     } finally {
       setIsScanning(false)
-      fetchDuplicates()
+      setScanProgress(null)
     }
   }
 
   // Helper to calculate hamming distance match percentage
   const calculateMatch = (p1: Photo, p2: Photo, isExact: boolean): number => {
     if (isExact) return 100
-    if (!p1.perceptual_hash || !p2.perceptual_hash || p1.perceptual_hash === '0000000000000000') return 95
+    if (!p1.perceptual_hash || !p2.perceptual_hash || p1.perceptual_hash === '0'.repeat(64)) return 95
     let distance = 0
-    for (let i = 0; i < Math.min(p1.perceptual_hash.length, p2.perceptual_hash.length); i++) {
+    const len = Math.min(p1.perceptual_hash.length, p2.perceptual_hash.length)
+    for (let i = 0; i < len; i++) {
       const n1 = parseInt(p1.perceptual_hash[i], 16)
       const n2 = parseInt(p2.perceptual_hash[i], 16)
       let xor = n1 ^ n2
@@ -104,7 +108,8 @@ export default function DuplicatesPage() {
         xor >>= 1
       }
     }
-    return Math.max(75, Math.round(((64 - distance) / 64) * 100))
+    const totalBits = len * 4
+    return Math.max(75, Math.round(((totalBits - distance) / totalBits) * 100))
   }
 
   // Structure duplicate groups with Master (Largest file size) + Duplicates
@@ -153,13 +158,34 @@ export default function DuplicatesPage() {
     return result
   }, [utilitiesData])
 
-  // Filter groups by tab
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<'size' | 'confidence' | 'count'>('size')
+
+  // Filter & Sort groups by tab, confidence, search query, and sort mode
   const filteredGroups = useMemo(() => {
-    if (activeTab === 'exact') return groups.filter(g => g.isExact)
-    if (activeTab === 'similar') return groups.filter(g => !g.isExact)
-    if (activeTab === 'videos') return groups.filter(g => g.isVideo)
-    return groups
-  }, [groups, activeTab])
+    let list = groups.filter(g => {
+      if (g.matchPercentage < minConfidence) return false
+      if (activeTab === 'exact') return g.isExact
+      if (activeTab === 'similar') return !g.isExact
+      if (activeTab === 'videos') return g.isVideo
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const match = g.items.some(p => p.filename.toLowerCase().includes(q) || p.file_path?.toLowerCase().includes(q))
+        if (!match) return false
+      }
+
+      return true
+    })
+
+    list.sort((a, b) => {
+      if (sortBy === 'confidence') return b.matchPercentage - a.matchPercentage
+      if (sortBy === 'count') return b.items.length - a.items.length
+      return b.recoverableBytes - a.recoverableBytes
+    })
+
+    return list
+  }, [groups, activeTab, minConfidence, searchQuery, sortBy])
 
   // Aggregate storage estimates
   const totalStats = useMemo(() => {
@@ -292,8 +318,15 @@ export default function DuplicatesPage() {
     }
   }
 
-  const handleOpenViewer = (photo: Photo) => {
-    photoDispatch({ type: 'SET_VIEWER_SCOPED', payload: { photoId: photo.id, photos: [photo] } })
+  const handleOpenViewer = (photo: Photo, groupItems?: Photo[]) => {
+    const allVisiblePhotos = filteredGroups.flatMap(g => g.items)
+    photoDispatch({
+      type: 'SET_VIEWER_SCOPED',
+      payload: {
+        photoId: photo.id,
+        photos: allVisiblePhotos.length > 0 ? allVisiblePhotos : (groupItems || [photo])
+      }
+    })
   }
 
   return (
@@ -491,7 +524,7 @@ export default function DuplicatesPage() {
                       >
                         <div
                           className="apple-tile-thumb"
-                          onClick={() => handleOpenViewer(photo)}
+                          onClick={() => handleOpenViewer(photo, group.items)}
                           style={{ aspectRatio: appState.gridDensity === 'comfortable' ? '4/3' : '1/1' }}
                         >
                           <img

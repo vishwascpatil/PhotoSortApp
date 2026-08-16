@@ -153,6 +153,50 @@ function createTables(): void {
   `)
 
   database.run(`
+    CREATE TABLE IF NOT EXISTS photo_fingerprints (
+      photo_id INTEGER PRIMARY KEY,
+      sha256 TEXT,
+      partial_sha256 TEXT,
+      phash TEXT,
+      dhash TEXT,
+      ahash TEXT,
+      block_hash TEXT,
+      rgb_histogram TEXT,
+      hsv_histogram TEXT,
+      edge_histogram TEXT,
+      quality_score REAL DEFAULT 0,
+      video_duration REAL,
+      video_keyframes TEXT,
+      algorithm_version INTEGER DEFAULT 1,
+      clip_embedding BLOB,
+      embedding_version TEXT,
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(photo_id) REFERENCES photos(id) ON DELETE CASCADE
+    )
+  `)
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN color_histogram TEXT') } catch {}
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN rgb_histogram TEXT') } catch {}
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN hsv_histogram TEXT') } catch {}
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN edge_histogram TEXT') } catch {}
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN quality_score REAL DEFAULT 0') } catch {}
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN algorithm_version INTEGER DEFAULT 1') } catch {}
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN clip_embedding BLOB') } catch {}
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN embedding_version TEXT') } catch {}
+
+  try { database.run('CREATE INDEX IF NOT EXISTS idx_fingerprints_sha256 ON photo_fingerprints(sha256)') } catch {}
+  try { database.run('CREATE INDEX IF NOT EXISTS idx_fingerprints_dhash ON photo_fingerprints(dhash)') } catch {}
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS scan_checkpoints (
+      id INTEGER PRIMARY KEY,
+      last_processed_photo_id INTEGER NOT NULL DEFAULT 0,
+      stage TEXT NOT NULL DEFAULT 'INIT',
+      percentage REAL NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+
+  database.run(`
     CREATE TABLE IF NOT EXISTS albums (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -492,7 +536,29 @@ export function insertPhotoBatch(photos: { photo: PhotoInsert; exif?: ExifInsert
 }
 
 export function updatePhotoThumbnails(id: number, thumbnailPath: string, previewPath: string): void {
-  runSql('UPDATE photos SET thumbnail_path = ?, preview_path = ? WHERE id = ?', [thumbnailPath, previewPath, id])
+  const database = getDb()
+  try {
+    database.run('UPDATE photos SET thumbnail_path = ?, preview_path = ? WHERE id = ?', [thumbnailPath, previewPath, id])
+    scheduleSave()
+  } catch {}
+}
+
+export function updatePhotoThumbnailsBatch(items: { id: number; thumbnailPath: string; previewPath: string }[]): void {
+  if (!items || items.length === 0) return
+  const database = getDb()
+  try {
+    database.run('BEGIN TRANSACTION')
+    const stmt = database.prepare('UPDATE photos SET thumbnail_path = ?, preview_path = ? WHERE id = ?')
+    for (const item of items) {
+      stmt.run([item.thumbnailPath, item.previewPath, item.id])
+    }
+    stmt.free()
+    database.run('COMMIT')
+    scheduleSave()
+  } catch (err) {
+    try { database.run('ROLLBACK') } catch {}
+    console.error('Batch thumbnail update failed:', err)
+  }
 }
 
 export interface PhotoFilter {
@@ -632,8 +698,26 @@ export function setTrashed(ids: number[], trashed: boolean): void {
   }
 }
 
-export function deletePermanently(ids: number[]): void {
+function safeUnlink(filePath: string): void {
   const { unlinkSync, existsSync } = require('fs')
+  if (!filePath || !existsSync(filePath)) return
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      unlinkSync(filePath)
+      return
+    } catch (err: any) {
+      if (err?.code === 'EBUSY' && attempt < 3) {
+        const start = Date.now()
+        while (Date.now() - start < 100) {}
+      } else {
+        break
+      }
+    }
+  }
+}
+
+export function deletePermanently(ids: number[]): void {
   const placeholders = ids.map(() => '?').join(',')
 
   // Fetch file paths before deleting records
@@ -641,22 +725,13 @@ export function deletePermanently(ids: number[]): void {
 
   // Physically delete original file and thumbnails from disk
   for (const photo of photos) {
-    try {
-      if (photo.file_path && existsSync(photo.file_path)) {
-        unlinkSync(photo.file_path)
-      }
-      if (photo.thumbnail_path && existsSync(photo.thumbnail_path)) {
-        unlinkSync(photo.thumbnail_path)
-      }
-      if (photo.preview_path && existsSync(photo.preview_path)) {
-        unlinkSync(photo.preview_path)
-      }
-    } catch (err) {
-      console.error('Failed to physically delete file from disk:', photo.file_path, err)
-    }
+    if (photo.file_path) safeUnlink(photo.file_path)
+    if (photo.thumbnail_path) safeUnlink(photo.thumbnail_path)
+    if (photo.preview_path) safeUnlink(photo.preview_path)
   }
 
   // Delete records from database
+  runSql(`DELETE FROM photo_fingerprints WHERE photo_id IN (${placeholders})`, ids)
   runSql(`DELETE FROM photos WHERE id IN (${placeholders})`, ids)
 
   cleanupOrphanedPeople()
@@ -769,7 +844,136 @@ function hammingDistance(hash1: string, hash2: string): number {
   return distance
 }
 
-export function getUtilitiesData() {
+// Helper to extract base numeric sequence from camera filenames (e.g. IMG_6368.JPG -> 6368, IMG_E6368.JPG -> 6368)
+function getBasePhotoSequence(filename: string): string {
+  if (!filename) return ''
+  const nameWithoutExt = filename.replace(/\.[^/.]+$/, '').toUpperCase()
+  const match = nameWithoutExt.match(/\d{4,}/)
+  return match ? match[0] : ''
+}
+
+// Helper to check if two photos are Portrait Mode vs Normal Mode versions of the same photo
+function isPortraitNormalPair(p1: PhotoRow, p2: PhotoRow): boolean {
+  const name1 = p1.filename.toUpperCase()
+  const name2 = p2.filename.toUpperCase()
+
+  // 1. Filename Pattern (iPhone 'E' prefix or 'PORTRAIT' keyword)
+  const hasPortraitKeyword = name1.includes('PORTRAIT') || name2.includes('PORTRAIT')
+  const hasEPrefix = (name1.startsWith('IMG_E') && name2.startsWith('IMG_')) ||
+                     (name2.startsWith('IMG_E') && name1.startsWith('IMG_'))
+
+  const seq1 = getBasePhotoSequence(p1.filename)
+  const seq2 = getBasePhotoSequence(p2.filename)
+  const sameSeqNumber = Boolean(seq1 && seq2 && seq1 === seq2)
+
+  // 2. EXIF Timestamp Proximity (shot within 10 seconds)
+  let closeTimestamp = false
+  if (p1.created_at && p2.created_at) {
+    const t1 = new Date(p1.created_at).getTime()
+    const t2 = new Date(p2.created_at).getTime()
+    if (!isNaN(t1) && !isNaN(t2) && Math.abs(t1 - t2) <= 10000) {
+      closeTimestamp = true
+    }
+  }
+
+  return (hasEPrefix && sameSeqNumber) || (hasPortraitKeyword && sameSeqNumber) || (sameSeqNumber && closeTimestamp)
+}
+
+// Helper to parse Video Fingerprint: VID_DUR_30_a3f8c9...
+function parseVideoFingerprint(hashStr: string | undefined): { duration: number; dHash: string } | null {
+  if (!hashStr || !hashStr.startsWith('VID_DUR_')) return null
+  const parts = hashStr.split('_')
+  if (parts.length < 4) return null
+  const duration = parseInt(parts[2], 10)
+  const dHash = parts[3]
+  return { duration, dHash }
+}
+
+import { defaultDuplicateOrchestrator } from './services/duplicate/DuplicateOrchestrator'
+import { PhotoFingerprintRecord } from './services/duplicate/types'
+
+export function savePhotoFingerprint(fp: PhotoFingerprintRecord): void {
+  const jsonHistogram = fp.colorHistogram ? JSON.stringify(fp.colorHistogram) : null
+  const jsonKeyframes = fp.videoKeyframes ? JSON.stringify(fp.videoKeyframes) : null
+
+  runSql(
+    `INSERT INTO photo_fingerprints (
+      photo_id, sha256, partial_sha256, phash, dhash, ahash, block_hash, color_histogram, video_duration, video_keyframes, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(photo_id) DO UPDATE SET
+      sha256 = excluded.sha256,
+      partial_sha256 = excluded.partial_sha256,
+      phash = excluded.phash,
+      dhash = excluded.dhash,
+      ahash = excluded.ahash,
+      block_hash = excluded.block_hash,
+      color_histogram = excluded.color_histogram,
+      video_duration = excluded.video_duration,
+      video_keyframes = excluded.video_keyframes,
+      updated_at = datetime('now')`,
+    [
+      fp.photoId,
+      fp.sha256 || null,
+      fp.partialSha256 || null,
+      fp.phash || null,
+      fp.dhash || null,
+      fp.ahash || null,
+      fp.blockHash || null,
+      jsonHistogram,
+      fp.videoDuration ?? null,
+      jsonKeyframes
+    ]
+  )
+
+  const legacyHash = fp.dhash || (fp.videoDuration ? `VID_DUR_${Math.round(fp.videoDuration)}_${fp.videoKeyframes?.[2] || ''}` : '')
+  if (legacyHash) {
+    runSql('UPDATE photos SET perceptual_hash = ? WHERE id = ?', [legacyHash, fp.photoId])
+  }
+}
+
+export function getAllPhotoFingerprints(): PhotoFingerprintRecord[] {
+  const rows = queryAll<any>(`
+    SELECT p.id as photoId, p.file_path as filePath, p.file_size as fileSize, p.mime_type as mimeType,
+           p.width, p.height, p.created_at as createdAt, p.perceptual_hash as legacyHash,
+           fp.sha256, fp.partial_sha256 as partialSha256, fp.phash, fp.dhash, fp.ahash, fp.block_hash as blockHash,
+           COALESCE(fp.color_histogram, fp.rgb_histogram) as colorHistogramJson, fp.video_duration as videoDuration, fp.video_keyframes as videoKeyframesJson
+    FROM photos p
+    LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id
+    WHERE p.is_trashed = 0
+  `)
+
+  return rows.map((r) => {
+    let colorHistogram: number[] | undefined
+    if (r.colorHistogramJson) {
+      try { colorHistogram = JSON.parse(r.colorHistogramJson) } catch {}
+    }
+    let videoKeyframes: string[] | undefined
+    if (r.videoKeyframesJson) {
+      try { videoKeyframes = JSON.parse(r.videoKeyframesJson) } catch {}
+    }
+
+    return {
+      photoId: r.photoId,
+      filePath: r.filePath,
+      fileSize: r.fileSize || 0,
+      mimeType: r.mimeType || 'image/jpeg',
+      width: r.width || 0,
+      height: r.height || 0,
+      createdAt: r.createdAt || '',
+      sha256: r.sha256 || undefined,
+      partialSha256: r.partialSha256 || undefined,
+      phash: r.phash || undefined,
+      dhash: r.dhash || r.legacyHash || undefined,
+      ahash: r.ahash || undefined,
+      blockHash: r.blockHash || undefined,
+      colorHistogram,
+      videoDuration: r.videoDuration || undefined,
+      videoKeyframes
+    }
+  })
+}
+
+export async function getUtilitiesData() {
   const allPhotos = queryAll<PhotoRow>('SELECT * FROM photos WHERE is_trashed = 0 ORDER BY created_at DESC')
 
   const whatsappPhotos = allPhotos.filter(p =>
@@ -780,78 +984,53 @@ export function getUtilitiesData() {
   const blurryPhotos = allPhotos.filter(p => p.blur_score !== undefined && p.blur_score >= 0 && p.blur_score < 100)
   blurryPhotos.sort((a, b) => (a.blur_score || 0) - (b.blur_score || 0))
 
-  // 1. Find Exact Visual & Byte Content Duplicates
-  // Match photos with identical 64-bit pixel-density hash OR exact filename + size copy
-  const exactDuplicates = new Map<string, PhotoRow[]>()
-  allPhotos.forEach(p => {
-    let key = ''
-    if (p.perceptual_hash && p.perceptual_hash !== '0000000000000000') {
-      // 100% Pixel Density Match
-      key = `hash_${p.perceptual_hash}`
-    } else if (p.file_size > 0 && p.filename) {
-      // Fallback for unanalyzed photos: exact same file size & exact filename
-      key = `filesize_${p.file_size}_${p.filename.toLowerCase()}`
-    }
+  const fingerprints = getAllPhotoFingerprints()
+  const duplicateGroups = await defaultDuplicateOrchestrator.runPipeline(fingerprints)
 
-    if (key) {
-      if (!exactDuplicates.has(key)) exactDuplicates.set(key, [])
-      exactDuplicates.get(key)!.push(p)
-    }
-  })
+  // Format groups into PhotoRow[][] array for backward compatibility & renderer UI
+  const photoMap = new Map<number, PhotoRow>()
+  allPhotos.forEach(p => photoMap.set(p.id, p))
 
-  const duplicateGroups = Array.from(exactDuplicates.values()).filter(group => group.length > 1)
+  const exactGroupRows: PhotoRow[][] = []
+  const similarGroupRows: PhotoRow[][] = []
 
-  // 2. Find Similar Photos (Strict Pixel Density Hamming Distance <= 5)
-  const similarGroups: PhotoRow[][] = []
-  const checkedForSimilar = new Set<number>()
-
-  duplicateGroups.forEach(group => group.forEach(p => checkedForSimilar.add(p.id)))
-
-  // Only compare photos that have a valid 64-bit pixel density hash
-  const availableForSimilar = allPhotos.filter(p =>
-    !checkedForSimilar.has(p.id) &&
-    p.perceptual_hash &&
-    p.perceptual_hash !== '0000000000000000'
-  )
-
-  for (let i = 0; i < availableForSimilar.length; i++) {
-    const p1 = availableForSimilar[i]
-    if (checkedForSimilar.has(p1.id)) continue
-
-    const currentGroup = [p1]
-    checkedForSimilar.add(p1.id)
-
-    for (let j = i + 1; j < availableForSimilar.length; j++) {
-      const p2 = availableForSimilar[j]
-      if (checkedForSimilar.has(p2.id)) continue
-
-      // Pixel Density Hamming Distance Check (<= 5 bits difference out of 64)
-      const dist = hammingDistance(p1.perceptual_hash!, p2.perceptual_hash!)
-      if (dist <= 5) {
-        currentGroup.push(p2)
-        checkedForSimilar.add(p2.id)
+  duplicateGroups.forEach((g) => {
+    const rows = g.items.map((item) => photoMap.get(item.photoId)).filter((p): p is PhotoRow => p !== undefined)
+    if (rows.length > 1) {
+      if (g.isExact || g.confidence >= 99) {
+        exactGroupRows.push(rows)
+      } else {
+        similarGroupRows.push(rows)
       }
     }
-
-    if (currentGroup.length > 1) {
-      similarGroups.push(currentGroup)
-    }
-  }
+  })
 
   return {
     whatsapp: whatsappPhotos,
     blurry: blurryPhotos,
-    duplicates: duplicateGroups,
-    similar: similarGroups
+    duplicates: exactGroupRows,
+    similar: similarGroupRows,
+    duplicateGroups // Rich production-grade DuplicateGroupResult[] metadata array
   }
 }
 
 export async function scanPerceptualHashesBatch(
-  onProgress?: (scanned: number, total: number) => void
+  onProgress?: (scanned: number, total: number) => void,
+  forceReScan: boolean = false
 ): Promise<{ scannedCount: number; duplicateCount: number }> {
-  const unanalyzed = queryAll<{ id: number; file_path: string }>(
-    "SELECT id, file_path FROM photos WHERE is_trashed = 0 AND (perceptual_hash IS NULL OR perceptual_hash = '' OR perceptual_hash = '0000000000000000')"
-  )
+  const query = forceReScan
+    ? "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at FROM photos p WHERE p.is_trashed = 0"
+    : "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at FROM photos p LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id WHERE p.is_trashed = 0 AND (fp.photo_id IS NULL OR fp.dhash IS NULL OR fp.dhash = '')"
+
+  const unanalyzed = queryAll<{
+    id: number
+    file_path: string
+    file_size: number
+    mime_type: string
+    width: number
+    height: number
+    created_at: string
+  }>(query)
 
   const total = unanalyzed.length
   if (total === 0) {
@@ -860,18 +1039,23 @@ export async function scanPerceptualHashesBatch(
   }
 
   let completed = 0
-  const BATCH_SIZE = 32
+  const BATCH_SIZE = 16
 
   for (let i = 0; i < unanalyzed.length; i += BATCH_SIZE) {
     const batch = unanalyzed.slice(i, i + BATCH_SIZE)
     await Promise.allSettled(
       batch.map(async (photo) => {
         try {
-          const { computePerceptualHash } = await import('./thumbnails')
-          const hash = await computePerceptualHash(photo.file_path)
-          if (hash && hash !== '0000000000000000') {
-            runSql('UPDATE photos SET perceptual_hash = ? WHERE id = ?', [hash, photo.id])
-          }
+          const fp = await defaultDuplicateOrchestrator.computeFingerprint(
+            photo.id,
+            photo.file_path,
+            photo.file_size || 0,
+            photo.mime_type || 'image/jpeg',
+            photo.width || 0,
+            photo.height || 0,
+            photo.created_at || ''
+          )
+          savePhotoFingerprint(fp)
         } catch {}
         completed++
         onProgress?.(completed, total)
