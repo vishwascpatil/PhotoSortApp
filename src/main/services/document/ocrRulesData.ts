@@ -1,4 +1,12 @@
-[
+export interface OcrRule {
+  id: number;
+  name: string;
+  category: string;
+  keywords: string[];
+  regex: string | null;
+}
+
+export const ocrRules: OcrRule[] = [
   {
     "id": 141,
     "name": "Purchase Order",
@@ -2689,4 +2697,5 @@
     ],
     "regex": null
   }
-]
+];
+export default ocrRules;

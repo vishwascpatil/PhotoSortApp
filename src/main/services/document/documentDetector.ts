@@ -1,11 +1,8 @@
 import sharp from 'sharp'
 import { existsSync } from 'fs'
 import { basename } from 'path'
-import { createRequire } from 'module'
 import Tesseract from 'tesseract.js'
-
-const require = createRequire(import.meta.url)
-const ocrRules: Array<{ id: number; name: string; category: string; keywords: string[]; regex: string | null }> = require('./ocr_rules.json')
+import { ocrRules } from './ocrRulesData.ts'
 
 // ─── Interfaces & Types ───────────────────────────────────────────────────
 
@@ -100,28 +97,40 @@ export function levenshteinDistance(a: string, b: string): number {
   return matrix[bn][an]
 }
 
-export function fuzzyIncludes(text: string, keyword: string, maxDistance = 2): boolean {
-  const kwLower = keyword.toLowerCase()
+export function fuzzyIncludes(text: string, keyword: string, maxDistance = 1): boolean {
+  const kwLower = keyword.trim().toLowerCase()
   const textLower = text.toLowerCase()
+
+  if (kwLower.length < 3) {
+    const rx = new RegExp(`\\b${kwLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+    return rx.test(textLower)
+  }
 
   if (textLower.includes(kwLower)) return true
 
-  // Word-by-word fuzzy match for short & medium terms
-  const words = textLower.split(/[\s,.:;!?'"()\[\]{}\/\-_]+/).filter(w => w.length > 0)
+  // For words of length 3-4, require exact match; distance 1 only for >=5 chars, distance 2 for >=8 chars
+  const allowedDist = kwLower.length >= 8 ? Math.min(2, maxDistance) : (kwLower.length >= 5 ? 1 : 0)
+  if (allowedDist === 0) {
+    const rx = new RegExp(`\\b${kwLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+    return rx.test(textLower)
+  }
+
+  // Word-by-word fuzzy match for terms
+  const words = textLower.split(/[\s,.:;!?'"()\[\]{}\/\-_]+/).filter(w => w.length >= 3)
   for (const word of words) {
-    if (Math.abs(word.length - kwLower.length) <= maxDistance) {
-      if (levenshteinDistance(word, kwLower) <= maxDistance) {
+    if (Math.abs(word.length - kwLower.length) <= allowedDist) {
+      if (levenshteinDistance(word, kwLower) <= allowedDist) {
         return true
       }
     }
   }
 
-  // Sliding window check for multi-word phrases (e.g. "unique identification", "income tax")
+  // Sliding window check for multi-word phrases
   if (kwLower.includes(' ')) {
     const phraseWords = kwLower.split(' ')
     for (let i = 0; i <= words.length - phraseWords.length; i++) {
       const windowStr = words.slice(i, i + phraseWords.length).join(' ')
-      if (levenshteinDistance(windowStr, kwLower) <= maxDistance + 1) {
+      if (levenshteinDistance(windowStr, kwLower) <= allowedDist) {
         return true
       }
     }
@@ -331,7 +340,8 @@ export async function detectQuadrilateral(
     const matchesIdCard = aspectRatio >= 1.35 && aspectRatio <= 1.85
     const matchesA4OrPassport = aspectRatio >= 1.20 && aspectRatio <= 1.65
 
-    const isValidDocQuad = areaRatio >= 0.25 && (matchesIdCard || matchesA4OrPassport)
+    // Document quad must be an embedded physical page/card (area 20% - 88%), not the full camera photo
+    const isValidDocQuad = areaRatio >= 0.20 && areaRatio <= 0.88 && (matchesIdCard || matchesA4OrPassport)
 
     return {
       hasQuad: isValidDocQuad,
@@ -978,32 +988,50 @@ export async function detectDocument(filePath: string): Promise<DocumentDetectio
 
     // Taxonomy Rule Matching (150+ rules from ocr_rules.json)
     let bestType = 'General Document'
-    let bestCategory: string | null = 'Unknown / Other'
+    let bestCategory: string | null = null
     let bestRuleScore = 0
 
-    for (const rule of ocrRules) {
-      let rulePoints = 0
-      for (const kw of rule.keywords) {
-        if (fuzzyIncludes(lowerText, kw, 1)) {
-          rulePoints += 4
+    // Only match taxonomy rules if we have at least 3 OCR words
+    if (words.length >= 3) {
+      for (const rule of ocrRules) {
+        let rulePoints = 0
+        let matchedKeywordsCount = 0
+
+        for (const kw of rule.keywords) {
+          if (fuzzyIncludes(lowerText, kw, 1)) {
+            rulePoints += 6
+            matchedKeywordsCount++
+          }
         }
-      }
 
-      if (rule.regex) {
-        try {
-          const rx = new RegExp(rule.regex, 'i')
-          if (rx.test(extractedText)) rulePoints += 10
-        } catch {}
-      }
+        let regexMatched = false
+        if (rule.regex && rule.regex.length >= 4 && !rule.regex.includes('Classification')) {
+          try {
+            const rx = new RegExp(rule.regex, 'i')
+            if (rx.test(extractedText)) {
+              rulePoints += 15
+              regexMatched = true
+            }
+          } catch {}
+        }
 
-      if (rulePoints > bestRuleScore) {
-        bestRuleScore = rulePoints
-        bestType = rule.name
-        bestCategory = rule.category
+        // Require at least 2 distinct keywords OR a verified regex match
+        if ((matchedKeywordsCount >= 2 || regexMatched) && rulePoints > bestRuleScore) {
+          bestRuleScore = rulePoints
+          bestType = rule.name
+          bestCategory = rule.category
+        }
       }
     }
 
-    totalScore += bestRuleScore
+    if (bestRuleScore > 0 && bestCategory) {
+      totalScore += bestRuleScore
+      matchedSignals.push({
+        signal: `Taxonomy Match: ${bestType}`,
+        points: bestRuleScore,
+        reason: `Matched category "${bestCategory}" (${bestType})`
+      })
+    }
 
     // Cap confidence if blurry
     let finalConfidence = Math.max(0, Math.min(100, totalScore))
@@ -1011,11 +1039,13 @@ export async function detectDocument(filePath: string): Promise<DocumentDetectio
       finalConfidence = Math.min(80, finalConfidence)
     }
 
-    const isDocument = finalConfidence >= DOCUMENT_SCORE_THRESHOLD
+    // A document must pass the score threshold AND have either an identity signature or verified text/quad evidence
+    const hasSufficientEvidence = words.length >= 4 || identityMatch.matched || (quadRes.hasQuad && words.length >= 2)
+    const isDocument = finalConfidence >= DOCUMENT_SCORE_THRESHOLD && hasSufficientEvidence
 
     return {
-      classification: isDocument ? bestType : 'not_a_document',
-      category: isDocument ? bestCategory : null,
+      classification: isDocument ? (bestCategory ? bestType : 'General Document') : 'not_a_document',
+      category: isDocument ? (bestCategory || 'Unknown / Other') : null,
       confidence: finalConfidence,
       ocrQualityScore,
       matchedSignals,
