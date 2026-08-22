@@ -13,6 +13,7 @@ import {
   getAllFaceDescriptors, saveFaceDescriptor, getUnscannedPhotos, markPhotoScanned, resetFaceScanData, getMergeSuggestions,
   resetLocationScanData, resetDocumentScanData, resetUtilityScanData,
   getUnanalyzedPhotos, savePhotoAnalysis, getUtilitiesData, getUnscannedDocuments, saveDocumentScan,
+  getAllTags, createTag, deleteTag, renameTag, addTagsToPhotos, syncPhotoTags, removeTagFromPhotos, getTagsForPhoto, getPhotosByTag, getAllTaggedPhotos,
   PhotoFilter
 } from './database'
 import { scanDirectory, processFiles } from './importer'
@@ -651,6 +652,52 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('large-files:get-manifests', () => {
     return getLargeFileManifests()
+  })
+
+  // ─── Tags ─────────────────────────────────────────────────────────────
+  ipcMain.handle('tags:get-all', () => {
+    return getAllTags()
+  })
+
+  ipcMain.handle('tags:create', (_event, name: string, color?: string) => {
+    return createTag(name, color)
+  })
+
+  ipcMain.handle('tags:delete', (_event, tagId: number) => {
+    deleteTag(tagId)
+    return true
+  })
+
+  ipcMain.handle('tags:rename', (_event, tagId: number, newName: string, newColor?: string) => {
+    renameTag(tagId, newName, newColor)
+    return true
+  })
+
+  ipcMain.handle('tags:add-to-photos', (_event, photoIds: number[], tagIds: number[]) => {
+    addTagsToPhotos(photoIds, tagIds)
+    return true
+  })
+
+  ipcMain.handle('tags:sync-photos', (_event, photoIds: number[], tagIds: number[]) => {
+    syncPhotoTags(photoIds, tagIds)
+    return true
+  })
+
+  ipcMain.handle('tags:remove-from-photos', (_event, photoIds: number[], tagId: number) => {
+    removeTagFromPhotos(photoIds, tagId)
+    return true
+  })
+
+  ipcMain.handle('tags:get-for-photo', (_event, photoId: number) => {
+    return getTagsForPhoto(photoId)
+  })
+
+  ipcMain.handle('tags:get-photos-by-tag', (_event, tagId: number) => {
+    return getPhotosByTag(tagId)
+  })
+
+  ipcMain.handle('tags:get-all-tagged-photos', () => {
+    return getAllTaggedPhotos()
   })
 
   // ─── System ──────────────────────────────────────────────────────────

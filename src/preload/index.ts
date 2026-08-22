@@ -216,6 +216,28 @@ const api = {
   detectDocumentBatch: (filePaths: string[]): Promise<any[]> =>
     ipcRenderer.invoke('documents:detect-batch', filePaths),
 
+  // Tags API
+  getAllTags: (): Promise<Array<{ id: number; name: string; color: string; photo_count: number }>> =>
+    ipcRenderer.invoke('tags:get-all'),
+  createTag: (name: string, color?: string): Promise<{ id: number; name: string; color: string }> =>
+    ipcRenderer.invoke('tags:create', name, color),
+  deleteTag: (tagId: number): Promise<boolean> =>
+    ipcRenderer.invoke('tags:delete', tagId),
+  renameTag: (tagId: number, newName: string, newColor?: string): Promise<boolean> =>
+    ipcRenderer.invoke('tags:rename', tagId, newName, newColor),
+  addTagsToPhotos: (photoIds: number[], tagIds: number[]): Promise<boolean> =>
+    ipcRenderer.invoke('tags:add-to-photos', photoIds, tagIds),
+  syncPhotoTags: (photoIds: number[], tagIds: number[]): Promise<boolean> =>
+    ipcRenderer.invoke('tags:sync-photos', photoIds, tagIds),
+  removeTagFromPhotos: (photoIds: number[], tagId: number): Promise<boolean> =>
+    ipcRenderer.invoke('tags:remove-from-photos', photoIds, tagId),
+  getTagsForPhoto: (photoId: number): Promise<Array<{ id: number; name: string; color: string }>> =>
+    ipcRenderer.invoke('tags:get-for-photo', photoId),
+  getPhotosByTag: (tagId: number): Promise<any[]> =>
+    ipcRenderer.invoke('tags:get-photos-by-tag', tagId),
+  getAllTaggedPhotos: (): Promise<any[]> =>
+    ipcRenderer.invoke('tags:get-all-tagged-photos'),
+
   // Large Files Mover & Relocation
   selectLargeFilesDestination: (): Promise<string | null> =>
     ipcRenderer.invoke('large-files:select-destination'),

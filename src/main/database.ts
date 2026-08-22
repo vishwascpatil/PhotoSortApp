@@ -138,6 +138,9 @@ function createTables(): void {
 
   try { database.run('ALTER TABLE photos ADD COLUMN document_category TEXT DEFAULT NULL') } catch { }
   try { database.run('ALTER TABLE people ADD COLUMN cover_face_base64 TEXT') } catch { }
+  try { database.run("ALTER TABLE tags ADD COLUMN color TEXT DEFAULT '#3b82f6'") } catch { }
+  try { database.run("ALTER TABLE tags ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP") } catch { }
+  try { database.run("ALTER TABLE photo_tags ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP") } catch { }
 
   // Now that document_category exists, we can safely run the reset
   try { database.run("UPDATE photos SET extracted_text = '', is_document = 0, document_category = NULL") } catch (e) { console.error('reset fail 7', e) }
@@ -174,17 +177,17 @@ function createTables(): void {
       FOREIGN KEY(photo_id) REFERENCES photos(id) ON DELETE CASCADE
     )
   `)
-  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN color_histogram TEXT') } catch {}
-  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN rgb_histogram TEXT') } catch {}
-  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN hsv_histogram TEXT') } catch {}
-  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN edge_histogram TEXT') } catch {}
-  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN quality_score REAL DEFAULT 0') } catch {}
-  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN algorithm_version INTEGER DEFAULT 1') } catch {}
-  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN clip_embedding BLOB') } catch {}
-  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN embedding_version TEXT') } catch {}
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN color_histogram TEXT') } catch { }
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN rgb_histogram TEXT') } catch { }
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN hsv_histogram TEXT') } catch { }
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN edge_histogram TEXT') } catch { }
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN quality_score REAL DEFAULT 0') } catch { }
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN algorithm_version INTEGER DEFAULT 1') } catch { }
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN clip_embedding BLOB') } catch { }
+  try { database.run('ALTER TABLE photo_fingerprints ADD COLUMN embedding_version TEXT') } catch { }
 
-  try { database.run('CREATE INDEX IF NOT EXISTS idx_fingerprints_sha256 ON photo_fingerprints(sha256)') } catch {}
-  try { database.run('CREATE INDEX IF NOT EXISTS idx_fingerprints_dhash ON photo_fingerprints(dhash)') } catch {}
+  try { database.run('CREATE INDEX IF NOT EXISTS idx_fingerprints_sha256 ON photo_fingerprints(sha256)') } catch { }
+  try { database.run('CREATE INDEX IF NOT EXISTS idx_fingerprints_dhash ON photo_fingerprints(dhash)') } catch { }
 
   database.run(`
     CREATE TABLE IF NOT EXISTS scan_checkpoints (
@@ -284,6 +287,26 @@ function createTables(): void {
     )
   `)
 
+  database.run(`
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT DEFAULT '#3b82f6',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS photo_tags (
+      photo_id INTEGER NOT NULL,
+      tag_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (photo_id, tag_id),
+      FOREIGN KEY(photo_id) REFERENCES photos(id) ON DELETE CASCADE,
+      FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    )
+  `)
+
   // Create indexes (IF NOT EXISTS not supported for indexes in all versions, use try/catch)
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_photos_created_at ON photos(created_at)',
@@ -294,7 +317,10 @@ function createTables(): void {
     'CREATE INDEX IF NOT EXISTS idx_album_photos_album ON album_photos(album_id)',
     'CREATE INDEX IF NOT EXISTS idx_album_photos_photo ON album_photos(photo_id)',
     'CREATE INDEX IF NOT EXISTS idx_exif_model ON exif_data(model)',
-    'CREATE INDEX IF NOT EXISTS idx_exif_date ON exif_data(date_taken)'
+    'CREATE INDEX IF NOT EXISTS idx_exif_date ON exif_data(date_taken)',
+    'CREATE INDEX IF NOT EXISTS idx_photo_tags_photo ON photo_tags(photo_id)',
+    'CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag_id)',
+    'CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)'
   ]
   for (const sql of indexes) {
     try { database.run(sql) } catch { }
@@ -540,7 +566,7 @@ export function updatePhotoThumbnails(id: number, thumbnailPath: string, preview
   try {
     database.run('UPDATE photos SET thumbnail_path = ?, preview_path = ? WHERE id = ?', [thumbnailPath, previewPath, id])
     scheduleSave()
-  } catch {}
+  } catch { }
 }
 
 export function updatePhotoThumbnailsBatch(items: { id: number; thumbnailPath: string; previewPath: string }[]): void {
@@ -556,7 +582,7 @@ export function updatePhotoThumbnailsBatch(items: { id: number; thumbnailPath: s
     database.run('COMMIT')
     scheduleSave()
   } catch (err) {
-    try { database.run('ROLLBACK') } catch {}
+    try { database.run('ROLLBACK') } catch { }
     console.error('Batch thumbnail update failed:', err)
   }
 }
@@ -709,7 +735,7 @@ function safeUnlink(filePath: string): void {
     } catch (err: any) {
       if (err?.code === 'EBUSY' && attempt < 3) {
         const start = Date.now()
-        while (Date.now() - start < 100) {}
+        while (Date.now() - start < 100) { }
       } else {
         break
       }
@@ -860,7 +886,7 @@ function isPortraitNormalPair(p1: PhotoRow, p2: PhotoRow): boolean {
   // 1. Filename Pattern (iPhone 'E' prefix or 'PORTRAIT' keyword)
   const hasPortraitKeyword = name1.includes('PORTRAIT') || name2.includes('PORTRAIT')
   const hasEPrefix = (name1.startsWith('IMG_E') && name2.startsWith('IMG_')) ||
-                     (name2.startsWith('IMG_E') && name1.startsWith('IMG_'))
+    (name2.startsWith('IMG_E') && name1.startsWith('IMG_'))
 
   const seq1 = getBasePhotoSequence(p1.filename)
   const seq2 = getBasePhotoSequence(p2.filename)
@@ -945,11 +971,11 @@ export function getAllPhotoFingerprints(): PhotoFingerprintRecord[] {
   return rows.map((r) => {
     let colorHistogram: number[] | undefined
     if (r.colorHistogramJson) {
-      try { colorHistogram = JSON.parse(r.colorHistogramJson) } catch {}
+      try { colorHistogram = JSON.parse(r.colorHistogramJson) } catch { }
     }
     let videoKeyframes: string[] | undefined
     if (r.videoKeyframesJson) {
-      try { videoKeyframes = JSON.parse(r.videoKeyframesJson) } catch {}
+      try { videoKeyframes = JSON.parse(r.videoKeyframesJson) } catch { }
     }
 
     return {
@@ -1056,7 +1082,7 @@ export async function scanPerceptualHashesBatch(
             photo.created_at || ''
           )
           savePhotoFingerprint(fp)
-        } catch {}
+        } catch { }
         completed++
         onProgress?.(completed, total)
       })
@@ -1447,6 +1473,129 @@ export function removeImportedFolder(folderId: number): void {
 
   cleanupOrphanedPeople()
   saveDatabase()
+}
+
+// ─── Tag Management ────────────────────────────────────────────────────────
+
+export interface TagRow {
+  id: number
+  name: string
+  color: string
+  photo_count?: number
+  created_at?: string
+}
+
+export function getAllTags(): TagRow[] {
+  return queryAll<TagRow>(`
+    SELECT 
+      t.id, 
+      t.name, 
+      COALESCE(t.color, '#3b82f6') as color, 
+      COUNT(pt.photo_id) as photo_count
+    FROM tags t
+    LEFT JOIN photo_tags pt ON t.id = pt.tag_id
+    LEFT JOIN photos p ON pt.photo_id = p.id AND p.is_trashed = 0
+    GROUP BY t.id
+    ORDER BY t.name ASC
+  `)
+}
+
+export function createTag(name: string, color = '#3b82f6'): TagRow {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Tag name cannot be empty')
+
+  const existing = queryOne<TagRow>('SELECT id, name, COALESCE(color, "#3b82f6") as color FROM tags WHERE LOWER(name) = LOWER(?)', [trimmed])
+  if (existing) {
+    return existing
+  }
+
+  runSql('INSERT INTO tags (name, color) VALUES (?, ?)', [trimmed, color])
+  saveDatabase()
+  const created = queryOne<TagRow>('SELECT id, name, COALESCE(color, "#3b82f6") as color FROM tags WHERE name = ?', [trimmed])
+  return created || { id: 0, name: trimmed, color, photo_count: 0 }
+}
+
+export function deleteTag(tagId: number): void {
+  runSql('DELETE FROM photo_tags WHERE tag_id = ?', [tagId])
+  runSql('DELETE FROM tags WHERE id = ?', [tagId])
+  saveDatabase()
+}
+
+export function renameTag(tagId: number, newName: string, newColor?: string): void {
+  const trimmed = newName.trim()
+  if (!trimmed) throw new Error('Tag name cannot be empty')
+
+  if (newColor) {
+    runSql('UPDATE tags SET name = ?, color = ? WHERE id = ?', [trimmed, newColor, tagId])
+  } else {
+    runSql('UPDATE tags SET name = ? WHERE id = ?', [trimmed, tagId])
+  }
+  saveDatabase()
+}
+
+export function addTagsToPhotos(photoIds: number[], tagIds: number[]): void {
+  for (const photoId of photoIds) {
+    for (const tagId of tagIds) {
+      try {
+        runSql('INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)', [photoId, tagId])
+      } catch { }
+    }
+  }
+  saveDatabase()
+}
+
+export function syncPhotoTags(photoIds: number[], tagIds: number[]): void {
+  for (const photoId of photoIds) {
+    if (tagIds.length === 0) {
+      runSql('DELETE FROM photo_tags WHERE photo_id = ?', [photoId])
+    } else {
+      const placeholders = tagIds.map(() => '?').join(',')
+      runSql(`DELETE FROM photo_tags WHERE photo_id = ? AND tag_id NOT IN (${placeholders})`, [photoId, ...tagIds])
+      for (const tagId of tagIds) {
+        try {
+          runSql('INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)', [photoId, tagId])
+        } catch { }
+      }
+    }
+  }
+  saveDatabase()
+}
+
+export function removeTagFromPhotos(photoIds: number[], tagId: number): void {
+  for (const photoId of photoIds) {
+    runSql('DELETE FROM photo_tags WHERE photo_id = ? AND tag_id = ?', [photoId, tagId])
+  }
+  saveDatabase()
+}
+
+export function getTagsForPhoto(photoId: number): TagRow[] {
+  return queryAll<TagRow>(`
+    SELECT t.id, t.name, COALESCE(t.color, '#3b82f6') as color
+    FROM tags t
+    JOIN photo_tags pt ON t.id = pt.tag_id
+    WHERE pt.photo_id = ?
+    ORDER BY t.name ASC
+  `, [photoId])
+}
+
+export function getPhotosByTag(tagId: number): PhotoRow[] {
+  return queryAll<PhotoRow>(`
+    SELECT p.*
+    FROM photos p
+    JOIN photo_tags pt ON p.id = pt.photo_id
+    WHERE pt.tag_id = ? AND p.is_trashed = 0
+    ORDER BY p.created_at DESC
+  `, [tagId])
+}
+
+export function getAllTaggedPhotos(): PhotoRow[] {
+  return queryAll<PhotoRow>(`
+    SELECT DISTINCT p.*
+    FROM photos p
+    JOIN photo_tags pt ON p.id = pt.photo_id
+    WHERE p.is_trashed = 0
+    ORDER BY p.created_at DESC
+  `)
 }
 
 export function closeDatabase(): void {

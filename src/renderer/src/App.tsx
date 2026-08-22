@@ -19,6 +19,8 @@ import ScreenshotsPage from './pages/ScreenshotsPage'
 import LargeFilesPage from './pages/LargeFilesPage'
 import JunkPage from './pages/JunkPage'
 import DocumentsPage from './pages/DocumentsPage'
+import TagsPage from './pages/TagsPage'
+import PlacesPage from './pages/PlacesPage'
 
 import FoldersPage from './pages/FoldersPage'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
@@ -110,8 +112,9 @@ function AppContent() {
       case 'people':
         return <ExplorePage initialTab="people" />
       case 'places':
+        return <PlacesPage />
       case 'tags':
-        return <ExplorePage initialTab="map" />
+        return <TagsPage />
       case 'documents':
         return <DocumentsPage />
       case 'duplicates':
