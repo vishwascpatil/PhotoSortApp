@@ -1,5 +1,5 @@
 import * as faceapi from '@vladmandic/face-api'
-import { getOriginalUrl } from '../utils/helpers'
+import { getOriginalUrl, getThumbnailUrl } from '../utils/helpers'
 
 const MODEL_URL = '/models'
 const DISTANCE_THRESHOLD = 0.48 // Balanced clustering threshold
@@ -90,11 +90,7 @@ export async function scanPhotosForFaces(): Promise<void> {
         // Load image from local file path via custom protocol wrapper
         const img = new Image()
         img.crossOrigin = 'anonymous'
-        let filePath = photo.file_path
-        if (photo.mime_type?.startsWith('video') && photo.thumbnail_path) {
-          filePath = photo.thumbnail_path
-        }
-        const url = getOriginalUrl(filePath)
+        const url = getThumbnailUrl(photo.preview_path || photo.thumbnail_path, photo.file_path)
         
         await new Promise((resolve, reject) => {
           img.onload = resolve

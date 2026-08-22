@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import {
   Compass, ImageIcon, Star, Film, FolderKanban, Users, MapPin, Tag, FileText,
-  Copy, Sparkles, Monitor, HardDrive, MessageSquare, Folder, Cloud, Images, Loader2, Trash2
+  Copy, Sparkles, Monitor, HardDrive, MessageSquare, Folder, Cloud, Images, Loader2, Trash2, Flame
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { formatFileSize } from '../utils/helpers'
@@ -61,7 +61,7 @@ export default function Sidebar() {
         { id: 'duplicates', icon: Copy, label: 'Duplicates' },
         { id: 'screenshots', icon: Monitor, label: 'Screenshots' },
         { id: 'large-files', icon: HardDrive, label: 'Large Files' },
-        { id: 'whatsapp', icon: MessageSquare, label: 'WhatsApp Junk' },
+        { id: 'junk', icon: Flame, label: 'JUNK' },
         { id: 'trash', icon: Trash2, label: 'Trash' }
       ]
     },

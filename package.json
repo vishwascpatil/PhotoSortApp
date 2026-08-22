@@ -12,7 +12,8 @@
     "start": "electron-vite preview",
     "dist:win": "electron-vite build && electron-builder --win --publish never",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
-    "dist:all": "electron-vite build && electron-builder --win --mac --publish never"
+    "dist:all": "electron-vite build && electron-builder --win --mac --publish never",
+    "calibrate": "node scripts/calibrate.ts"
   },
   "build": {
     "appId": "com.photosort.app",

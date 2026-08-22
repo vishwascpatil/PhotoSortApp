@@ -16,6 +16,9 @@ import SearchPage from './pages/SearchPage'
 import ExplorePage from './pages/ExplorePage'
 import DuplicatesPage from './pages/DuplicatesPage'
 import ScreenshotsPage from './pages/ScreenshotsPage'
+import LargeFilesPage from './pages/LargeFilesPage'
+import JunkPage from './pages/JunkPage'
+import DocumentsPage from './pages/DocumentsPage'
 
 import FoldersPage from './pages/FoldersPage'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
@@ -110,15 +113,17 @@ function AppContent() {
       case 'tags':
         return <ExplorePage initialTab="map" />
       case 'documents':
-        return <ExplorePage initialTab="documents" />
+        return <DocumentsPage />
       case 'duplicates':
       case 'similar':
         return <DuplicatesPage />
       case 'screenshots':
         return <ScreenshotsPage />
       case 'large-files':
+        return <LargeFilesPage />
+      case 'junk':
       case 'whatsapp':
-        return <ExplorePage initialTab="utilities" />
+        return <JunkPage />
       case 'folders':
       case 'google-photos':
         return <FoldersPage />

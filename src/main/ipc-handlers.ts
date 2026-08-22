@@ -22,6 +22,15 @@ import { scanLocations, stopLocationScanning } from './location-scanner'
 import { startFastDocScan, stopFastDocScan, getOcrBuffer } from './fast-doc-scanner'
 import { getOrGenerateHighResPreview, prefetchHighResPreviews } from './highres'
 import { classifyScreenshot, classifyScreenshotBatch } from './services/screenshot/screenshotDetector'
+import { classifyJunkMedia, classifyJunkMediaBatch } from './services/junk/junkDetector'
+import { detectDocument } from './services/document/documentDetector'
+import {
+  selectDestinationDirectory,
+  moveLargeFiles,
+  undoLargeFileMove,
+  getLargeFileManifests,
+  LargeFileMoveOptions
+} from './services/largeFiles/largeFileMover'
 import { logErrorToFile } from './logger'
 
 export function registerIpcHandlers(): void {
@@ -583,6 +592,65 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('screenshots:classify-batch', (_event, filePaths: string[]) => {
     return classifyScreenshotBatch(filePaths)
+  })
+
+  // ─── Junk / Forwarded Media Classifier ────────────────────────────────
+  ipcMain.handle('junk:classify', (_event, filePath: string) => {
+    return classifyJunkMedia(filePath)
+  })
+
+  ipcMain.handle('junk:classify-batch', (_event, filePaths: string[]) => {
+    return classifyJunkMediaBatch(filePaths)
+  })
+
+  // ─── Document Detector ────────────────────────────────────────────────
+  ipcMain.handle('documents:detect', (_event, filePath: string) => {
+    return detectDocument(filePath)
+  })
+
+  ipcMain.handle('documents:detect-batch', async (event, filePaths: string[]) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const results: any[] = []
+    for (let i = 0; i < filePaths.length; i++) {
+      const res = await detectDocument(filePaths[i])
+      results.push({ filePath: filePaths[i], ...res })
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('doc-detect:progress', {
+          completed: i + 1,
+          total: filePaths.length,
+          currentFile: filePaths[i]
+        })
+      }
+    }
+    return results
+  })
+
+  // ─── Large Files Relocation & Undo ────────────────────────────────────
+  ipcMain.handle('large-files:select-destination', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return selectDestinationDirectory(win || undefined)
+  })
+
+  ipcMain.handle('large-files:move', async (event, options: LargeFileMoveOptions) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return moveLargeFiles(options, (progress) => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('large-files:progress', progress)
+      }
+    })
+  })
+
+  ipcMain.handle('large-files:undo', async (event, manifestId: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return undoLargeFileMove(manifestId, (progress) => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('large-files:undo-progress', progress)
+      }
+    })
+  })
+
+  ipcMain.handle('large-files:get-manifests', () => {
+    return getLargeFileManifests()
   })
 
   // ─── System ──────────────────────────────────────────────────────────

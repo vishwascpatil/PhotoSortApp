@@ -204,6 +204,55 @@ const api = {
   classifyScreenshotBatch: (filePaths: string[]): Promise<Map<string, { classification: string; score: number; matchedSignals: string[] }>> =>
     ipcRenderer.invoke('screenshots:classify-batch', filePaths),
 
+  // Junk / Forwarded Media Classifier
+  classifyJunk: (filePath: string): Promise<any> =>
+    ipcRenderer.invoke('junk:classify', filePath),
+  classifyJunkBatch: (filePaths: string[]): Promise<Map<string, any>> =>
+    ipcRenderer.invoke('junk:classify-batch', filePaths),
+
+  // Document Detector
+  detectDocument: (filePath: string): Promise<any> =>
+    ipcRenderer.invoke('documents:detect', filePath),
+  detectDocumentBatch: (filePaths: string[]): Promise<any[]> =>
+    ipcRenderer.invoke('documents:detect-batch', filePaths),
+
+  // Large Files Mover & Relocation
+  selectLargeFilesDestination: (): Promise<string | null> =>
+    ipcRenderer.invoke('large-files:select-destination'),
+  moveLargeFiles: (options: {
+    fileIds: number[]
+    destinationDir: string
+    preserveRelativeSubpath?: boolean
+    collisionStrategy?: 'rename' | 'skip' | 'overwrite'
+    updateDatabasePath?: boolean
+  }): Promise<{
+    success: boolean
+    manifestId: string
+    movedCount: number
+    skippedCount: number
+    failedCount: number
+    totalBytesMoved: number
+    errors: string[]
+  }> => ipcRenderer.invoke('large-files:move', options),
+  undoLargeFileMove: (manifestId: string): Promise<{
+    success: boolean
+    restoredCount: number
+    failedCount: number
+    errors: string[]
+  }> => ipcRenderer.invoke('large-files:undo', manifestId),
+  getLargeFileManifests: (): Promise<any[]> =>
+    ipcRenderer.invoke('large-files:get-manifests'),
+  onLargeFilesProgress: (callback: (progress: { completed: number; total: number; currentFile: string; bytesMoved: number; totalBytes: number; percentage: number }) => void): (() => void) => {
+    const handler = (_event: any, progress: any) => callback(progress)
+    ipcRenderer.on('large-files:progress', handler)
+    return () => ipcRenderer.removeListener('large-files:progress', handler)
+  },
+  onLargeFilesUndoProgress: (callback: (progress: { completed: number; total: number; currentFile: string; bytesMoved: number; totalBytes: number; percentage: number }) => void): (() => void) => {
+    const handler = (_event: any, progress: any) => callback(progress)
+    ipcRenderer.on('large-files:undo-progress', handler)
+    return () => ipcRenderer.removeListener('large-files:undo-progress', handler)
+  },
+
   // System ──────────────────────────────────────────────────────────
   getPlatform: (): Promise<string> =>
     ipcRenderer.invoke('system:get-platform'),

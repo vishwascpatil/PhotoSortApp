@@ -1,3 +1,5 @@
+import { getThumbnailUrl } from '../utils/helpers'
+
 export interface AnalysisProgress {
   analyzedCount: number
   totalCount: number
@@ -106,11 +108,7 @@ export async function analyzePhotos(
       try {
         const img = new Image()
         img.crossOrigin = 'anonymous'
-        let filePath = photo.file_path
-        if (photo.mime_type?.startsWith('video') && photo.thumbnail_path) {
-          filePath = photo.thumbnail_path
-        }
-        const url = filePath.startsWith('file://') ? filePath : `file://${filePath.replace(/\\/g, '/')}`
+        const url = getThumbnailUrl(photo.thumbnail_path, photo.file_path)
         
         await new Promise((resolve, reject) => {
           img.onload = resolve
@@ -139,7 +137,6 @@ export async function analyzePhotos(
         
         await window.photoVault.savePhotoAnalysis(photo.id, blurScore, aHash)
       } catch (err) {
-        console.error(`Failed to analyze photo ${photo.id}:`, err)
         // Mark as processed with fallback values so it doesn't get stuck
         await window.photoVault.savePhotoAnalysis(photo.id, 100, '0000000000000000')
       } finally {

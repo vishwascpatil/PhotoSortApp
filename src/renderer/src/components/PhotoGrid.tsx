@@ -89,7 +89,7 @@ export default function PhotoGrid({ photos, showDateHeaders = true, onContextMen
   return (
     <div className="photo-grid-container">
       {dateGroups.map((group, gi) => (
-        <div key={group.date || gi} className="photo-grid-date-group">
+        <div key={`${group.date || 'unknown'}-${gi}`} className="photo-grid-date-group">
           {showDateHeaders && group.date && (
             <div className="photo-grid-date-header">
               <button

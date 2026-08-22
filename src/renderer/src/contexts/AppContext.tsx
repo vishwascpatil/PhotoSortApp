@@ -25,6 +25,7 @@ interface AppState {
     | 'similar'
     | 'screenshots'
     | 'large-files'
+    | 'junk'
     | 'whatsapp'
     | 'folders'
     | 'google-photos'
