@@ -10,10 +10,12 @@ import {
   addPhotosToAlbum, removePhotosFromAlbum,
   addImportedFolder, getImportedFolders, removeImportedFolder,
   getPeople, createPerson, updatePersonName, deletePerson, addPhotoToPerson, getPhotosByPerson, mergePeople,
+  togglePersonFavorite, setPersonCoverPhoto, removePhotoFromPerson,
   getAllFaceDescriptors, saveFaceDescriptor, getUnscannedPhotos, markPhotoScanned, resetFaceScanData, getMergeSuggestions,
   resetLocationScanData, resetDocumentScanData, resetUtilityScanData,
   getUnanalyzedPhotos, savePhotoAnalysis, getUtilitiesData, getUnscannedDocuments, saveDocumentScan,
   getAllTags, createTag, deleteTag, renameTag, addTagsToPhotos, syncPhotoTags, removeTagFromPhotos, getTagsForPhoto, getPhotosByTag, getAllTaggedPhotos,
+  updateLocationNameForPhotos,
   PhotoFilter
 } from './database'
 import { scanDirectory, processFiles } from './importer'
@@ -32,6 +34,13 @@ import {
   getLargeFileManifests,
   LargeFileMoveOptions
 } from './services/largeFiles/largeFileMover'
+import {
+  selectOrganizationDestination,
+  generateOrganizationPreviewPlan,
+  executeOrganization,
+  cancelOrganization,
+  OrganizationOptions
+} from './services/organizer/libraryOrganizer'
 import { logErrorToFile } from './logger'
 
 export function registerIpcHandlers(): void {
@@ -519,6 +528,20 @@ export function registerIpcHandlers(): void {
     return getPhotosByPerson(personId)
   })
 
+  ipcMain.handle('people:toggle-favorite', (_event, personId: number) => {
+    return togglePersonFavorite(personId)
+  })
+
+  ipcMain.handle('people:set-cover-photo', (_event, personId: number, photoId: number, faceBase64?: string) => {
+    setPersonCoverPhoto(personId, photoId, faceBase64)
+    return true
+  })
+
+  ipcMain.handle('people:remove-photo', (_event, personId: number, photoId: number) => {
+    removePhotoFromPerson(personId, photoId)
+    return true
+  })
+
   // ─── Face Recognition ──────────────────────────────────────────────────
   ipcMain.handle('faces:get-all', () => {
     return getAllFaceDescriptors()
@@ -545,6 +568,11 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('locations:reset', (_event) => {
     resetLocationScanData()
+    return true
+  })
+
+  ipcMain.handle('locations:update-name', (_event, photoIds: number[], newLocationName: string) => {
+    updateLocationNameForPhotos(photoIds, newLocationName)
     return true
   })
 
@@ -708,6 +736,36 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('system:log-error', (_event, type: string, message: string) => {
     logErrorToFile(type, message)
     return true
+  })
+
+  // ─── Library Organizer & Folder Exporter ──────────────────────────────
+  ipcMain.handle('organizer:select-destination', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) || undefined
+    return selectOrganizationDestination(win)
+  })
+
+  ipcMain.handle('organizer:preview-plan', (_event, options: OrganizationOptions) => {
+    return generateOrganizationPreviewPlan(options)
+  })
+
+  ipcMain.handle('organizer:execute', async (event, options: OrganizationOptions) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return executeOrganization(options, (progress) => {
+      win?.webContents.send('organizer:progress', progress)
+    })
+  })
+
+  ipcMain.handle('organizer:cancel', () => {
+    cancelOrganization()
+    return true
+  })
+
+  ipcMain.handle('organizer:show-in-folder', (_event, folderPath: string) => {
+    if (folderPath && existsSync(folderPath)) {
+      shell.openPath(folderPath)
+      return true
+    }
+    return false
   })
 
   // ─── Window Controls ─────────────────────────────────────────────────

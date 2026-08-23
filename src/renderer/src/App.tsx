@@ -13,6 +13,7 @@ import VideosPage from './pages/VideosPage'
 
 import TrashPage from './pages/TrashPage'
 import SearchPage from './pages/SearchPage'
+import PeoplePage from './pages/PeoplePage'
 import ExplorePage from './pages/ExplorePage'
 import DuplicatesPage from './pages/DuplicatesPage'
 import ScreenshotsPage from './pages/ScreenshotsPage'
@@ -24,6 +25,7 @@ import PlacesPage from './pages/PlacesPage'
 
 import FoldersPage from './pages/FoldersPage'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
+import FolderExportModal from './components/FolderExportModal'
 
 import WelcomePage from './pages/WelcomePage'
 
@@ -31,7 +33,7 @@ import OverviewPage from './pages/OverviewPage'
 import ScanningLibraryPage from './pages/ScanningLibraryPage'
 
 function AppContent() {
-  const { state } = useApp()
+  const { state, dispatch, closeExportModal } = useApp()
   const { state: photoState } = usePhotos()
   const [isDragging, setIsDragging] = useState(false)
 
@@ -110,7 +112,7 @@ function AppContent() {
       case 'explore':
         return <ExplorePage />
       case 'people':
-        return <ExplorePage initialTab="people" />
+        return <PeoplePage />
       case 'places':
         return <PlacesPage />
       case 'tags':
@@ -163,6 +165,16 @@ function AppContent() {
       {/* Keyboard Shortcuts Modal (?) */}
       {shortcutsModal && (
         <KeyboardShortcutsModal onClose={() => setShortcutsModal(false)} />
+      )}
+
+      {/* Folder Export & Organize Modal */}
+      {state.exportModalOpen && (
+        <FolderExportModal
+          isOpen={state.exportModalOpen}
+          onClose={closeExportModal}
+          initialMode={state.exportModalOptions?.mode || 'copy'}
+          specificFolderFilter={state.exportModalOptions?.specificFolderFilter}
+        />
       )}
 
       {/* Drag & Drop Overlay */}

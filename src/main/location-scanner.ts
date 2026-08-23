@@ -40,18 +40,34 @@ function extractLocationFromPath(filePath: string): string | null {
   const parts = filePath.replace(/\\/g, '/').split('/')
   parts.pop() // remove filename
   
-  const ignoreFolders = new Set(['photos', 'dcim', 'camera', 'pictures', 'downloads', 'desktop', 'documents', 'users', 'vishwas photos', 'vishwas', '100apple', '101apple', '102apple', '103apple'])
+  const ignoreFolders = new Set([
+    'photos', 'dcim', 'camera', 'pictures', 'downloads', 'desktop',
+    'documents', 'users', 'vishwas photos', 'vishwas', '100apple',
+    '101apple', '102apple', '103apple', 'testfolder', 'new folder', 'temp', 'sorted'
+  ])
   
   for (let i = parts.length - 1; i >= 0; i--) {
     let folder = parts[i].trim()
     if (!folder) continue
     const lower = folder.toLowerCase()
     
-    // Clean folder names like "New Delhi (2026)" -> "New Delhi"
-    folder = folder.replace(/\s*\(\d{4}\)\s*/g, '').trim()
+    // Clean folder names: remove dates, years, copy suffixes, "trip", "vacation"
+    folder = folder
+      .replace(/\s*\(\d{4}\)\s*/g, '')
+      .replace(/[-_]\s*copy(\s*-\s*copy)*/gi, '')
+      .replace(/\b(trip|tour|vacation|photos|pics|travel|visit|diaries)\b/gi, '')
+      .replace(/[-_]+/g, ' ')
+      .trim()
     
-    if (folder.length > 2 && !ignoreFolders.has(lower) && !/^\d+$/.test(folder)) {
-      return folder
+    // Title Case format (e.g. "delhi agra" -> "Delhi Agra")
+    const formatted = folder
+      .split(' ')
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ')
+    
+    if (formatted.length > 2 && !ignoreFolders.has(lower) && !/^\d+$/.test(folder)) {
+      return formatted
     }
   }
   return null
@@ -110,7 +126,16 @@ export async function scanLocations() {
             if (response.ok) {
               const data = (await response.json()) as any
               if (data && data.address) {
-                locationName = data.address.city || data.address.town || data.address.village || data.address.state || data.address.country || null
+                const city = data.address.city || data.address.town || data.address.village || data.address.municipality || data.address.suburb
+                const state = data.address.state
+                const country = data.address.country
+                if (city) {
+                  locationName = city
+                } else if (state) {
+                  locationName = state
+                } else if (country) {
+                  locationName = country
+                }
               }
             }
           } catch { }

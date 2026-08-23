@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Folder, RefreshCw, Trash2, ArrowLeft, Plus, HardDrive, CheckCircle2 } from 'lucide-react'
+import { Folder, RefreshCw, Trash2, ArrowLeft, Plus, HardDrive, CheckCircle2, FolderTree, Download } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
 import PhotoGrid from '../components/PhotoGrid'
@@ -16,7 +16,7 @@ interface ImportedFolder {
 
 export default function FoldersPage() {
   const { state: photoState, loadPhotos, refreshPhotos } = usePhotos()
-  const { showToast, navigateTo } = useApp()
+  const { showToast, navigateTo, openExportModal } = useApp()
   const [folders, setFolders] = useState<ImportedFolder[]>([])
   const [selectedFolder, setSelectedFolder] = useState<ImportedFolder | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -206,6 +206,18 @@ export default function FoldersPage() {
         <div className="folders-header-actions">
           <button
             type="button"
+            onClick={() => openExportModal({ mode: 'copy' })}
+            disabled={folders.length === 0}
+            className="apple-secondary-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="Organize files by Year -> Trips -> Documents -> Months and Export"
+          >
+            <FolderTree size={14} style={{ color: '#0ea5e9' }} />
+            <span>Organize & Export</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleSyncAll}
             disabled={isSyncing || folders.length === 0}
             className="apple-secondary-btn"
@@ -252,6 +264,17 @@ export default function FoldersPage() {
                 </div>
 
                 <div className="apple-folder-card-actions">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      openExportModal({ mode: 'copy', specificFolderFilter: folder.folder_path })
+                    }}
+                    className="apple-card-action-btn"
+                    title="Organize this folder"
+                  >
+                    <FolderTree size={14} style={{ color: '#0ea5e9' }} />
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => handleSyncSingleFolder(e, folder)}

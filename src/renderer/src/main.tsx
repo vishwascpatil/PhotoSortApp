@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 import { setupMockApi } from './mockApi'
 
@@ -10,7 +11,10 @@ setupMockApi()
 if (window.photoVault && window.photoVault.logError) {
   const originalConsoleError = console.error
   console.error = (...args) => {
-    window.photoVault.logError('RENDERER_CONSOLE_ERROR', args.join(' '))
+    const formatted = args
+      .map(a => (a instanceof Error ? a.stack || a.message : typeof a === 'object' ? JSON.stringify(a) : String(a)))
+      .join(' ')
+    window.photoVault.logError('RENDERER_CONSOLE_ERROR', formatted)
     originalConsoleError.apply(console, args)
   }
 
@@ -27,6 +31,8 @@ if (window.photoVault && window.photoVault.logError) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 )

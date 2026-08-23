@@ -342,6 +342,9 @@ export function setupMockApi() {
     deletePerson: async () => true,
     mergePeople: async () => true,
     addPhotoToPerson: async () => true,
+    removePhotoFromPerson: async () => true,
+    togglePersonFavorite: async () => true,
+    setPersonCoverPhoto: async () => true,
     getPhotosByPerson: async (personId: number) => samplePhotos.slice(0, 3),
     getAllFaceDescriptors: async () => [],
     saveFaceDescriptor: async () => true,
@@ -372,6 +375,33 @@ export function setupMockApi() {
     onSyncStatus: () => () => {},
     onSyncAllCompleted: () => () => {},
     onMenuImportFolder: () => () => {},
-    onMenuImportFiles: () => () => {}
+    onMenuImportFiles: () => () => {},
+    selectOrganizationDestination: async () => 'C:/Users/User/Pictures/ExportedPhotos',
+    previewOrganizationPlan: async () => ({
+      totalFiles: samplePhotos.length,
+      totalBytes: 15000000,
+      yearGroups: [{
+        year: '2024',
+        fileCount: samplePhotos.length,
+        totalBytes: 15000000,
+        subfolders: [{ name: 'Trip - Delhi', fileCount: 3, totalBytes: 8000000, sampleFilenames: ['sample1.jpg'] }]
+      }],
+      categoryBreakdown: { trips: 3, documents: 0, screenshots: 0, videos: 0, generalPhotos: 0 }
+    }),
+    executeOrganization: async () => ({
+      success: true,
+      mode: 'copy',
+      destinationDir: 'C:/Users/User/Pictures/ExportedPhotos',
+      totalFiles: samplePhotos.length,
+      processedCount: samplePhotos.length,
+      skippedCount: 0,
+      failedCount: 0,
+      totalBytesTransferred: 15000000,
+      entries: [],
+      errors: []
+    }),
+    cancelOrganization: async () => true,
+    showInFolder: async () => true,
+    onOrganizationProgress: () => () => {}
   }
 }

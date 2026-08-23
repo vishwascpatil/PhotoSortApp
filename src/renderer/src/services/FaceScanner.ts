@@ -80,7 +80,16 @@ export async function scanPhotosForFaces(): Promise<void> {
       if (!isScanning) break // ability to cancel
 
       try {
-        if (photo.is_document === 1) {
+        const isVideo =
+          (photo.mime_type && photo.mime_type.startsWith('video')) ||
+          (photo.filename &&
+            (photo.filename.endsWith('.mp4') ||
+              photo.filename.endsWith('.mov') ||
+              photo.filename.endsWith('.mkv') ||
+              photo.filename.endsWith('.avi') ||
+              photo.filename.endsWith('.wmv')))
+
+        if (photo.is_document === 1 || isVideo) {
           await window.photoVault.markPhotoScanned(photo.id)
           scannedCount++
           updateProgress({ scannedCount, totalCount, isScanning: true })
@@ -91,12 +100,19 @@ export async function scanPhotosForFaces(): Promise<void> {
         const img = new Image()
         img.crossOrigin = 'anonymous'
         const url = getThumbnailUrl(photo.preview_path || photo.thumbnail_path, photo.file_path)
-        
-        await new Promise((resolve, reject) => {
-          img.onload = resolve
-          img.onerror = reject
+
+        const loadSuccess = await new Promise<boolean>((resolve) => {
+          img.onload = () => resolve(true)
+          img.onerror = () => resolve(false)
           img.src = url
         })
+
+        if (!loadSuccess) {
+          await window.photoVault.markPhotoScanned(photo.id)
+          scannedCount++
+          updateProgress({ scannedCount, totalCount, isScanning: true })
+          continue
+        }
 
         // Scale down large images, but keep high enough resolution (2048) to spot smaller faces accurately
         const maxDim = 2048
@@ -189,8 +205,8 @@ export async function scanPhotosForFaces(): Promise<void> {
             }
           }
         }
-      } catch (err) {
-        console.error(`Failed to scan photo ${photo.id}:`, err)
+      } catch (err: any) {
+        console.warn(`Could not process photo ${photo.id} for faces:`, err?.message || err)
       } finally {
         await window.photoVault.markPhotoScanned(photo.id)
         scannedCount++

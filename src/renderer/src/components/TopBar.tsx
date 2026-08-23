@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import { Search, Grid3x3, LayoutGrid, Sun, Moon, Menu, Minus, Square, X } from 'lucide-react'
+import { Search, Grid3x3, LayoutGrid, Sun, Moon, Menu, Minus, Square, X, FolderTree, Download } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { debounce } from '../utils/helpers'
 
 export default function TopBar() {
-  const { state, dispatch, toggleTheme } = useApp()
+  const { state, dispatch, toggleTheme, openExportModal } = useApp()
   const [searchInput, setSearchInput] = useState('')
   const [isMaximized, setIsMaximized] = useState(false)
 
@@ -83,6 +83,30 @@ export default function TopBar() {
 
       {/* Actions */}
       <div className="topbar-actions">
+        {/* Organize & Export Folder Button */}
+        <button
+          className="btn btn-primary"
+          onClick={() => openExportModal({ mode: 'copy' })}
+          title="Organize files by Year -> Trips -> Documents -> Months and Export"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            fontWeight: 700,
+            padding: '6px 13px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)',
+            boxShadow: '0 2px 8px rgba(14, 165, 233, 0.25)',
+            border: 'none',
+            color: '#ffffff',
+            cursor: 'pointer'
+          }}
+        >
+          <FolderTree size={15} />
+          <span>Organize & Export</span>
+        </button>
+
         <button
           className="topbar-btn"
           onClick={() => {

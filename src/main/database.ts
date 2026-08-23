@@ -138,6 +138,7 @@ function createTables(): void {
 
   try { database.run('ALTER TABLE photos ADD COLUMN document_category TEXT DEFAULT NULL') } catch { }
   try { database.run('ALTER TABLE people ADD COLUMN cover_face_base64 TEXT') } catch { }
+  try { database.run('ALTER TABLE people ADD COLUMN is_favorite INTEGER DEFAULT 0') } catch { }
   try { database.run("ALTER TABLE tags ADD COLUMN color TEXT DEFAULT '#3b82f6'") } catch { }
   try { database.run("ALTER TABLE tags ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP") } catch { }
   try { database.run("ALTER TABLE photo_tags ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP") } catch { }
@@ -853,6 +854,14 @@ export function savePhotoLocation(photoId: number, locationName: string): void {
   runSql('UPDATE photos SET location_name = ? WHERE id = ?', [locationName, photoId])
 }
 
+export function updateLocationNameForPhotos(photoIds: number[], newLocationName: string): void {
+  const trimmed = newLocationName.trim()
+  for (const photoId of photoIds) {
+    runSql('UPDATE photos SET location_name = ? WHERE id = ?', [trimmed, photoId])
+  }
+  saveDatabase()
+}
+
 // Compute Hamming distance between two hex hashes
 function hammingDistance(hash1: string, hash2: string): number {
   if (hash1.length !== hash2.length) return 999
@@ -1180,7 +1189,10 @@ export interface PersonRow {
   created_at: string
   photo_count?: number
   cover_thumbnail?: string | null
+  cover_preview?: string | null
+  cover_file_path?: string | null
   cover_face_base64?: string | null
+  is_favorite?: number
 }
 
 export function createPerson(name: string, coverPhotoId?: number, faceBase64?: string): number {
@@ -1193,6 +1205,37 @@ export function createPerson(name: string, coverPhotoId?: number, faceBase64?: s
 
 export function updatePersonName(personId: number, name: string): void {
   runSql('UPDATE people SET name = ? WHERE id = ?', [name, personId])
+  saveDatabase()
+}
+
+export function togglePersonFavorite(personId: number): boolean {
+  const current = queryOne<{ is_favorite: number }>('SELECT is_favorite FROM people WHERE id = ?', [personId])
+  const nextVal = current && current.is_favorite === 1 ? 0 : 1
+  runSql('UPDATE people SET is_favorite = ? WHERE id = ?', [nextVal, personId])
+  saveDatabase()
+  return nextVal === 1
+}
+
+export function setPersonCoverPhoto(personId: number, photoId: number, faceBase64?: string): void {
+  if (faceBase64) {
+    runSql('UPDATE people SET cover_photo_id = ?, cover_face_base64 = ? WHERE id = ?', [photoId, faceBase64, personId])
+  } else {
+    runSql('UPDATE people SET cover_photo_id = ? WHERE id = ?', [photoId, personId])
+  }
+  saveDatabase()
+}
+
+export function removePhotoFromPerson(personId: number, photoId: number): void {
+  runSql('DELETE FROM photo_people WHERE person_id = ? AND photo_id = ?', [personId, photoId])
+  runSql('DELETE FROM face_descriptors WHERE person_id = ? AND photo_id = ?', [personId, photoId])
+
+  // If cover photo was removed, reset or pick another photo
+  const person = queryOne<{ cover_photo_id: number | null }>('SELECT cover_photo_id FROM people WHERE id = ?', [personId])
+  if (person && person.cover_photo_id === photoId) {
+    const nextPhoto = queryOne<{ photo_id: number }>('SELECT photo_id FROM photo_people WHERE person_id = ? LIMIT 1', [personId])
+    runSql('UPDATE people SET cover_photo_id = ?, cover_face_base64 = NULL WHERE id = ?', [nextPhoto ? nextPhoto.photo_id : null, personId])
+  }
+  saveDatabase()
 }
 
 export function mergePeople(primaryId: number, secondaryId: number): void {
@@ -1218,18 +1261,21 @@ export function mergePeople(primaryId: number, secondaryId: number): void {
 
 export function deletePerson(personId: number): void {
   runSql('DELETE FROM people WHERE id = ?', [personId])
+  saveDatabase()
 }
 
 export function getPeople(): PersonRow[] {
   return queryAll<PersonRow>(`
-    SELECT p.*, COUNT(ph2.id) as photo_count, ph.thumbnail_path as cover_thumbnail
+    SELECT p.*, COUNT(ph2.id) as photo_count, 
+           ph.thumbnail_path as cover_thumbnail,
+           ph.preview_path as cover_preview,
+           ph.file_path as cover_file_path
     FROM people p
     LEFT JOIN photo_people pp ON p.id = pp.person_id
     LEFT JOIN photos ph2 ON pp.photo_id = ph2.id AND ph2.is_trashed = 0
     LEFT JOIN photos ph ON p.cover_photo_id = ph.id
     GROUP BY p.id
-    ORDER BY photo_count DESC, p.name ASC
-    LIMIT 50
+    ORDER BY p.is_favorite DESC, photo_count DESC, p.name ASC
   `)
 }
 

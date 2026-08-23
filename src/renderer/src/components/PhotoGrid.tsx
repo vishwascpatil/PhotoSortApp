@@ -27,7 +27,7 @@ export default function PhotoGrid({ photos, showDateHeaders = true, onContextMen
     let currentGroup: Photo[] = []
 
     for (const photo of photos) {
-      const dateKey = photo.created_at.split('T')[0] || photo.created_at.split(' ')[0]
+      const dateKey = photo.created_at ? (photo.created_at.split('T')[0] || photo.created_at.split(' ')[0]) : 'Unknown Date'
       if (dateKey !== currentDate) {
         if (currentGroup.length > 0) {
           groups.push({ date: currentDate, photos: currentGroup })

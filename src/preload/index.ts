@@ -165,6 +165,9 @@ const api = {
   deletePerson: (personId: number): Promise<boolean> => ipcRenderer.invoke('people:delete', personId),
   mergePeople: (primaryId: number, secondaryId: number): Promise<boolean> => ipcRenderer.invoke('people:merge', primaryId, secondaryId),
   addPhotoToPerson: (personId: number, photoId: number): Promise<boolean> => ipcRenderer.invoke('people:add-photo', personId, photoId),
+  removePhotoFromPerson: (personId: number, photoId: number): Promise<boolean> => ipcRenderer.invoke('people:remove-photo', personId, photoId),
+  togglePersonFavorite: (personId: number): Promise<boolean> => ipcRenderer.invoke('people:toggle-favorite', personId),
+  setPersonCoverPhoto: (personId: number, photoId: number, faceBase64?: string): Promise<boolean> => ipcRenderer.invoke('people:set-cover-photo', personId, photoId, faceBase64),
   getPhotosByPerson: (personId: number): Promise<PhotoRow[]> =>
     ipcRenderer.invoke('people:get-photos', personId),
 
@@ -180,6 +183,8 @@ const api = {
   // Location Scanner
   startLocationScan: (): Promise<boolean> => ipcRenderer.invoke('photos:start-location-scan'),
   stopLocationScan: (): Promise<boolean> => ipcRenderer.invoke('photos:stop-location-scan'),
+  updateLocationName: (photoIds: number[], newLocationName: string): Promise<boolean> =>
+    ipcRenderer.invoke('locations:update-name', photoIds, newLocationName),
   onLocationScanProgress: (callback: (progress: any) => void) => {
     const listener = (_event: any, progress: any) => callback(progress)
     ipcRenderer.on('location-scan:progress', listener)
@@ -340,6 +345,25 @@ const api = {
     const handler = (): void => callback()
     ipcRenderer.on('menu:import-files', handler)
     return () => ipcRenderer.removeListener('menu:import-files', handler)
+  },
+
+  // ─── Library Organizer & Folder Exporter ──────────────────────────────
+  selectOrganizationDestination: (): Promise<string | null> =>
+    ipcRenderer.invoke('organizer:select-destination'),
+  previewOrganizationPlan: (options: any): Promise<any> =>
+    ipcRenderer.invoke('organizer:preview-plan', options),
+  executeOrganization: (options: any): Promise<any> =>
+    ipcRenderer.invoke('organizer:execute', options),
+  cancelOrganization: (): Promise<boolean> =>
+    ipcRenderer.invoke('organizer:cancel'),
+  showInFolder: (folderPath: string): Promise<boolean> =>
+    ipcRenderer.invoke('organizer:show-in-folder', folderPath),
+  onOrganizationProgress: (callback: (progress: any) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: any): void => {
+      callback(progress)
+    }
+    ipcRenderer.on('organizer:progress', handler)
+    return () => ipcRenderer.removeListener('organizer:progress', handler)
   }
 }
 

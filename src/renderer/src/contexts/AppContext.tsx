@@ -46,6 +46,8 @@ interface AppState {
     total: number
     completed: number
   }
+  exportModalOpen: boolean
+  exportModalOptions: { mode?: 'copy' | 'move'; specificFolderFilter?: string } | null
 }
 
 type AppAction =
@@ -59,6 +61,8 @@ type AppAction =
   | { type: 'SET_SEARCH'; payload: string }
   | { type: 'SET_PLATFORM'; payload: string }
   | { type: 'SET_IMPORT_STATUS'; payload: AppState['importStatus'] }
+  | { type: 'OPEN_EXPORT_MODAL'; payload?: { mode?: 'copy' | 'move'; specificFolderFilter?: string } }
+  | { type: 'CLOSE_EXPORT_MODAL' }
 
 const initialState: AppState = {
   currentView: 'loading',
@@ -75,7 +79,9 @@ const initialState: AppState = {
     message: '',
     total: 0,
     completed: 0
-  }
+  },
+  exportModalOpen: false,
+  exportModalOptions: null
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -112,6 +118,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
         importStatus: { active, stage, message, total, completed: newCompleted }
       };
     }
+    case 'OPEN_EXPORT_MODAL':
+      return {
+        ...state,
+        exportModalOpen: true,
+        exportModalOptions: action.payload || null
+      }
+    case 'CLOSE_EXPORT_MODAL':
+      return {
+        ...state,
+        exportModalOpen: false,
+        exportModalOptions: null
+      }
     default:
       return state
   }
@@ -124,6 +142,8 @@ interface AppContextType {
   openAlbum: (albumId: number) => void
   showToast: (message: string, undoAction?: () => void) => void
   toggleTheme: () => void
+  openExportModal: (options?: { mode?: 'copy' | 'move'; specificFolderFilter?: string }) => void
+  closeExportModal: () => void
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -137,6 +157,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openAlbum = useCallback((albumId: number) => {
     dispatch({ type: 'SET_ALBUM_ID', payload: albumId })
+  }, [])
+
+  const openExportModal = useCallback((options?: { mode?: 'copy' | 'move'; specificFolderFilter?: string }) => {
+    dispatch({ type: 'OPEN_EXPORT_MODAL', payload: options })
+  }, [])
+
+  const closeExportModal = useCallback(() => {
+    dispatch({ type: 'CLOSE_EXPORT_MODAL' })
   }, [])
 
   const showToast = useCallback((message: string, undoAction?: () => void) => {
@@ -195,7 +223,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AppContext.Provider value={{ state, dispatch, navigateTo, openAlbum, showToast, toggleTheme }}>
+    <AppContext.Provider
+      value={{
+        state,
+        dispatch,
+        navigateTo,
+        openAlbum,
+        showToast,
+        toggleTheme,
+        openExportModal,
+        closeExportModal
+      }}
+    >
       {children}
     </AppContext.Provider>
   )

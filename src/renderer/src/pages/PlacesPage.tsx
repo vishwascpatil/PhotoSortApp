@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import {
   MapPin, Map as MapIcon, Grid, ChevronLeft, RefreshCw,
-  Sparkles, Compass, Globe, Layers, Navigation, Eye, CheckCircle2
+  Sparkles, Compass, Globe, Layers, Navigation, Edit2, FolderPlus, Download, Check
 } from 'lucide-react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -38,6 +38,10 @@ export default function PlacesPage() {
   const [selectedGroup, setSelectedGroup] = useState<LocationGroup | null>(null)
   const [locationProgress, setLocationProgress] = useState<any>(null)
   const [isScanning, setIsScanning] = useState(false)
+
+  // Rename Location Modal State
+  const [editingGroup, setEditingGroup] = useState<LocationGroup | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
@@ -83,7 +87,6 @@ export default function PlacesPage() {
 
   // Location Groups
   const locationGroups = useMemo<LocationGroup[]>(() => {
-    // 1. Group geo-photos and photos that have location_name
     const groupsMap: Record<string, { photos: Photo[]; lat?: number; lng?: number; locName: string; year?: string }> = {}
 
     // First from geoPhotos
@@ -105,7 +108,7 @@ export default function PlacesPage() {
       groupsMap[key].photos.push(p)
     }
 
-    // Also include photos from photoState that have location_name but might not have direct GPS
+    // Also include photos from photoState that have location_name
     for (const p of photoState.photos) {
       if (p.location_name && !p.is_trashed) {
         const year = p.created_at ? p.created_at.split('-')[0] : ''
@@ -142,7 +145,6 @@ export default function PlacesPage() {
   useEffect(() => {
     if (viewMode !== 'map' || selectedGroup) return
 
-    // Allow DOM container to mount
     const timer = setTimeout(() => {
       if (!mapContainerRef.current) return
 
@@ -155,7 +157,6 @@ export default function PlacesPage() {
           worldCopyJump: true
         })
 
-        // Sleek Dark / CartoDB tiles
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
           attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
           maxZoom: 19
@@ -175,7 +176,6 @@ export default function PlacesPage() {
       if (geoPhotos.length > 0) {
         const bounds = L.latLngBounds([])
 
-        // Cluster geo photos by nearby coordinates (~0.01 deg)
         const clusters: Record<string, { lat: number; lng: number; photos: Photo[]; locName: string }> = {}
         for (const item of geoPhotos) {
           const clusterKey = `${item.lat.toFixed(2)},${item.lng.toFixed(2)}`
@@ -277,21 +277,6 @@ export default function PlacesPage() {
     }
   }
 
-  const handleResetLocationScan = async () => {
-    if (confirm('Reset all identified locations and rescan your library?')) {
-      try {
-        if (window.photoVault?.resetLocationScanData) {
-          await window.photoVault.resetLocationScanData()
-          refreshPhotos()
-          showToast('Location data reset. Starting fresh scan...')
-          handleStartLocationScan()
-        }
-      } catch (err: any) {
-        showToast(`Error resetting locations: ${err?.message || err}`)
-      }
-    }
-  }
-
   const handleStopLocationScan = async () => {
     try {
       if (window.photoVault?.stopLocationScan) {
@@ -301,6 +286,65 @@ export default function PlacesPage() {
       }
     } catch (err: any) {
       showToast(`Error: ${err?.message || err}`)
+    }
+  }
+
+  const handleSaveRename = async () => {
+    if (!editingGroup || !renameValue.trim()) return
+    const trimmed = renameValue.trim()
+
+    try {
+      const photoIds = editingGroup.photos.map(p => p.id)
+      if (window.photoVault?.updateLocationName) {
+        await window.photoVault.updateLocationName(photoIds, trimmed)
+        showToast(`Location renamed to "${trimmed}"`)
+        setEditingGroup(null)
+        await loadGeoData()
+        refreshPhotos()
+        if (selectedGroup?.name === editingGroup.name) {
+          setSelectedGroup({
+            ...selectedGroup,
+            name: `${trimmed}${selectedGroup.year ? ` (${selectedGroup.year})` : ''}`,
+            locationName: trimmed
+          })
+        }
+      }
+    } catch (err: any) {
+      showToast(`Error renaming location: ${err?.message || err}`)
+    }
+  }
+
+  const handleOrganizeToDiskFolder = async (group: LocationGroup) => {
+    try {
+      if (!window.photoVault?.selectLargeFilesDestination || !window.photoVault?.moveLargeFiles) {
+        showToast('Folder mover unavailable')
+        return
+      }
+
+      const dest = await window.photoVault.selectLargeFilesDestination()
+      if (!dest) return
+
+      const folderName = group.locationName.replace(/[/\\?%*:|"<>]/g, '-').trim()
+      const targetDir = `${dest}/${folderName}`
+
+      const fileIds = group.photos.map(p => p.id)
+      const res = await window.photoVault.moveLargeFiles({
+        fileIds,
+        destinationDir: targetDir,
+        preserveRelativeSubpath: false,
+        collisionStrategy: 'rename',
+        updateDatabasePath: true
+      })
+
+      if (res.success) {
+        showToast(`Moved ${res.movedCount} photos to "${folderName}" folder`)
+        refreshPhotos()
+        loadGeoData()
+      } else {
+        showToast(`Move completed with ${res.failedCount} failures`)
+      }
+    } catch (err: any) {
+      showToast(`Error organizing to folder: ${err?.message || err}`)
     }
   }
 
@@ -348,8 +392,22 @@ export default function PlacesPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                {selectedGroup ? selectedGroup.name : 'Places'}
+                {selectedGroup ? selectedGroup.locationName : 'Places'}
               </h1>
+              {selectedGroup && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setEditingGroup(selectedGroup)
+                    setRenameValue(selectedGroup.locationName)
+                  }}
+                  style={{ padding: '4px', display: 'flex', color: 'var(--text-secondary)' }}
+                  title="Rename Location"
+                >
+                  <Edit2 size={14} />
+                </button>
+              )}
               <span
                 style={{
                   background: 'rgba(14, 165, 233, 0.12)',
@@ -369,80 +427,98 @@ export default function PlacesPage() {
         </div>
 
         {/* View Mode & Scanner Actions */}
-        {!selectedGroup && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* Cards vs Map Toggle */}
-            <div
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {selectedGroup ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => handleOrganizeToDiskFolder(selectedGroup)}
               style={{
+                fontSize: '12px',
+                padding: '6px 14px',
                 display: 'flex',
                 alignItems: 'center',
-                backgroundColor: 'var(--bg-secondary, #1e293b)',
-                borderRadius: '8px',
-                border: '1px solid var(--border, #334155)',
-                padding: '2px'
+                gap: '6px',
+                background: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)'
               }}
             >
-              <button
-                type="button"
-                className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setViewMode('cards')}
+              <FolderPlus size={14} /> Move to Location Folder
+            </button>
+          ) : (
+            <>
+              {/* Cards vs Map Toggle */}
+              <div
                 style={{
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px'
+                  backgroundColor: 'var(--bg-secondary, #1e293b)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border, #334155)',
+                  padding: '2px'
                 }}
               >
-                <Grid size={14} /> Places
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${viewMode === 'map' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setViewMode('map')}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <Globe size={14} /> Map
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setViewMode('cards')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Grid size={14} /> Places
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${viewMode === 'map' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setViewMode('map')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Globe size={14} /> Map
+                </button>
+              </div>
 
-            {/* Scan Controls */}
-            {isScanning ? (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handleStopLocationScan}
-                style={{ fontSize: '12px', padding: '6px 12px' }}
-              >
-                Stop Scan
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleStartLocationScan}
-                style={{
-                  fontSize: '12px',
-                  padding: '6px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)'
-                }}
-              >
-                <Sparkles size={14} /> Scan Locations
-              </button>
-            )}
-          </div>
-        )}
+              {/* Scan Controls */}
+              {isScanning ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleStopLocationScan}
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
+                >
+                  Stop Scan
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleStartLocationScan}
+                  style={{
+                    fontSize: '12px',
+                    padding: '6px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)'
+                  }}
+                >
+                  <Sparkles size={14} /> Scan Locations
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* ─── Scanning Progress Banner ────────────────────────────────────── */}
@@ -529,7 +605,8 @@ export default function PlacesPage() {
                           overflow: 'hidden',
                           cursor: 'pointer',
                           transition: 'all 0.2s ease',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                          position: 'relative'
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = 'translateY(-3px)'
@@ -566,9 +643,11 @@ export default function PlacesPage() {
                             style={{
                               position: 'absolute',
                               inset: 0,
-                              background: 'linear-gradient(to top, rgba(15, 23, 42, 0.8) 0%, transparent 60%)'
+                              background: 'linear-gradient(to top, rgba(15, 23, 42, 0.85) 0%, transparent 60%)'
                             }}
                           />
+
+                          {/* Year and Photo Count Badges */}
                           <div
                             style={{
                               position: 'absolute',
@@ -590,17 +669,38 @@ export default function PlacesPage() {
                           </div>
                         </div>
 
-                        {/* Card Info */}
+                        {/* Card Info & Quick Rename Button */}
                         <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <MapPin size={16} color="#0ea5e9" />
-                            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                            <MapPin size={16} color="#0ea5e9" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {group.locationName}
                             </span>
                           </div>
-                          <span style={{ fontSize: '12px', color: '#0ea5e9', fontWeight: 600 }}>
-                            View &rarr;
-                          </span>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditingGroup(group)
+                                setRenameValue(group.locationName)
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-secondary)',
+                                padding: '4px',
+                                cursor: 'pointer'
+                              }}
+                              title="Rename Location Folder"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <span style={{ fontSize: '12px', color: '#0ea5e9', fontWeight: 600 }}>
+                              View &rarr;
+                            </span>
+                          </div>
                         </div>
                       </div>
                     )
@@ -654,6 +754,84 @@ export default function PlacesPage() {
             </>
           )}
         </>
+      )}
+
+      {/* ─── Rename Location Modal ───────────────────────────────────────── */}
+      {editingGroup && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
+          onClick={() => setEditingGroup(null)}
+        >
+          <div
+            style={{
+              width: '380px',
+              maxWidth: '92vw',
+              backgroundColor: 'var(--bg-secondary, #1e293b)',
+              borderRadius: '16px',
+              border: '1px solid var(--border, #334155)',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+              color: 'var(--text-primary, #f8fafc)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '17px', fontWeight: 700 }}>
+              Rename Location Folder
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 16px 0' }}>
+              e.g. <b>Delhi Agra</b>, <b>Agra</b>, <b>Goa Trip</b>, <b>Paris</b>
+            </p>
+
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveRename()}
+              placeholder="e.g. Delhi Agra"
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border, #334155)',
+                backgroundColor: 'var(--bg-primary, #0f172a)',
+                color: 'var(--text-primary, #f8fafc)',
+                fontSize: '13px',
+                marginBottom: '20px',
+                outline: 'none'
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setEditingGroup(null)}
+                style={{ fontSize: '12px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveRename}
+                disabled={!renameValue.trim()}
+                style={{ fontSize: '12px', padding: '6px 16px' }}
+              >
+                Save Location
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ─── Selection Bar ───────────────────────────────────────────────── */}

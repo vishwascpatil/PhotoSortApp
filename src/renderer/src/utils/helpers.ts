@@ -6,13 +6,15 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'No Date'
   const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return 'No Date'
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const dayMs = 86400000
 
-  if (diff < dayMs && date.getDate() === now.getDate()) {
+  if (diff >= 0 && diff < dayMs && date.getDate() === now.getDate()) {
     return 'Today'
   }
 
@@ -25,7 +27,7 @@ export function formatDate(dateStr: string): string {
   }
 
   const options: Intl.DateTimeFormatOptions = {
-    weekday: diff < 7 * dayMs ? 'long' : undefined,
+    weekday: diff < 7 * dayMs && diff >= 0 ? 'long' : undefined,
     month: 'long',
     day: 'numeric',
     year: 'numeric'
@@ -34,8 +36,10 @@ export function formatDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', options)
 }
 
-export function formatDateFull(dateStr: string): string {
+export function formatDateFull(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'No Date'
   const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return 'No Date'
   return date.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -46,10 +50,11 @@ export function formatDateFull(dateStr: string): string {
   })
 }
 
-export function groupPhotosByDate(photos: { id: number; created_at: string }[]): Map<string, number[]> {
+export function groupPhotosByDate(photos: { id: number; created_at?: string }[]): Map<string, number[]> {
   const groups = new Map<string, number[]>()
   for (const photo of photos) {
-    const dateKey = photo.created_at.split('T')[0] || photo.created_at.split(' ')[0]
+    const raw = photo.created_at || ''
+    const dateKey = raw ? (raw.split('T')[0] || raw.split(' ')[0]) : 'Unknown Date'
     const existing = groups.get(dateKey) || []
     existing.push(photo.id)
     groups.set(dateKey, existing)
