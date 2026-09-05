@@ -2,12 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   ArrowLeft, Heart, Info, Trash2, Edit, ZoomIn, ZoomOut,
   ChevronLeft, ChevronRight, RotateCw, Download, FolderOpen,
-  Calendar, Camera, Aperture, ImageIcon, HardDrive, MapPin, RotateCcw, Film, Tag, Plus, X
+  Calendar, Camera, Aperture, ImageIcon, HardDrive, MapPin, RotateCcw, Film, X
 } from 'lucide-react'
 import { Photo, usePhotos } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
 import { getThumbnailUrl, getOriginalUrl, getVideoUrl, formatDateFull, formatFileSize, isBrowserNativeImage, isVideoFile } from '../utils/helpers'
-import TagModal from './TagModal'
 
 export default function PhotoViewer() {
   const { state, dispatch } = usePhotos()
@@ -19,8 +18,6 @@ export default function PhotoViewer() {
   const hasDragged = useRef(false)
   const [showInfo, setShowInfo] = useState(false)
   const [exifData, setExifData] = useState<any | null>(null)
-  const [tags, setTags] = useState<Array<{ id: number; name: string; color: string }>>([])
-  const [isTagModalOpen, setIsTagModalOpen] = useState(false)
   const [imgSrc, setImgSrc] = useState('')
   const imageRef = useRef<HTMLImageElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -170,12 +167,7 @@ export default function PhotoViewer() {
       else setExifData(null)
     })
 
-    // 5. Load Tags
-    if (window.photoVault?.getTagsForPhoto) {
-      window.photoVault.getTagsForPhoto(photo.id).then(t => {
-        if (!isCancelled) setTags(t || [])
-      }).catch(() => {})
-    }
+
 
     return () => {
       isCancelled = true
@@ -459,69 +451,7 @@ export default function PhotoViewer() {
             </div>
           )}
 
-          {/* Tags Section */}
-          <div className="photo-info-section">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <div className="photo-info-section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Tag size={14} /> Tags
-              </div>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setIsTagModalOpen(true)}
-                style={{ fontSize: '11px', padding: '2px 8px', color: 'var(--primary, #3b82f6)' }}
-              >
-                <Plus size={12} /> Add
-              </button>
-            </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {tags.length === 0 ? (
-                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>No tags assigned</div>
-              ) : (
-                tags.map((t) => (
-                  <span
-                    key={t.id}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '3px 8px',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      backgroundColor: `${t.color}22`,
-                      color: t.color,
-                      border: `1px solid ${t.color}55`
-                    }}
-                  >
-                    {t.name}
-                    <button
-                      type="button"
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        if (window.photoVault?.removeTagFromPhotos) {
-                          await window.photoVault.removeTagFromPhotos([photo.id], t.id)
-                          setTags(prev => prev.filter(item => item.id !== t.id))
-                          showToast(`Removed tag "${t.name}"`)
-                        }
-                      }}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: t.color,
-                        cursor: 'pointer',
-                        padding: 0,
-                        display: 'flex'
-                      }}
-                    >
-                      <X size={10} />
-                    </button>
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
         </div>
       )}
 
@@ -562,23 +492,7 @@ export default function PhotoViewer() {
         </div>
       )}
 
-      {photo && (
-        <TagModal
-          photoIds={[photo.id]}
-          isOpen={isTagModalOpen}
-          onClose={() => {
-            setIsTagModalOpen(false)
-            if (window.photoVault?.getTagsForPhoto) {
-              window.photoVault.getTagsForPhoto(photo.id).then(t => setTags(t || []))
-            }
-          }}
-          onApplied={() => {
-            if (window.photoVault?.getTagsForPhoto) {
-              window.photoVault.getTagsForPhoto(photo.id).then(t => setTags(t || []))
-            }
-          }}
-        />
-      )}
+
     </div>
   )
 }

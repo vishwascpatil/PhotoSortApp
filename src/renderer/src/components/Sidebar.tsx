@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
-  Compass, ImageIcon, Star, Film, FolderKanban, Users, MapPin, Tag, FileText,
+  Compass, ImageIcon, Star, Film, FolderKanban, Users, MapPin, FileText,
   Copy, Sparkles, Monitor, HardDrive, MessageSquare, Folder, Cloud, Images, Loader2, Trash2, Flame, Share2
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
@@ -51,7 +51,6 @@ export default function Sidebar() {
       items: [
         { id: 'people', icon: Users, label: 'People' },
         { id: 'places', icon: MapPin, label: 'Places' },
-        { id: 'tags', icon: Tag, label: 'Tags' },
         { id: 'documents', icon: FileText, label: 'Documents' }
       ]
     },

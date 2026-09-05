@@ -19,7 +19,6 @@ interface AppState {
     | 'album-detail'
     | 'people'
     | 'places'
-    | 'tags'
     | 'documents'
     | 'duplicates'
     | 'similar'

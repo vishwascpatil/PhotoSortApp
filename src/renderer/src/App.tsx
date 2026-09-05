@@ -20,7 +20,6 @@ import ScreenshotsPage from './pages/ScreenshotsPage'
 import LargeFilesPage from './pages/LargeFilesPage'
 import JunkPage from './pages/JunkPage'
 import DocumentsPage from './pages/DocumentsPage'
-import TagsPage from './pages/TagsPage'
 import PlacesPage from './pages/PlacesPage'
 
 import FoldersPage from './pages/FoldersPage'
@@ -115,8 +114,6 @@ function AppContent() {
         return <PeoplePage />
       case 'places':
         return <PlacesPage />
-      case 'tags':
-        return <TagsPage />
       case 'documents':
         return <DocumentsPage />
       case 'duplicates':
