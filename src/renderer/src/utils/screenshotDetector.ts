@@ -7,8 +7,10 @@ export const KNOWN_SCREENSHOT_RESOLUTIONS: readonly [number, number][] = [
   [1080, 2400],
   [1170, 2532],
   [1179, 2556],
+  [1206, 2622],
   [1284, 2778],
   [1290, 2796],
+  [1320, 2868],
   // tablets
   [1620, 2160],
   [2048, 2732],
@@ -123,13 +125,17 @@ export function detectScreenshot(photo: Photo): ScreenshotDetection {
         (w === 1080 && (h === 1920 || h === 2340 || h === 2400)) ||
         (w === 1170 && h === 2532) ||
         (w === 1179 && h === 2556) ||
+        (w === 1206 && h === 2622) ||
         (w === 1284 && h === 2778) ||
         (w === 1290 && h === 2796) ||
+        (w === 1320 && h === 2868) ||
         (h === 1080 && (w === 1920 || w === 2340 || w === 2400)) ||
         (h === 1170 && w === 2532) ||
         (h === 1179 && w === 2556) ||
+        (h === 1206 && w === 2622) ||
         (h === 1284 && w === 2778) ||
-        (h === 1290 && w === 2796)
+        (h === 1290 && w === 2796) ||
+        (h === 1320 && w === 2868)
 
       if (lowerName.endsWith('.png') || lowerName.endsWith('.webp')) {
         return {
@@ -140,9 +146,9 @@ export function detectScreenshot(photo: Photo): ScreenshotDetection {
       }
     }
 
-    // 6. Mobile aspect ratio heuristics (tall phone display ratio >= 1.7)
+    // 6. Mobile aspect ratio heuristics (tall phone display ratio >= 1.6)
     const aspectRatio = h > w ? h / w : w / h
-    if (lowerName.endsWith('.png') && aspectRatio >= 1.7) {
+    if (lowerName.endsWith('.png') && aspectRatio >= 1.6) {
       return { isScreenshot: true, category: 'mobile', reason: 'Mobile screen aspect ratio' }
     }
   }

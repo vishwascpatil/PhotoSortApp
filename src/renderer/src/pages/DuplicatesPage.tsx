@@ -25,7 +25,13 @@ export default function DuplicatesPage() {
 
   const [loading, setLoading] = useState(true)
   const [isScanning, setIsScanning] = useState(false)
-  const [scanProgress, setScanProgress] = useState<{ scannedCount: number; totalCount: number; isScanning: boolean } | null>(null)
+  const [scanProgress, setScanProgress] = useState<{
+    scannedCount: number
+    totalCount: number
+    percent: number
+    isComplete: boolean
+    message?: string
+  } | null>(null)
   const [utilitiesData, setUtilitiesData] = useState<{ duplicates: Photo[][]; similar: Photo[][] }>({
     duplicates: [],
     similar: []
@@ -61,10 +67,13 @@ export default function DuplicatesPage() {
   useEffect(() => {
     if (window.photoVault?.onDuplicateScanProgress) {
       const unsub = window.photoVault.onDuplicateScanProgress((progress) => {
+        const pct = progress.total > 0 ? Math.min(99, Math.round((progress.scanned / progress.total) * 100)) : 0
         setScanProgress({
           scannedCount: progress.scanned,
           totalCount: progress.total,
-          isScanning: progress.scanned < progress.total
+          percent: pct,
+          isComplete: false,
+          message: `Analyzing perceptual fingerprints (${progress.scanned.toLocaleString()} / ${progress.total.toLocaleString()})...`
         })
       })
       return unsub
@@ -73,16 +82,55 @@ export default function DuplicatesPage() {
 
   // Trigger manual 100% Pixel Density Duplicate Scan
   const handleStartScan = async () => {
+    if (isScanning) return
     setIsScanning(true)
-    showToast('Running multi-stage duplicate detection engine across library...')
+
+    // Estimate total items from library photos or database
+    let totalEstimated = photoState.photos?.length || 0
+    if (totalEstimated === 0) {
+      try {
+        totalEstimated = (await window.photoVault?.getPhotoCount({})) || 0
+      } catch {
+        totalEstimated = 0
+      }
+    }
+
+    setScanProgress({
+      scannedCount: 0,
+      totalCount: totalEstimated,
+      percent: 0,
+      isComplete: false,
+      message: 'Initializing similarity and duplicate scan...'
+    })
+
     try {
       if (window.photoVault?.scanDuplicates) {
         const data = await window.photoVault.scanDuplicates()
+        const finalTotal = totalEstimated > 0 ? totalEstimated : (data.duplicates?.flat().length || 100)
+
+        // Smoothly reach 100%
+        setScanProgress({
+          scannedCount: finalTotal,
+          totalCount: finalTotal,
+          percent: 100,
+          isComplete: true,
+          message: `Complete scan finished! Analyzed all ${finalTotal.toLocaleString()} items.`
+        })
+
         setUtilitiesData({
           duplicates: data.duplicates || [],
           similar: data.similar || []
         })
-        showToast('Duplicate detection pipeline complete!')
+
+        const totalDupes = (data.duplicates?.length || 0) + (data.similar?.length || 0)
+        showToast(
+          totalDupes > 0
+            ? `Complete scan finished! Found ${totalDupes} duplicate/similar groups.`
+            : `Complete scan finished! No duplicates found in library.`
+        )
+
+        // Keep 100% complete state visible for 2.5 seconds so user clearly sees 100%
+        await new Promise((resolve) => setTimeout(resolve, 2500))
       }
     } catch (err) {
       console.error('Scan failed:', err)
@@ -426,23 +474,91 @@ export default function DuplicatesPage() {
         </div>
       </header>
 
-      {/* Live Scan Progress */}
-      {isScanning && (
-        <div className="apple-scan-banner" style={{ margin: '0 0 16px 0', padding: '10px 16px' }}>
-          <Loader2 size={16} className="animate-spin" />
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px', fontWeight: 600 }}>
-              <span>Analyzing photo & video similarities...</span>
-              <span>{scanProgress ? `${scanProgress.scannedCount} / ${scanProgress.totalCount}` : 'Processing...'}</span>
+      {/* Live Progressive Scan Banner (0% to 100%) */}
+      {isScanning && scanProgress && (
+        <div
+          style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '14px 18px',
+            marginBottom: '16px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+            position: 'relative',
+            overflow: 'hidden',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          {/* Top Row: Icon, Status Label, Count & Percentage */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {scanProgress.isComplete ? (
+                <CheckCircle2 size={18} color="#10b981" />
+              ) : (
+                <Loader2 size={18} className="animate-spin" color="var(--primary, #3b82f6)" />
+              )}
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {scanProgress.isComplete
+                  ? `Scan Complete! Analyzed all ${scanProgress.totalCount.toLocaleString()} items`
+                  : scanProgress.message || 'Analyzing photo & video similarities across library...'}
+              </span>
             </div>
-            <div className="apple-progress-track" style={{ height: '3px' }}>
-              <div
-                className="apple-progress-fill"
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {scanProgress.totalCount > 0 && (
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                  {scanProgress.scannedCount.toLocaleString()} / {scanProgress.totalCount.toLocaleString()}
+                </span>
+              )}
+              <span
                 style={{
-                  width: `${scanProgress && scanProgress.totalCount > 0 ? Math.round((scanProgress.scannedCount / scanProgress.totalCount) * 100) : 10}%`
+                  background: scanProgress.isComplete ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                  color: scanProgress.isComplete ? '#10b981' : 'var(--primary, #3b82f6)',
+                  fontWeight: 800,
+                  fontSize: '12px',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  minWidth: '42px',
+                  textAlign: 'center'
                 }}
-              />
+              >
+                {scanProgress.percent}%
+              </span>
             </div>
+          </div>
+
+          {/* Subtext: Live details */}
+          {!scanProgress.isComplete && (
+            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
+              Multi-stage perceptual hashing and similarity clustering in progress...
+            </div>
+          )}
+
+          {/* Progressive Bar Track */}
+          <div
+            style={{
+              width: '100%',
+              height: '6px',
+              borderRadius: '6px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              overflow: 'hidden',
+              position: 'relative'
+            }}
+          >
+            <div
+              style={{
+                width: `${scanProgress.percent}%`,
+                height: '100%',
+                borderRadius: '6px',
+                background: scanProgress.isComplete
+                  ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)'
+                  : 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #10b981 100%)',
+                transition: 'width 0.25s ease-out',
+                boxShadow: scanProgress.isComplete
+                  ? '0 0 10px rgba(16, 185, 129, 0.5)'
+                  : '0 0 10px rgba(59, 130, 246, 0.5)'
+              }}
+            />
           </div>
         </div>
       )}

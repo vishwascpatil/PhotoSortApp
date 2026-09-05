@@ -24,6 +24,9 @@ export interface Photo {
   is_document?: number
   document_category?: string | null
   location_name?: string | null
+  camera_make?: string | null
+  camera_model?: string | null
+  date_taken?: string | null
 }
 
 interface PhotoState {

@@ -20,7 +20,13 @@ const THRESHOLD_OPTIONS = [
 
 export default function LargeFilesPage() {
   const { state: photoState, dispatch: photoDispatch, loadPhotos, refreshPhotos } = usePhotos()
-  const { showToast } = useApp()
+  const { state: appState, showToast } = useApp()
+
+  const gridDensity = appState.gridDensity || 'dense'
+  const isComfortable = gridDensity === 'comfortable'
+  const isMedium = gridDensity === 'medium'
+  const minTileWidth = isComfortable ? 240 : isMedium ? 160 : 100
+  const gridGap = isComfortable ? '14px' : isMedium ? '10px' : '6px'
 
   // Controls
   const [minBytes, setMinBytes] = useState<number>(50 * 1024 * 1024)
@@ -482,8 +488,8 @@ export default function LargeFilesPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: '14px',
+            gridTemplateColumns: `repeat(auto-fill, minmax(${minTileWidth}px, 1fr))`,
+            gap: gridGap,
             marginBottom: '40px'
           }}
         >

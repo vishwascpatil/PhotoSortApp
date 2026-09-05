@@ -25,7 +25,7 @@ export interface JunkDetectionResult {
   score: number
   matchedSignals: MatchedSignal[]
   suggestedAction: 'move_to_junk_folder' | 'flag_for_review' | 'none'
-  category?: 'whatsapp' | 'telegram' | 'facebook' | 'instagram' | 'sticker' | 'other'
+  category?: 'whatsapp' | 'instagram' | 'snapchat' | 'linkedin' | 'browser' | 'editor' | 'other-social' | 'other-apps'
 }
 
 export const KNOWN_PLATFORM_DIMENSIONS: readonly [number, number][] = [
@@ -33,6 +33,8 @@ export const KNOWN_PLATFORM_DIMENSIONS: readonly [number, number][] = [
   [1600, 1600],
   [1600, 900],
   [1280, 1280],
+  [720, 1600],
+  [720, 1280],
   // Instagram feed / story / reels
   [1080, 1080],
   [1080, 1350],
@@ -50,44 +52,84 @@ export const KNOWN_PLATFORM_DIMENSIONS: readonly [number, number][] = [
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.heic', '.webp', '.bmp', '.gif'])
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.avi', '.webm', '.3gp'])
 
-// ─── Signal 1: Filename Pattern (+35) ───────────────────────────────────────
+// ─── Signal 1: Filename Pattern (+35 to +50) ────────────────────────────────
 export function checkFilenamePattern(filename: string): { matched: boolean; points: number; reason: string; category?: JunkDetectionResult['category'] } {
   const name = filename.trim()
+  const lower = name.toLowerCase()
 
   // 1. WhatsApp image
-  if (/^IMG-\d{8}-WA\d{4}\./i.test(name)) {
-    return { matched: true, points: 35, reason: 'WhatsApp image naming pattern (IMG-YYYYMMDD-WAxxxx)', category: 'whatsapp' }
+  if (/^IMG-\d{8}-WA\d{4,}\./i.test(name)) {
+    return { matched: true, points: 50, reason: 'WhatsApp image naming pattern (IMG-YYYYMMDD-WAxxxx)', category: 'whatsapp' }
   }
 
   // 2. WhatsApp video
-  if (/^VID-\d{8}-WA\d{4}\./i.test(name)) {
-    return { matched: true, points: 35, reason: 'WhatsApp video naming pattern (VID-YYYYMMDD-WAxxxx)', category: 'whatsapp' }
+  if (/^VID-\d{8}-WA\d{4,}\./i.test(name)) {
+    return { matched: true, points: 50, reason: 'WhatsApp video naming pattern (VID-YYYYMMDD-WAxxxx)', category: 'whatsapp' }
   }
 
   // 3. WhatsApp sticker
-  if (/^STK-\d{8}-WA\d{4}\./i.test(name)) {
-    return { matched: true, points: 35, reason: 'WhatsApp sticker naming pattern (STK-YYYYMMDD-WAxxxx)', category: 'sticker' }
+  if (/^STK-\d{8}-WA\d{4,}\./i.test(name)) {
+    return { matched: true, points: 50, reason: 'WhatsApp sticker naming pattern (STK-YYYYMMDD-WAxxxx)', category: 'whatsapp' }
   }
 
-  // 4. Telegram image
-  if (/^photo_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\./i.test(name)) {
-    return { matched: true, points: 35, reason: 'Telegram photo naming pattern', category: 'telegram' }
+  // 4. WhatsApp Web / Desktop export
+  if (/WhatsApp (Image|Video|Audio|Document) \d{4}-\d{2}-\d{2}/i.test(name)) {
+    return { matched: true, points: 50, reason: 'WhatsApp Web / Desktop exported file', category: 'whatsapp' }
   }
 
-  // 5. Telegram video
-  if (/^video_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\./i.test(name)) {
-    return { matched: true, points: 35, reason: 'Telegram video naming pattern', category: 'telegram' }
+  // 5. WhatsApp generic prefix
+  if (/^WA[-_]?\d+/i.test(name)) {
+    return { matched: true, points: 45, reason: 'WhatsApp exported media prefix', category: 'whatsapp' }
   }
 
-  // 6. Facebook / Messenger download
+  // 6. iOS saved WhatsApp / messaging forward (4-letter uppercase code, e.g. AAWT0024.JPG)
+  if (/^[A-Z]{4,7}\d{4,5}\.(jpg|jpeg|mov|mp4|png|webp)$/i.test(name)) {
+    return { matched: true, points: 40, reason: 'iOS WhatsApp export naming (4-letter code)', category: 'whatsapp' }
+  }
+
+  // 7. Instagram / Meta CDN
+  if (/^\d{6,15}_\d{10,25}_\d{10,25}_[no]\.(jpg|mp4|webp)$/i.test(name)) {
+    return { matched: true, points: 50, reason: 'Instagram CDN hashed file naming pattern', category: 'instagram' }
+  }
+  if (/^(instagram|ig|reels)[-_]/i.test(name)) {
+    return { matched: true, points: 40, reason: 'Instagram download naming pattern', category: 'instagram' }
+  }
+
+  // 8. Snapchat
+  if (/^Snapchat-\d+/i.test(name) || /^snap[-_]\d+/i.test(name)) {
+    return { matched: true, points: 45, reason: 'Snapchat exported media naming', category: 'snapchat' }
+  }
+
+  // 9. LinkedIn
+  if (/^linkedin-feed-image-/i.test(name) || /^feedshare-shrink_/i.test(name) || /^li_feed_/i.test(name) || /\blinkedin\b/i.test(lower)) {
+    return { matched: true, points: 45, reason: 'LinkedIn feed share download', category: 'linkedin' }
+  }
+
+  // 10. Editor & Creative Apps (Canva, Snapseed, VSCO, InShot, CapCut, PicsArt, Photoshop)
+  if (/canva\s*-\s*|untitled\s*design|^canva_/i.test(lower) || /^snapseed/i.test(lower) || /^vsco/i.test(lower) || /^inshot/i.test(lower) || /^capcut/i.test(lower) || /^picsart/i.test(lower) || /_edit\b|_edited\b|_psd\b|_export\b|_render\b|adobe|photoshop|lightroom/i.test(lower)) {
+    return { matched: true, points: 45, reason: 'Created with image/video editor application', category: 'editor' }
+  }
+
+  // 11. Browser & Web Downloads
+  if (/^download(\s*\(\d+\))?\./i.test(name) || /^image(\s*\(\d+\))?\./i.test(name) || /^photo(\s*\(\d+\))?\./i.test(name) || /^untitled(\s*\(\d+\))?\./i.test(name) || /^save_image/i.test(name) || /favicon|logo|icon|clipart|vector|stock|graphic|asset|badge|button|infographic/i.test(lower)) {
+    return { matched: true, points: 40, reason: 'Web browser download / asset', category: 'browser' }
+  }
+
+  // 12. Other Social Media (Telegram, Facebook, Reddit, Twitter, TikTok)
+  if (/^photo_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\./i.test(name) || /^video_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\./i.test(name)) {
+    return { matched: true, points: 50, reason: 'Telegram media naming pattern', category: 'other-social' }
+  }
   if (/^received_\d+/i.test(name) || /^FB_IMG_\d+/i.test(name)) {
-    return { matched: true, points: 35, reason: 'Facebook / Messenger downloaded image pattern', category: 'facebook' }
+    return { matched: true, points: 45, reason: 'Facebook / Messenger downloaded media pattern', category: 'other-social' }
+  }
+  if (/^RDT_\d+/i.test(name) || /^(reddit|twitter|tw|x_export)[-_]/i.test(name) || /^(tiktok|snaptik|ssstik)/i.test(name)) {
+    return { matched: true, points: 45, reason: 'Social media downloaded asset', category: 'other-social' }
   }
 
-  // 7. Generic downloaded hash pattern (weak tiebreaker)
+  // 13. Generic downloaded hash pattern
   if (!/^(IMG_|DSC_|PXL_|DJI_|GOPR|SAM_|DCIM)/i.test(name)) {
     if (/^[0-9a-f]{16,32}\./i.test(name) || /^[0-9]{12,20}\./i.test(name) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\./i.test(name)) {
-      return { matched: true, points: 20, reason: 'Generated hash / timestamp filename from messaging app', category: 'other' }
+      return { matched: true, points: 25, reason: 'Generated hash / timestamp filename from messaging app', category: 'other-apps' }
     }
   }
 
@@ -98,29 +140,26 @@ export function checkFilenamePattern(filename: string): { matched: boolean; poin
 export function checkSourceFolderSignal(filePath: string): { matched: boolean; points: number; reason: string; category?: JunkDetectionResult['category'] } {
   const norm = filePath.replace(/\\/g, '/').toLowerCase()
 
-  if (norm.includes('whatsapp/media/whatsapp images') || norm.includes('whatsapp images')) {
-    return { matched: true, points: 40, reason: 'Source path is WhatsApp Images directory', category: 'whatsapp' }
+  if (norm.includes('whatsapp/media/whatsapp images') || norm.includes('whatsapp images') || norm.includes('whatsapp video') || norm.includes('/whatsapp/')) {
+    return { matched: true, points: 40, reason: 'Source path is WhatsApp media directory', category: 'whatsapp' }
   }
-  if (norm.includes('whatsapp/media/whatsapp video') || norm.includes('whatsapp video')) {
-    return { matched: true, points: 40, reason: 'Source path is WhatsApp Video directory', category: 'whatsapp' }
+  if (norm.includes('/instagram/') || norm.includes('/ig/')) {
+    return { matched: true, points: 40, reason: 'Source path is Instagram saved folder', category: 'instagram' }
   }
-  if (norm.includes('whatsapp/media/whatsapp animated gifs') || norm.includes('whatsapp animated gifs') || norm.includes('whatsapp stickers')) {
-    return { matched: true, points: 40, reason: 'Source path is WhatsApp GIFs / Stickers directory', category: 'sticker' }
+  if (norm.includes('/snapchat/')) {
+    return { matched: true, points: 40, reason: 'Source path is Snapchat folder', category: 'snapchat' }
   }
-  if (norm.includes('whatsapp/media/whatsapp documents') || norm.includes('whatsapp documents')) {
-    return { matched: true, points: 35, reason: 'Source path is WhatsApp Documents directory', category: 'whatsapp' }
+  if (norm.includes('/linkedin/')) {
+    return { matched: true, points: 40, reason: 'Source path is LinkedIn folder', category: 'linkedin' }
   }
-  if (norm.includes('telegram/telegram images') || norm.includes('telegram images') || norm.includes('telegram video') || norm.includes('/telegram/')) {
-    return { matched: true, points: 40, reason: 'Source path is Telegram media folder', category: 'telegram' }
+  if (norm.includes('/canva/') || norm.includes('/snapseed/') || norm.includes('/vsco/') || norm.includes('/inshot/') || norm.includes('/capcut/') || norm.includes('/picsart/')) {
+    return { matched: true, points: 40, reason: 'Source path is editor app folder', category: 'editor' }
   }
-  if (norm.includes('/instagram/')) {
-    return { matched: true, points: 35, reason: 'Source path is Instagram saved folder', category: 'instagram' }
+  if (norm.includes('/downloads/') || norm.includes('/chrome/') || norm.includes('/safari/') || norm.includes('/browser/')) {
+    return { matched: true, points: 35, reason: 'Source path is downloads directory', category: 'browser' }
   }
-  if (norm.includes('/messenger/') || norm.includes('/facebook/')) {
-    return { matched: true, points: 35, reason: 'Source path is Messenger / Facebook folder', category: 'facebook' }
-  }
-  if (norm.includes('/downloads/whatsapp') || norm.includes('/whatsapp/')) {
-    return { matched: true, points: 35, reason: 'Source path contains WhatsApp directory structure', category: 'whatsapp' }
+  if (norm.includes('/telegram/') || norm.includes('/facebook/') || norm.includes('/messenger/') || norm.includes('/reddit/') || norm.includes('/twitter/') || norm.includes('/tiktok/')) {
+    return { matched: true, points: 40, reason: 'Source path is social platform folder', category: 'other-social' }
   }
 
   return { matched: false, points: 0, reason: '' }
@@ -224,7 +263,7 @@ export async function classifyJunkMedia(filePath: string): Promise<JunkDetection
 
   const filename = basename(filePath)
   const matchedSignals: MatchedSignal[] = []
-  let detectedCategory: JunkDetectionResult['category'] = 'other'
+  let detectedCategory: JunkDetectionResult['category'] = 'other-apps'
 
   // Signal 1: Filename Pattern (+35)
   const sig1 = checkFilenamePattern(filename)
@@ -262,7 +301,7 @@ export async function classifyJunkMedia(filePath: string): Promise<JunkDetection
   const sig8 = checkStickerShortCircuit(ext, width, height, fileSize)
   if (sig8.matched) {
     matchedSignals.push({ signal: 'Signal 8: Sticker Short-Circuit', points: sig8.points, reason: sig8.reason })
-    detectedCategory = 'sticker'
+    detectedCategory = 'other-apps'
   }
 
   // Signal 5: Platform Resize Dimensions (+15)
@@ -313,6 +352,27 @@ export async function classifyJunkMedia(filePath: string): Promise<JunkDetection
       }
     } catch {}
 
+    // 1:1 Square Post (classic Instagram / Meme square card)
+    if (width === height && width >= 450 && width <= 1440) {
+      matchedSignals.push({
+        signal: 'Signal 6: 1:1 Square Post',
+        points: 25,
+        reason: `1:1 Square post format (${width}×${height})`
+      })
+      if (detectedCategory === 'other-apps') detectedCategory = 'other-apps'
+    }
+
+    // Extreme banner aspect ratio (web graphics, headers, banners)
+    const ratio = Math.max(width, height) / Math.min(width, height)
+    if (ratio >= 2.4) {
+      matchedSignals.push({
+        signal: 'Signal 10: Extreme Aspect Ratio',
+        points: 30,
+        reason: `Extreme banner aspect ratio (${ratio.toFixed(1)}:1)`
+      })
+      if (detectedCategory === 'other-apps') detectedCategory = 'browser'
+    }
+
     // Signal 4: Complete metadata strip (+25)
     if (!hasAnyExif) {
       matchedSignals.push({
@@ -322,11 +382,11 @@ export async function classifyJunkMedia(filePath: string): Promise<JunkDetection
       })
     }
 
-    // Signal 9: Camera EXIF presence (-50 Penalty)
+    // Signal 9: Camera EXIF presence (-60 Penalty)
     if (hasCameraExif) {
       matchedSignals.push({
         signal: 'Signal 9: Camera EXIF Presence',
-        points: -50,
+        points: -60,
         reason: 'Original camera hardware EXIF detected (penalty)'
       })
     }
@@ -359,7 +419,7 @@ export async function classifyJunkMedia(filePath: string): Promise<JunkDetection
       score: 90,
       matchedSignals,
       suggestedAction: 'move_to_junk_folder',
-      category: 'sticker'
+      category: 'other-apps'
     }
   }
 

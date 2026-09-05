@@ -451,6 +451,9 @@ export interface PhotoRow {
   extracted_text?: string
   is_document?: number
   document_category?: string
+  camera_make?: string | null
+  camera_model?: string | null
+  date_taken?: string | null
 }
 
 export interface PhotoInsert {
@@ -642,8 +645,9 @@ export function getPhotos(filter: PhotoFilter = {}): PhotoRow[] {
     params.push(filter.albumId)
   }
 
+  join += ' LEFT JOIN exif_data e ON p.id = e.photo_id'
+
   if (filter.search) {
-    join += ' LEFT JOIN exif_data e ON p.id = e.photo_id'
     conditions.push(`(
       p.filename LIKE ? 
       OR e.model LIKE ? 
@@ -662,7 +666,7 @@ export function getPhotos(filter: PhotoFilter = {}): PhotoRow[] {
   const limit = filter.limit ? `LIMIT ${filter.limit}` : ''
   const offset = filter.offset ? `OFFSET ${filter.offset}` : ''
 
-  const sql = `SELECT p.* FROM photos p ${join} ${where} ORDER BY p.created_at DESC ${limit} ${offset}`
+  const sql = `SELECT p.*, e.make AS camera_make, e.model AS camera_model, e.date_taken FROM photos p ${join} ${where} ORDER BY p.created_at DESC ${limit} ${offset}`
   return queryAll<PhotoRow>(sql, params)
 }
 
