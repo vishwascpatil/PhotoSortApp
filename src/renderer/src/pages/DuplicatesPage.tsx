@@ -639,13 +639,16 @@ export default function DuplicatesPage() {
             const isGroupDuplicatesSelected = duplicateCopies.every(item => selectedIds.has(item.id))
 
             return (
-              <div key={group.id} className="apple-group-card">
+              <div key={group.id} className={`apple-group-card ${group.items.length > 3 ? 'has-many-items' : ''}`}>
                 {/* Minimal Header Bar */}
                 <div className="apple-group-header">
                   <div className="apple-group-meta">
                     <span className={`apple-match-badge ${group.isExact ? 'is-exact' : 'is-similar'}`}>
                       {group.isExact ? <CheckCircle2 size={12} /> : <Sparkles size={12} />}
                       {group.isExact ? '100% Exact' : `${group.matchPercentage}% Match`}
+                    </span>
+                    <span className="apple-items-count-badge">
+                      {group.items.length} files
                     </span>
                     <span className="apple-reclaim-text">
                       +{formatFileSize(group.recoverableBytes)}
@@ -662,7 +665,7 @@ export default function DuplicatesPage() {
                 </div>
 
                 {/* Side-by-Side Comparison Items */}
-                <div className="apple-tiles-row">
+                <div className={`apple-tiles-row count-${group.items.length} ${group.items.length > 3 ? 'has-many' : ''}`}>
                   {group.items.map((photo, itemIdx) => {
                     const isMaster = itemIdx === 0
                     const isSelectedForTrash = selectedIds.has(photo.id)
@@ -689,7 +692,7 @@ export default function DuplicatesPage() {
                           {/* Master / Copy Badge */}
                           {isMaster ? (
                             <div className="apple-tile-badge-master">
-                              KEEP MASTER
+                              {group.items.length > 3 ? 'MASTER' : 'KEEP MASTER'}
                             </div>
                           ) : (
                             <div className="apple-tile-badge-duplicate">
