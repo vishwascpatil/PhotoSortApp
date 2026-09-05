@@ -1,55 +1,84 @@
 import { spawn } from 'child_process'
 import ffmpegPath from 'ffmpeg-static'
 import sharp from 'sharp'
+import { existsSync } from 'fs'
 import { IVideoFingerprintService, VideoFingerprint } from './types'
 import { defaultPerceptualHashService } from './PerceptualHashService'
 
 export class VideoFingerprintService implements IVideoFingerprintService {
   /**
-   * Extract video duration and 5 temporal keyframe dHashes (10%, 30%, 50%, 70%, 90%)
+   * Fast Video Fingerprint:
+   * 1. If thumbnailPath exists, computes 256-bit dHash & 64-bit DCT pHash directly in ~3ms
+   * 2. Probes video duration once via lightweight metadata probe
    */
-  async computeVideoFingerprint(videoPath: string): Promise<VideoFingerprint> {
-    const duration = await this.getVideoDuration(videoPath)
+  async computeVideoFingerprint(videoPath: string, thumbnailPath?: string | null): Promise<VideoFingerprint> {
+    let dhash: string | undefined
+    let phash: string | undefined
+    const keyframes: string[] = []
 
-    // Adaptive keyframe count: <15s -> 5 keyframes, 30s -> 8 keyframes, 60s -> 12 keyframes, >60s -> 15 keyframes
-    let keyframePcts: number[] = [0.1, 0.3, 0.5, 0.7, 0.9]
-    if (duration > 60) {
-      keyframePcts = Array.from({ length: 15 }, (_, i) => (i + 1) / 16)
-    } else if (duration > 30) {
-      keyframePcts = Array.from({ length: 12 }, (_, i) => (i + 1) / 13)
-    } else if (duration >= 15) {
-      keyframePcts = Array.from({ length: 8 }, (_, i) => (i + 1) / 9)
+    if (thumbnailPath && existsSync(thumbnailPath)) {
+      try {
+        const hashes = await defaultPerceptualHashService.computeMultiHashes(thumbnailPath)
+        dhash = hashes.dhash
+        phash = hashes.phash
+        if (dhash) keyframes.push(dhash)
+      } catch {}
     }
 
-    const timestamps = keyframePcts.map((pct) =>
-      Math.max(0.5, duration > 0 ? duration * pct : 1.0 + pct * 2)
-    )
-
-    const keyframes = await Promise.all(
-      timestamps.map((t) => this.extractFrameHashAtTimestamp(videoPath, t))
-    )
+    const duration = await this.getVideoDuration(videoPath)
 
     return {
       duration,
-      keyframes
+      keyframes,
+      dhash,
+      phash
     }
   }
 
   /**
-   * Compare two video temporal fingerprints across 5 keyframe vectors and duration
+   * Compare two video temporal fingerprints across duration, thumbnail hashes, and keyframe vectors
    */
   compareVideoFingerprints(
     v1: VideoFingerprint,
     v2: VideoFingerprint
   ): { isDuplicate: boolean; confidence: number; reasons: string[] } {
     const durationDiff = Math.abs(v1.duration - v2.duration)
-    if (durationDiff > 3.5) {
+    if (durationDiff > 3.0) {
       return { isDuplicate: false, confidence: 0, reasons: ['Video duration differs significantly'] }
     }
 
     const reasons: string[] = []
     reasons.push(`Video durations match (${v1.duration.toFixed(1)}s vs ${v2.duration.toFixed(1)}s)`)
 
+    // 1. Direct Thumbnail Perceptual Hash comparison (dHash & pHash)
+    if (v1.dhash && v2.dhash && v1.dhash.length === 64 && v2.dhash.length === 64 && v1.dhash !== '0'.repeat(64)) {
+      const dDist = defaultPerceptualHashService.hammingDistance(v1.dhash, v2.dhash)
+      let pDist = 999
+      if (v1.phash && v2.phash && v1.phash.length === 16 && v2.phash.length === 16) {
+        pDist = defaultPerceptualHashService.hammingDistance(v1.phash, v2.phash)
+      }
+
+      if (dDist <= 14 || (dDist <= 22 && pDist <= 6)) {
+        let confidence = 95
+        if (dDist <= 6 && durationDiff <= 0.5) {
+          confidence = 98
+        } else if (dDist <= 10) {
+          confidence = 95
+        } else {
+          confidence = 90
+        }
+
+        reasons.push(`Video Keyframe Visual Hash match (dHash dist: ${dDist}/256, pHash dist: ${pDist === 999 ? 'N/A' : pDist + '/64'})`)
+
+        return {
+          isDuplicate: true,
+          confidence,
+          reasons
+        }
+      }
+    }
+
+    // 2. Multi-keyframe vector fallback
     let matchedKeyframes = 0
     let totalDist = 0
     const count = Math.min(v1.keyframes.length, v2.keyframes.length)
@@ -59,34 +88,26 @@ export class VideoFingerprintService implements IVideoFingerprintService {
       const k2 = v2.keyframes[i]
       if (k1 && k2 && k1 !== '0'.repeat(64) && k2 !== '0'.repeat(64)) {
         const dist = defaultPerceptualHashService.hammingDistance(k1, k2)
-        if (dist <= 38) {
+        if (dist <= 30) {
           matchedKeyframes++
           totalDist += dist
         }
       }
     }
 
-    if (matchedKeyframes >= 2) {
-      const avgDist = totalDist / Math.max(1, matchedKeyframes)
-      let confidence = 95
-      if (durationDiff <= 1.0 && matchedKeyframes >= 4 && avgDist <= 20) {
-        confidence = 98
-      } else if (matchedKeyframes >= 3) {
-        confidence = 90
-      } else {
-        confidence = 85
-      }
-
-      reasons.push(`${matchedKeyframes}/5 temporal keyframe vectors matched across video timeline`)
-
-      return {
-        isDuplicate: true,
-        confidence,
-        reasons
+    if (matchedKeyframes >= 1 && count > 0) {
+      const avgDist = totalDist / matchedKeyframes
+      if (avgDist <= 22) {
+        reasons.push(`${matchedKeyframes} keyframe vectors matched across timeline (avg dist: ${avgDist.toFixed(1)})`)
+        return {
+          isDuplicate: true,
+          confidence: durationDiff <= 1.0 && avgDist <= 12 ? 95 : 90,
+          reasons
+        }
       }
     }
 
-    return { isDuplicate: false, confidence: 0, reasons: ['Keyframe temporal vector mismatch'] }
+    return { isDuplicate: false, confidence: 0, reasons: ['Keyframe visual mismatch'] }
   }
 
   private getVideoDuration(videoPath: string): Promise<number> {

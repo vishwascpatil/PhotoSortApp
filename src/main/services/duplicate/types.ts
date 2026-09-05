@@ -10,6 +10,7 @@ export interface PhotoFingerprintRecord {
   width: number
   height: number
   createdAt: string
+  thumbnailPath?: string | null
   sha256?: string
   partialSha256?: string
   phash?: string
@@ -100,7 +101,7 @@ export interface PerceptualHashes {
 }
 
 export interface IPerceptualHashService {
-  computeMultiHashes(imagePath: string): Promise<PerceptualHashes>
+  computeMultiHashes(imagePath: string, thumbnailPath?: string | null): Promise<PerceptualHashes>
   computeRotationVariants(imagePath: string): Promise<PerceptualHashes['rotations']>
   hammingDistance(h1: string, h2: string): number
 }
@@ -108,10 +109,12 @@ export interface IPerceptualHashService {
 export interface VideoFingerprint {
   duration: number
   keyframes: string[]
+  dhash?: string
+  phash?: string
 }
 
 export interface IVideoFingerprintService {
-  computeVideoFingerprint(videoPath: string): Promise<VideoFingerprint>
+  computeVideoFingerprint(videoPath: string, thumbnailPath?: string | null): Promise<VideoFingerprint>
   compareVideoFingerprints(v1: VideoFingerprint, v2: VideoFingerprint): { isDuplicate: boolean; confidence: number; reasons: string[] }
 }
 

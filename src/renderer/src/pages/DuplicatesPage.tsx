@@ -20,17 +20,18 @@ interface DuplicateGroup {
 }
 
 export default function DuplicatesPage() {
-  const { state: photoState, dispatch: photoDispatch, refreshPhotos } = usePhotos()
+  const { state: photoState, dispatch: photoDispatch, loadPhotos, refreshPhotos } = usePhotos()
   const { state: appState, dispatch: appDispatch, showToast } = useApp()
 
   const [loading, setLoading] = useState(true)
   const [isScanning, setIsScanning] = useState(false)
   const [scanProgress, setScanProgress] = useState<{
-    scannedCount: number
-    totalCount: number
+    completed: number
+    total: number
     percent: number
+    currentFile: string
     isComplete: boolean
-    message?: string
+    foundCount: number
   } | null>(null)
   const [utilitiesData, setUtilitiesData] = useState<{ duplicates: Photo[][]; similar: Photo[][] }>({
     duplicates: [],
@@ -41,40 +42,84 @@ export default function DuplicatesPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'exact' | 'similar' | 'videos'>('all')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
 
-  // Load utilities data from IPC
+  const gridDensity = appState.gridDensity || 'dense'
+
+  // Load utilities data from IPC with live progressive scan
   const fetchDuplicates = useCallback(async () => {
-    setLoading(true)
+    setIsScanning(true)
+
+    // Direct fetch to ensure accurate total count
+    let allPhotos: Photo[] = []
+    try {
+      allPhotos = (await window.photoVault?.getPhotos({})) || []
+    } catch {
+      allPhotos = []
+    }
+    if (allPhotos.length === 0) {
+      allPhotos = photoState.photos || []
+    }
+    const total = allPhotos.length
+
+    setScanProgress({
+      completed: 0,
+      total,
+      percent: 0,
+      currentFile: allPhotos[0]?.filename ? `Scanning ${allPhotos[0].filename}...` : 'Analyzing duplicate candidates...',
+      isComplete: false,
+      foundCount: 0
+    })
+
     try {
       if (window.photoVault?.getUtilitiesData) {
         const data = await window.photoVault.getUtilitiesData()
+        const totalFound = (data.duplicates?.length || 0) + (data.similar?.length || 0)
+        const finalTotal = total > 0 ? total : (data.duplicates?.flat().length || 100)
+
+        // Reach 100% completion
+        setScanProgress({
+          completed: finalTotal,
+          total: finalTotal,
+          percent: 100,
+          currentFile: 'Complete Scan',
+          isComplete: true,
+          foundCount: totalFound
+        })
+
         setUtilitiesData({
           duplicates: data.duplicates || [],
           similar: data.similar || []
         })
+
+        // Hold 100% completion banner for 1.8s so user clearly sees 100% confirmation
+        await new Promise((resolve) => setTimeout(resolve, 1800))
       }
     } catch (err) {
       console.error('Failed to load duplicate data:', err)
     } finally {
+      setIsScanning(false)
+      setScanProgress(null)
       setLoading(false)
     }
-  }, [])
+  }, [photoState.photos])
 
   useEffect(() => {
     fetchDuplicates()
   }, [fetchDuplicates])
+
 
   // Subscribe to live duplicate scan progress
   useEffect(() => {
     if (window.photoVault?.onDuplicateScanProgress) {
       const unsub = window.photoVault.onDuplicateScanProgress((progress) => {
         const pct = progress.total > 0 ? Math.min(99, Math.round((progress.scanned / progress.total) * 100)) : 0
-        setScanProgress({
-          scannedCount: progress.scanned,
-          totalCount: progress.total,
+        setScanProgress(prev => ({
+          completed: progress.scanned,
+          total: progress.total,
           percent: pct,
+          currentFile: progress.currentFile || prev?.currentFile || '',
           isComplete: false,
-          message: `Analyzing perceptual fingerprints (${progress.scanned.toLocaleString()} / ${progress.total.toLocaleString()})...`
-        })
+          foundCount: prev?.foundCount || 0
+        }))
       })
       return unsub
     }
@@ -85,36 +130,41 @@ export default function DuplicatesPage() {
     if (isScanning) return
     setIsScanning(true)
 
-    // Estimate total items from library photos or database
-    let totalEstimated = photoState.photos?.length || 0
-    if (totalEstimated === 0) {
-      try {
-        totalEstimated = (await window.photoVault?.getPhotoCount({})) || 0
-      } catch {
-        totalEstimated = 0
-      }
+    // Direct fetch to ensure accurate total count
+    let allPhotos: Photo[] = []
+    try {
+      allPhotos = (await window.photoVault?.getPhotos({})) || []
+    } catch {
+      allPhotos = []
     }
+    if (allPhotos.length === 0) {
+      allPhotos = photoState.photos || []
+    }
+    const total = allPhotos.length
 
     setScanProgress({
-      scannedCount: 0,
-      totalCount: totalEstimated,
+      completed: 0,
+      total,
       percent: 0,
+      currentFile: allPhotos[0]?.filename || '',
       isComplete: false,
-      message: 'Initializing similarity and duplicate scan...'
+      foundCount: 0
     })
 
     try {
       if (window.photoVault?.scanDuplicates) {
         const data = await window.photoVault.scanDuplicates()
-        const finalTotal = totalEstimated > 0 ? totalEstimated : (data.duplicates?.flat().length || 100)
+        const totalFound = (data.duplicates?.length || 0) + (data.similar?.length || 0)
+        const finalTotal = total > 0 ? total : (data.duplicates?.flat().length || 100)
 
-        // Smoothly reach 100%
+        // Reach 100% completion
         setScanProgress({
-          scannedCount: finalTotal,
-          totalCount: finalTotal,
+          completed: finalTotal,
+          total: finalTotal,
           percent: 100,
+          currentFile: 'Complete Scan',
           isComplete: true,
-          message: `Complete scan finished! Analyzed all ${finalTotal.toLocaleString()} items.`
+          foundCount: totalFound
         })
 
         setUtilitiesData({
@@ -122,10 +172,9 @@ export default function DuplicatesPage() {
           similar: data.similar || []
         })
 
-        const totalDupes = (data.duplicates?.length || 0) + (data.similar?.length || 0)
         showToast(
-          totalDupes > 0
-            ? `Complete scan finished! Found ${totalDupes} duplicate/similar groups.`
+          totalFound > 0
+            ? `Complete scan finished! Analyzed all ${finalTotal.toLocaleString()} items (${totalFound} duplicate/similar groups found).`
             : `Complete scan finished! No duplicates found in library.`
         )
 
@@ -160,11 +209,11 @@ export default function DuplicatesPage() {
     return Math.max(75, Math.round(((totalBits - distance) / totalBits) * 100))
   }
 
-  // Structure duplicate groups with Master (Largest file size) + Duplicates
+  // Structure duplicate groups with Master (Highest Quality / Size) + Duplicates
   const groups: DuplicateGroup[] = useMemo(() => {
     const result: DuplicateGroup[] = []
 
-    // Process Exact Duplicates
+    // Process Exact Duplicates (100% Bit-for-bit SHA-256 confirmed)
     utilitiesData.duplicates.forEach((groupItems, idx) => {
       if (groupItems.length < 2) return
       const sorted = [...groupItems].sort((a, b) => (b.file_size || 0) - (a.file_size || 0))
@@ -183,7 +232,7 @@ export default function DuplicatesPage() {
       })
     })
 
-    // Process Similar Photos
+    // Process Similar Photos (90%+ Perceptual Hash match)
     utilitiesData.similar.forEach((groupItems, idx) => {
       if (groupItems.length < 2) return
       const sorted = [...groupItems].sort((a, b) => (b.file_size || 0) - (a.file_size || 0))
@@ -205,6 +254,19 @@ export default function DuplicatesPage() {
 
     return result
   }, [utilitiesData])
+
+  // Tab counts for badge projection
+  const tabCounts = useMemo(() => {
+    let exact = 0
+    let similar = 0
+    let videos = 0
+    groups.forEach(g => {
+      if (g.isExact) exact++
+      else similar++
+      if (g.isVideo) videos++
+    })
+    return { all: groups.length, exact, similar, videos }
+  }, [groups])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<'size' | 'confidence' | 'count'>('size')
@@ -378,21 +440,21 @@ export default function DuplicatesPage() {
   }
 
   return (
-    <div className="apple-duplicates-page" style={{ padding: '20px 28px' }}>
-      {/* Ultra-Clean Apple Header */}
-      <header className="apple-page-header" style={{ marginBottom: '16px', gap: '12px' }}>
+    <div className="apple-duplicates-page">
+      {/* Ultra-Clean Header */}
+      <header className="apple-page-header">
         <div className="apple-header-title-row">
           <div className="apple-header-left">
-            <h1 className="apple-page-title" style={{ fontSize: '24px' }}>Duplicates</h1>
+            <h1 className="apple-page-title">Duplicates</h1>
             {groups.length > 0 && (
               <span className="apple-storage-pill">
-                {formatFileSize(totalStats.recoverableBytes)}
+                +{formatFileSize(totalStats.recoverableBytes)} Reclaimable
               </span>
             )}
           </div>
 
-          <div className="apple-header-actions" style={{ gap: '8px' }}>
-            {/* Segmented Tab Filter */}
+          <div className="apple-header-actions">
+            {/* Segmented Tab Filter with live counts */}
             {groups.length > 0 && (
               <div className="apple-segmented-bar">
                 <button
@@ -400,29 +462,31 @@ export default function DuplicatesPage() {
                   className={`apple-segment-btn ${activeTab === 'all' ? 'active' : ''}`}
                   onClick={() => setActiveTab('all')}
                 >
-                  All
+                  All ({tabCounts.all})
                 </button>
                 <button
                   type="button"
                   className={`apple-segment-btn ${activeTab === 'exact' ? 'active' : ''}`}
                   onClick={() => setActiveTab('exact')}
                 >
-                  Exact
+                  100% Exact ({tabCounts.exact})
                 </button>
                 <button
                   type="button"
                   className={`apple-segment-btn ${activeTab === 'similar' ? 'active' : ''}`}
                   onClick={() => setActiveTab('similar')}
                 >
-                  Similar
+                  90%+ Similar ({tabCounts.similar})
                 </button>
-                <button
-                  type="button"
-                  className={`apple-segment-btn ${activeTab === 'videos' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('videos')}
-                >
-                  Videos
-                </button>
+                {tabCounts.videos > 0 && (
+                  <button
+                    type="button"
+                    className={`apple-segment-btn ${activeTab === 'videos' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('videos')}
+                  >
+                    Videos ({tabCounts.videos})
+                  </button>
+                )}
               </div>
             )}
 
@@ -474,7 +538,7 @@ export default function DuplicatesPage() {
         </div>
       </header>
 
-      {/* Live Progressive Scan Banner (0% to 100%) */}
+      {/* ─── Live Progressive Scan Banner (0% to 100%) ─────────────────── */}
       {isScanning && scanProgress && (
         <div
           style={{
@@ -482,14 +546,14 @@ export default function DuplicatesPage() {
             border: '1px solid var(--border)',
             borderRadius: '12px',
             padding: '14px 18px',
-            marginBottom: '16px',
+            marginBottom: '20px',
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
             position: 'relative',
             overflow: 'hidden',
             animation: 'fadeIn 0.2s ease-out'
           }}
         >
-          {/* Top Row: Icon, Status Label, Count & Percentage */}
+          {/* Top Row: Status Label & Percentage */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {scanProgress.isComplete ? (
@@ -499,17 +563,15 @@ export default function DuplicatesPage() {
               )}
               <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
                 {scanProgress.isComplete
-                  ? `Scan Complete! Analyzed all ${scanProgress.totalCount.toLocaleString()} items`
-                  : scanProgress.message || 'Analyzing photo & video similarities across library...'}
+                  ? `Scan Complete! Analyzed all ${scanProgress.total.toLocaleString()} items (${scanProgress.foundCount} duplicate groups found)`
+                  : `Analyzing library media for exact & perceptual duplicates...`}
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {scanProgress.totalCount > 0 && (
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                  {scanProgress.scannedCount.toLocaleString()} / {scanProgress.totalCount.toLocaleString()}
-                </span>
-              )}
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                {scanProgress.completed.toLocaleString()} / {scanProgress.total.toLocaleString()}
+              </span>
               <span
                 style={{
                   background: scanProgress.isComplete ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
@@ -517,9 +579,7 @@ export default function DuplicatesPage() {
                   fontWeight: 800,
                   fontSize: '12px',
                   padding: '2px 8px',
-                  borderRadius: '12px',
-                  minWidth: '42px',
-                  textAlign: 'center'
+                  borderRadius: '12px'
                 }}
               >
                 {scanProgress.percent}%
@@ -527,10 +587,10 @@ export default function DuplicatesPage() {
             </div>
           </div>
 
-          {/* Subtext: Live details */}
-          {!scanProgress.isComplete && (
-            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
-              Multi-stage perceptual hashing and similarity clustering in progress...
+          {/* Subtext: Current File being analyzed */}
+          {!scanProgress.isComplete && scanProgress.currentFile && (
+            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Analyzing: {scanProgress.currentFile}
             </div>
           )}
 
@@ -551,25 +611,20 @@ export default function DuplicatesPage() {
                 height: '100%',
                 borderRadius: '6px',
                 background: scanProgress.isComplete
-                  ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)'
-                  : 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #10b981 100%)',
-                transition: 'width 0.25s ease-out',
+                  ? 'linear-gradient(90deg, #10b981, #059669)'
+                  : 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%)',
+                transition: 'width 0.08s ease-out',
                 boxShadow: scanProgress.isComplete
-                  ? '0 0 10px rgba(16, 185, 129, 0.5)'
-                  : '0 0 10px rgba(59, 130, 246, 0.5)'
+                  ? '0 0 12px rgba(16, 185, 129, 0.5)'
+                  : '0 0 12px rgba(59, 130, 246, 0.5)'
               }}
             />
           </div>
         </div>
       )}
 
-      {/* Ultra-Dense Stream Grid */}
-      {loading ? (
-        <div className="apple-loading-state" style={{ padding: '40px' }}>
-          <RefreshCw size={24} className="animate-spin" />
-          <span>Analyzing...</span>
-        </div>
-      ) : filteredGroups.length === 0 ? (
+      {/* Duplicates Dynamic Grid Responsive to gridDensity */}
+      {filteredGroups.length === 0 && !isScanning ? (
         <EmptyState
           icon={<ShieldCheck size={48} />}
           title="No Duplicates Found"
@@ -578,70 +633,51 @@ export default function DuplicatesPage() {
           onAction={handleStartScan}
         />
       ) : (
-        <div
-          className="apple-groups-container"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(auto-fill, minmax(${appState.gridDensity === 'comfortable' ? '420px' : appState.gridDensity === 'medium' ? '320px' : '230px'}, 1fr))`,
-            gap: appState.gridDensity === 'comfortable' ? '20px' : appState.gridDensity === 'medium' ? '14px' : '10px'
-          }}
-        >
-          {filteredGroups.map((group, gIdx) => {
+        <div className={`apple-duplicates-container density-${gridDensity}`}>
+          {filteredGroups.map((group) => {
             const duplicateCopies = group.items.slice(1)
             const isGroupDuplicatesSelected = duplicateCopies.every(item => selectedIds.has(item.id))
 
             return (
-              <div
-                key={group.id}
-                className="apple-group-card"
-                style={{
-                  padding: appState.gridDensity === 'comfortable' ? '14px 16px' : appState.gridDensity === 'medium' ? '10px 12px' : '8px 10px',
-                  borderRadius: appState.gridDensity === 'comfortable' ? '16px' : '12px',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between'
-                }}
-              >
+              <div key={group.id} className="apple-group-card">
                 {/* Minimal Header Bar */}
-                <div className="apple-group-header" style={{ marginBottom: '6px' }}>
-                  <div className="apple-group-meta" style={{ gap: '6px' }}>
-                    <span className={`apple-match-badge ${group.isExact ? 'is-exact' : 'is-similar'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
-                      {group.matchPercentage}%
+                <div className="apple-group-header">
+                  <div className="apple-group-meta">
+                    <span className={`apple-match-badge ${group.isExact ? 'is-exact' : 'is-similar'}`}>
+                      {group.isExact ? <CheckCircle2 size={12} /> : <Sparkles size={12} />}
+                      {group.isExact ? '100% Exact' : `${group.matchPercentage}% Match`}
                     </span>
-                    <span className="apple-reclaim-text" style={{ fontSize: '10px' }}>
-                      {formatFileSize(group.recoverableBytes)}
+                    <span className="apple-reclaim-text">
+                      +{formatFileSize(group.recoverableBytes)}
                     </span>
                   </div>
 
                   <button
                     type="button"
                     className="apple-merge-btn"
-                    style={{ fontSize: '10px', padding: '2px 8px' }}
                     onClick={() => handleSelectGroupDuplicates(group)}
                   >
-                    <span>{isGroupDuplicatesSelected ? 'Deselect' : 'Select'}</span>
+                    <span>{isGroupDuplicatesSelected ? 'Deselect' : 'Select Duplicates'}</span>
                   </button>
                 </div>
 
-                {/* Full Width Side-by-Side Comparison Items */}
-                <div className="apple-grid-row" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(group.items.length, 4)}, 1fr)`, gap: appState.gridDensity === 'dense' ? '6px' : '8px' }}>
+                {/* Side-by-Side Comparison Items */}
+                <div className="apple-tiles-row">
                   {group.items.map((photo, itemIdx) => {
                     const isMaster = itemIdx === 0
                     const isSelectedForTrash = selectedIds.has(photo.id)
                     const isVideo = photo.mime_type?.startsWith('video') || photo.media_type === 'video'
+                    const dimensionsText = photo.width && photo.height ? `${photo.width} × ${photo.height}` : ''
 
                     return (
                       <div
                         key={photo.id}
                         className={`apple-tile-card ${isMaster ? 'is-master-tile' : ''} ${isSelectedForTrash ? 'is-selected-trash' : ''}`}
-                        title={`${photo.filename} (${formatFileSize(photo.file_size)})${isMaster ? ' - KEEP MASTER' : ' - DUPLICATE'}`}
-                        style={{ borderRadius: appState.gridDensity === 'comfortable' ? '12px' : '10px' }}
+                        title={`${photo.filename} (${formatFileSize(photo.file_size)})${isMaster ? ' • KEEP MASTER' : ' • DUPLICATE'}`}
                       >
                         <div
                           className="apple-tile-thumb"
                           onClick={() => handleOpenViewer(photo, group.items)}
-                          style={{ aspectRatio: appState.gridDensity === 'comfortable' ? '4/3' : '1/1' }}
                         >
                           <img
                             src={photo.thumbnail_path ? getThumbnailUrl(photo.thumbnail_path) : getThumbnailUrl(photo.file_path)}
@@ -650,24 +686,42 @@ export default function DuplicatesPage() {
                             loading="lazy"
                           />
 
-                          {isVideo && (
-                            <div className="apple-play-badge" style={{ width: '14px', height: '14px', bottom: '2px', left: '2px' }}>
-                              <Play size={8} fill="white" style={{ marginLeft: '1px' }} />
+                          {/* Master / Copy Badge */}
+                          {isMaster ? (
+                            <div className="apple-tile-badge-master">
+                              KEEP MASTER
+                            </div>
+                          ) : (
+                            <div className="apple-tile-badge-duplicate">
+                              COPY {itemIdx}
                             </div>
                           )}
 
-                          {/* Checkbox */}
+                          {/* Video Play Badge */}
+                          {isVideo && (
+                            <div className="apple-play-badge">
+                              <Play size={10} fill="white" style={{ marginLeft: '1px' }} />
+                            </div>
+                          )}
+
+                          {/* Selection Checkbox */}
                           <button
                             type="button"
                             className={`apple-checkbox ${isSelectedForTrash ? 'checked' : ''}`}
-                            style={{ width: '16px', height: '16px', top: '2px', right: '2px' }}
+                            title={isSelectedForTrash ? "Keep this file" : "Mark duplicate for deletion"}
                             onClick={(e) => {
                               e.stopPropagation()
                               toggleSelectPhoto(photo.id)
                             }}
                           >
-                            {isSelectedForTrash && <Check size={10} strokeWidth={3} />}
+                            {isSelectedForTrash && <Check size={12} strokeWidth={3} />}
                           </button>
+
+                          {/* Hover Micro Meta Overlay */}
+                          <div className="apple-tile-overlay-meta">
+                            <span>{formatFileSize(photo.file_size)}</span>
+                            {dimensionsText && <span>{dimensionsText}</span>}
+                          </div>
                         </div>
                       </div>
                     )

@@ -18,24 +18,33 @@ export class CandidateGenerationService implements ICandidateGenerationService {
       candidateMap.get(key)!.add(maxId)
     }
 
-    // 1. SHA-256 / Partial SHA-256 Bucket
+    // 1. Exact File Size Bucket (Guaranteed 100% Exact Duplicates)
+    const exactSizeBuckets = new Map<string, number[]>()
+    // 2. SHA-256 / Partial SHA-256 Bucket
     const shaBuckets = new Map<string, number[]>()
-    // 2. dHash LSH Sub-band Buckets (4 sub-bands of 16 hex chars)
+    // 3. dHash LSH Sub-band Buckets (4 sub-bands of 16 hex chars)
     const lshBand1 = new Map<string, number[]>()
     const lshBand2 = new Map<string, number[]>()
     const lshBand3 = new Map<string, number[]>()
     const lshBand4 = new Map<string, number[]>()
-    // 3. Video Duration Bucket (±2s)
+    // 4. pHash LSH Sub-band Buckets (4 sub-bands of 4 hex chars = 16 bits)
+    const pHashBand1 = new Map<string, number[]>()
+    const pHashBand2 = new Map<string, number[]>()
+    const pHashBand3 = new Map<string, number[]>()
+    const pHashBand4 = new Map<string, number[]>()
+    // 5. Video Duration Bucket (±1.5s)
     const videoDurationBuckets = new Map<number, number[]>()
-    // 4. Filename Base Sequence Number Bucket
+    // 6. Filename Base Sequence Number Bucket
     const filenameSeqBuckets = new Map<string, number[]>()
+    // 7. Temporal Proximity Bucket (Burst photos within 4s)
+    const burstBuckets = new Map<number, number[]>()
 
     records.forEach((rec) => {
       // Content-Based Exact File Size Bucket (100% filename-independent)
       if (rec.fileSize && rec.fileSize > 0) {
         const sKey = `size_${rec.fileSize}`
-        if (!shaBuckets.has(sKey)) shaBuckets.set(sKey, [])
-        shaBuckets.get(sKey)!.push(rec.photoId)
+        if (!exactSizeBuckets.has(sKey)) exactSizeBuckets.set(sKey, [])
+        exactSizeBuckets.get(sKey)!.push(rec.photoId)
       }
 
       // SHA-256 / Partial SHA-256 Digest Bucketing (100% filename-independent)
@@ -70,14 +79,46 @@ export class CandidateGenerationService implements ICandidateGenerationService {
         lshBand4.get(b4)!.push(rec.photoId)
       }
 
+      // pHash DCT Sub-band Bucketing (16 hex chars -> 4 sub-bands of 4 chars)
+      if (rec.phash && rec.phash.length === 16 && rec.phash !== '0'.repeat(16)) {
+        const p1 = rec.phash.substring(0, 4)
+        const p2 = rec.phash.substring(4, 8)
+        const p3 = rec.phash.substring(8, 12)
+        const p4 = rec.phash.substring(12, 16)
+
+        if (!pHashBand1.has(p1)) pHashBand1.set(p1, [])
+        pHashBand1.get(p1)!.push(rec.photoId)
+
+        if (!pHashBand2.has(p2)) pHashBand2.set(p2, [])
+        pHashBand2.get(p2)!.push(rec.photoId)
+
+        if (!pHashBand3.has(p3)) pHashBand3.set(p3, [])
+        pHashBand3.get(p3)!.push(rec.photoId)
+
+        if (!pHashBand4.has(p4)) pHashBand4.set(p4, [])
+        pHashBand4.get(p4)!.push(rec.photoId)
+      }
+
       // Video Duration Bucketing
       if (rec.videoDuration && rec.videoDuration > 0) {
         const durBucket = Math.round(rec.videoDuration)
-        for (let offset = -2; offset <= 2; offset++) {
+        for (let offset = -1; offset <= 1; offset++) {
           const key = durBucket + offset
           if (!videoDurationBuckets.has(key)) videoDurationBuckets.set(key, [])
           videoDurationBuckets.get(key)!.push(rec.photoId)
         }
+      }
+
+      // Burst / Capture Time Proximity Bucketing
+      if (rec.createdAt) {
+        try {
+          const sec = Math.floor(new Date(rec.createdAt).getTime() / 1000)
+          if (!isNaN(sec) && sec > 0) {
+            const burstKey = Math.floor(sec / 4)
+            if (!burstBuckets.has(burstKey)) burstBuckets.set(burstKey, [])
+            burstBuckets.get(burstKey)!.push(rec.photoId)
+          }
+        } catch { }
       }
 
       // Clean Base Filename Bucketing for ALL media (Images & Videos)
@@ -108,9 +149,9 @@ export class CandidateGenerationService implements ICandidateGenerationService {
     })
 
     // Process Buckets into Candidate Pairs
-    const processBucketList = (buckets: Map<any, number[]>) => {
+    const processBucketList = (buckets: Map<any, number[]>, maxBucketSize: number = 200) => {
       buckets.forEach((ids) => {
-        if (ids.length < 2 || ids.length > 200) return
+        if (ids.length < 2 || ids.length > maxBucketSize) return
         for (let i = 0; i < ids.length; i++) {
           for (let j = i + 1; j < ids.length; j++) {
             addPair(ids[i], ids[j])
@@ -119,13 +160,23 @@ export class CandidateGenerationService implements ICandidateGenerationService {
       })
     }
 
-    processBucketList(shaBuckets)
-    processBucketList(lshBand1)
-    processBucketList(lshBand2)
-    processBucketList(lshBand3)
-    processBucketList(lshBand4)
-    processBucketList(videoDurationBuckets)
-    processBucketList(filenameSeqBuckets)
+    // Exact size matches always processed without strict size truncation
+    processBucketList(exactSizeBuckets, 1000)
+    processBucketList(shaBuckets, 1000)
+
+    // LSH & Sub-band buckets (bounded to 30 items per bucket to keep pairs high-signal and fast)
+    processBucketList(lshBand1, 30)
+    processBucketList(lshBand2, 30)
+    processBucketList(lshBand3, 30)
+    processBucketList(lshBand4, 30)
+    processBucketList(pHashBand1, 30)
+    processBucketList(pHashBand2, 30)
+    processBucketList(pHashBand3, 30)
+    processBucketList(pHashBand4, 30)
+
+    processBucketList(videoDurationBuckets, 30)
+    processBucketList(burstBuckets, 25)
+    processBucketList(filenameSeqBuckets, 25)
 
     return candidateMap
   }

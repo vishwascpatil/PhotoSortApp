@@ -1,6 +1,6 @@
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
 import { app } from 'electron'
-import { join } from 'path'
+import { join, basename } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 
 let db: SqlJsDatabase | null = null
@@ -970,10 +970,60 @@ export function savePhotoFingerprint(fp: PhotoFingerprintRecord): void {
   }
 }
 
+export function savePhotoFingerprintsBatch(fps: PhotoFingerprintRecord[]): void {
+  if (fps.length === 0) return
+  const database = getDb()
+  try {
+    database.run('BEGIN TRANSACTION')
+    for (const fp of fps) {
+      const jsonHistogram = fp.colorHistogram ? JSON.stringify(fp.colorHistogram) : null
+      const jsonKeyframes = fp.videoKeyframes ? JSON.stringify(fp.videoKeyframes) : null
+
+      runSql(
+        `INSERT INTO photo_fingerprints (
+          photo_id, sha256, partial_sha256, phash, dhash, ahash, block_hash, color_histogram, video_duration, video_keyframes, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(photo_id) DO UPDATE SET
+          sha256 = excluded.sha256,
+          partial_sha256 = excluded.partial_sha256,
+          phash = excluded.phash,
+          dhash = excluded.dhash,
+          ahash = excluded.ahash,
+          block_hash = excluded.block_hash,
+          color_histogram = excluded.color_histogram,
+          video_duration = excluded.video_duration,
+          video_keyframes = excluded.video_keyframes,
+          updated_at = datetime('now')`,
+        [
+          fp.photoId,
+          fp.sha256 || null,
+          fp.partialSha256 || null,
+          fp.phash || null,
+          fp.dhash || null,
+          fp.ahash || null,
+          fp.blockHash || null,
+          jsonHistogram,
+          fp.videoDuration ?? null,
+          jsonKeyframes
+        ]
+      )
+
+      const legacyHash = fp.dhash || (fp.videoDuration ? `VID_DUR_${Math.round(fp.videoDuration)}_${fp.videoKeyframes?.[2] || ''}` : '')
+      if (legacyHash) {
+        runSql('UPDATE photos SET perceptual_hash = ? WHERE id = ?', [legacyHash, fp.photoId])
+      }
+    }
+    database.run('COMMIT')
+  } catch (err) {
+    try { database.run('ROLLBACK') } catch {}
+    console.error('Failed to batch save photo fingerprints:', err)
+  }
+}
+
 export function getAllPhotoFingerprints(): PhotoFingerprintRecord[] {
   const rows = queryAll<any>(`
     SELECT p.id as photoId, p.file_path as filePath, p.file_size as fileSize, p.mime_type as mimeType,
-           p.width, p.height, p.created_at as createdAt, p.perceptual_hash as legacyHash,
+           p.width, p.height, p.created_at as createdAt, p.thumbnail_path as thumbnailPath, p.perceptual_hash as legacyHash,
            fp.sha256, fp.partial_sha256 as partialSha256, fp.phash, fp.dhash, fp.ahash, fp.block_hash as blockHash,
            COALESCE(fp.color_histogram, fp.rgb_histogram) as colorHistogramJson, fp.video_duration as videoDuration, fp.video_keyframes as videoKeyframesJson
     FROM photos p
@@ -999,6 +1049,7 @@ export function getAllPhotoFingerprints(): PhotoFingerprintRecord[] {
       width: r.width || 0,
       height: r.height || 0,
       createdAt: r.createdAt || '',
+      thumbnailPath: r.thumbnailPath || null,
       sha256: r.sha256 || undefined,
       partialSha256: r.partialSha256 || undefined,
       phash: r.phash || undefined,
@@ -1012,7 +1063,9 @@ export function getAllPhotoFingerprints(): PhotoFingerprintRecord[] {
   })
 }
 
-export async function getUtilitiesData() {
+export async function getUtilitiesData(
+  onProgress?: (scanned: number, total: number, currentFile?: string) => void
+) {
   const allPhotos = queryAll<PhotoRow>('SELECT * FROM photos WHERE is_trashed = 0 ORDER BY created_at DESC')
 
   const whatsappPhotos = allPhotos.filter(p =>
@@ -1023,8 +1076,22 @@ export async function getUtilitiesData() {
   const blurryPhotos = allPhotos.filter(p => p.blur_score !== undefined && p.blur_score >= 0 && p.blur_score < 100)
   blurryPhotos.sort((a, b) => (a.blur_score || 0) - (b.blur_score || 0))
 
+  // Ensure any newly imported photos without fingerprints are quickly fingerprinted using fast thumbnail hashing
+  const unanalyzedCount = queryOne<{ count: number }>(`
+    SELECT COUNT(*) as count 
+    FROM photos p 
+    LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id 
+    WHERE p.is_trashed = 0 AND (fp.photo_id IS NULL OR fp.dhash IS NULL OR fp.dhash = '')
+  `)?.count || 0
+
+  if (unanalyzedCount > 0) {
+    await scanPerceptualHashesBatch(onProgress, false)
+  }
+
   const fingerprints = getAllPhotoFingerprints()
-  const duplicateGroups = await defaultDuplicateOrchestrator.runPipeline(fingerprints)
+  const duplicateGroups = await defaultDuplicateOrchestrator.runPipeline(fingerprints, (evaluated, totalPairs) => {
+    onProgress?.(evaluated, totalPairs, `Comparing duplicate candidates (${evaluated} / ${totalPairs})`)
+  })
 
   // Format groups into PhotoRow[][] array for backward compatibility & renderer UI
   const photoMap = new Map<number, PhotoRow>()
@@ -1054,12 +1121,12 @@ export async function getUtilitiesData() {
 }
 
 export async function scanPerceptualHashesBatch(
-  onProgress?: (scanned: number, total: number) => void,
+  onProgress?: (scanned: number, total: number, currentFile?: string) => void,
   forceReScan: boolean = false
 ): Promise<{ scannedCount: number; duplicateCount: number }> {
   const query = forceReScan
-    ? "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at FROM photos p WHERE p.is_trashed = 0"
-    : "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at FROM photos p LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id WHERE p.is_trashed = 0 AND (fp.photo_id IS NULL OR fp.dhash IS NULL OR fp.dhash = '')"
+    ? "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at, p.thumbnail_path FROM photos p WHERE p.is_trashed = 0"
+    : "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at, p.thumbnail_path FROM photos p LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id WHERE p.is_trashed = 0 AND (fp.photo_id IS NULL OR fp.dhash IS NULL OR fp.dhash = '')"
 
   const unanalyzed = queryAll<{
     id: number
@@ -1069,6 +1136,7 @@ export async function scanPerceptualHashesBatch(
     width: number
     height: number
     created_at: string
+    thumbnail_path: string | null
   }>(query)
 
   const total = unanalyzed.length
@@ -1078,10 +1146,12 @@ export async function scanPerceptualHashesBatch(
   }
 
   let completed = 0
-  const BATCH_SIZE = 16
+  const BATCH_SIZE = 32
 
   for (let i = 0; i < unanalyzed.length; i += BATCH_SIZE) {
     const batch = unanalyzed.slice(i, i + BATCH_SIZE)
+    const fps: PhotoFingerprintRecord[] = []
+
     await Promise.allSettled(
       batch.map(async (photo) => {
         try {
@@ -1092,16 +1162,25 @@ export async function scanPerceptualHashesBatch(
             photo.mime_type || 'image/jpeg',
             photo.width || 0,
             photo.height || 0,
-            photo.created_at || ''
+            photo.created_at || '',
+            photo.thumbnail_path
           )
-          savePhotoFingerprint(fp)
-        } catch { }
+          fps.push(fp)
+        } catch (err) {
+          console.error(`Failed to fingerprint photo ${photo.id}:`, err)
+        }
         completed++
-        onProgress?.(completed, total)
+        const currentFile = photo.file_path ? basename(photo.file_path) : ''
+        onProgress?.(completed, total, currentFile)
       })
     )
+
+    if (fps.length > 0) {
+      savePhotoFingerprintsBatch(fps)
+    }
   }
 
+  saveDatabase()
   return { scannedCount: completed, duplicateCount: total }
 }
 

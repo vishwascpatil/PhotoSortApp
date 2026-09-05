@@ -108,7 +108,7 @@ const api = {
   savePhotoAnalysis: (photoId: number, blurScore: number, perceptualHash: string): Promise<boolean> => ipcRenderer.invoke('photos:save-analysis', photoId, blurScore, perceptualHash),
   getUtilitiesData: (): Promise<any> => ipcRenderer.invoke('photos:get-utilities-data'),
   scanDuplicates: (): Promise<any> => ipcRenderer.invoke('photos:scan-duplicates'),
-  onDuplicateScanProgress: (callback: (progress: { scanned: number; total: number }) => void): (() => void) => {
+  onDuplicateScanProgress: (callback: (progress: { scanned: number; total: number; currentFile?: string }) => void): (() => void) => {
     const handler = (_event: any, progress: any) => callback(progress)
     ipcRenderer.on('duplicate-scan:progress', handler)
     return () => ipcRenderer.removeListener('duplicate-scan:progress', handler)

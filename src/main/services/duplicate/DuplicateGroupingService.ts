@@ -112,7 +112,7 @@ export class DuplicateGroupingService implements IDuplicateGroupingService {
         masterPhotoId: master.photoId,
         totalBytes,
         recoverableBytes,
-        items: clusterRecords
+        items: sortedCluster
       })
     })
 

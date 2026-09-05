@@ -2,8 +2,12 @@ import sharp from 'sharp'
 import { IFeatureVectorService } from './types'
 
 export class FeatureVectorService implements IFeatureVectorService {
+  async computeColorHistogram(imagePath: string): Promise<number[]> {
+    return this.computeHsvHistogram(imagePath)
+  }
+
   async computeRgbHistogram(imagePath: string): Promise<number[]> {
-    return this.computeColorHistogram(imagePath)
+    return this.computeHsvHistogram(imagePath)
   }
 
   async computeHsvHistogram(imagePath: string): Promise<number[]> {

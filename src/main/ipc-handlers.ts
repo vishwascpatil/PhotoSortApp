@@ -14,6 +14,7 @@ import {
   getAllFaceDescriptors, saveFaceDescriptor, getUnscannedPhotos, markPhotoScanned, resetFaceScanData, getMergeSuggestions,
   resetLocationScanData, resetDocumentScanData, resetUtilityScanData,
   getUnanalyzedPhotos, savePhotoAnalysis, getUtilitiesData, getUnscannedDocuments, saveDocumentScan,
+  scanPerceptualHashesBatch,
   getAllTags, createTag, deleteTag, renameTag, addTagsToPhotos, syncPhotoTags, removeTagFromPhotos, getTagsForPhoto, getPhotosByTag, getAllTaggedPhotos,
   updateLocationNameForPhotos,
   PhotoFilter
@@ -162,6 +163,8 @@ export function registerIpcHandlers(): void {
     })
 
     resumeVideoQueue()
+    // Auto-fingerprint newly imported photos in background for instant duplicate detection
+    scanPerceptualHashesBatch(undefined, false).catch(() => {})
     return { success: true, count: insertedItems.length }
   })
 
@@ -246,6 +249,8 @@ export function registerIpcHandlers(): void {
     })
 
     resumeVideoQueue()
+    // Auto-fingerprint newly imported photos in background for instant duplicate detection
+    scanPerceptualHashesBatch(undefined, false).catch(() => {})
     return { success: true, count: insertedItems.length }
   })
 
@@ -371,16 +376,20 @@ export function registerIpcHandlers(): void {
     shell.showItemInFolder(filePath)
   })
 
-  ipcMain.handle('photos:get-utilities-data', () => {
-    return getUtilitiesData()
+  ipcMain.handle('photos:get-utilities-data', (event) => {
+    return getUtilitiesData((scanned, total, currentFile) => {
+      event.sender.send('duplicate-scan:progress', { scanned, total, currentFile })
+    })
   })
 
   ipcMain.handle('photos:scan-duplicates', async (event) => {
     const { scanPerceptualHashesBatch } = await import('./database')
-    await scanPerceptualHashesBatch((scanned, total) => {
-      event.sender.send('duplicate-scan:progress', { scanned, total })
+    await scanPerceptualHashesBatch((scanned, total, currentFile) => {
+      event.sender.send('duplicate-scan:progress', { scanned, total, currentFile })
     }, true)
-    return getUtilitiesData()
+    return getUtilitiesData((scanned, total, currentFile) => {
+      event.sender.send('duplicate-scan:progress', { scanned, total, currentFile })
+    })
   })
 
   ipcMain.handle('photos:get-unanalyzed', () => {

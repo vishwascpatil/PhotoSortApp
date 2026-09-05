@@ -69,15 +69,19 @@ export class DuplicateDetectionService implements IDuplicateDetectionService {
       const p1 = r1.partialSha256 || await defaultHashService.computePartialSha256(r1.filePath)
       const p2 = r2.partialSha256 || await defaultHashService.computePartialSha256(r2.filePath)
       if (p1 && p2 && p1 === p2) {
-        matchReasons.push('99% Content Partial Binary Digest & File Size Match')
-        return {
-          photo1Id: r1.photoId,
-          photo2Id: r2.photoId,
-          confidence: 99,
-          confidenceLabel: '99% Binary Match',
-          matchReasons,
-          isExact: true,
-          isVideo: false
+        const s1 = r1.sha256 || await defaultHashService.computeSha256(r1.filePath)
+        const s2 = r2.sha256 || await defaultHashService.computeSha256(r2.filePath)
+        if (s1 && s2 && s1 === s2) {
+          matchReasons.push('100% Binary SHA-256 Digest Match')
+          return {
+            photo1Id: r1.photoId,
+            photo2Id: r2.photoId,
+            confidence: 100,
+            confidenceLabel: '100% Exact Duplicate',
+            matchReasons,
+            isExact: true,
+            isVideo: false
+          }
         }
       }
     }
@@ -121,11 +125,12 @@ export class DuplicateDetectionService implements IDuplicateDetectionService {
       aHashDist = defaultPerceptualHashService.hammingDistance(r1.ahash, r2.ahash)
     }
 
-    // Check Rotation & Flip Invariance if standard distance is slightly higher
+    // Check Rotation & Flip Invariance if standard distance is borderline and pHash matches
     let minDHashDist = dHashDist
-    if (dHashDist > 16 && dHashDist <= 45) {
+    if (dHashDist > 14 && dHashDist <= 26 && pHashDist <= 8) {
       try {
-        const rotVariants = await defaultPerceptualHashService.computeRotationVariants(r2.filePath)
+        const rotTarget = r2.thumbnailPath || r2.filePath
+        const rotVariants = await defaultPerceptualHashService.computeRotationVariants(rotTarget)
         if (rotVariants) {
           const distances = [
             defaultPerceptualHashService.hammingDistance(r1.dhash!, rotVariants.rot90),
@@ -255,6 +260,28 @@ export class DuplicateDetectionService implements IDuplicateDetectionService {
       }
     }
 
+    // Content-Based On-The-Fly Binary Digest Verification for Videos
+    if (r1.fileSize && r2.fileSize && r1.fileSize === r2.fileSize && r1.fileSize > 0) {
+      const p1 = r1.partialSha256 || await defaultHashService.computePartialSha256(r1.filePath)
+      const p2 = r2.partialSha256 || await defaultHashService.computePartialSha256(r2.filePath)
+      if (p1 && p2 && p1 === p2) {
+        const s1 = r1.sha256 || await defaultHashService.computeSha256(r1.filePath)
+        const s2 = r2.sha256 || await defaultHashService.computeSha256(r2.filePath)
+        if (s1 && s2 && s1 === s2) {
+          matchReasons.push('100% Binary SHA-256 Video Digest Match')
+          return {
+            photo1Id: r1.photoId,
+            photo2Id: r2.photoId,
+            confidence: 100,
+            confidenceLabel: '100% Exact Duplicate',
+            matchReasons,
+            isExact: true,
+            isVideo: true
+          }
+        }
+      }
+    }
+
     // Video File Copy Name Pattern Matcher (e.g. IMG_3037 - Copy.MOV vs IMG_3037 - Copy (2).MOV)
     const name1 = r1.filePath.replace(/\\/g, '/').split('/').pop() || ''
     const name2 = r2.filePath.replace(/\\/g, '/').split('/').pop() || ''
@@ -278,11 +305,21 @@ export class DuplicateDetectionService implements IDuplicateDetectionService {
     }
 
     // Stage 6: Multi-Keyframe Video Fingerprint Vector Check
-    let v1 = r1.videoDuration && r1.videoKeyframes ? { duration: r1.videoDuration, keyframes: r1.videoKeyframes } : null
-    let v2 = r2.videoDuration && r2.videoKeyframes ? { duration: r2.videoDuration, keyframes: r2.videoKeyframes } : null
+    let v1 = {
+      duration: r1.videoDuration || 0,
+      keyframes: r1.videoKeyframes || [],
+      dhash: r1.dhash,
+      phash: r1.phash
+    }
+    let v2 = {
+      duration: r2.videoDuration || 0,
+      keyframes: r2.videoKeyframes || [],
+      dhash: r2.dhash,
+      phash: r2.phash
+    }
 
-    if (!v1) v1 = await defaultVideoFingerprintService.computeVideoFingerprint(r1.filePath)
-    if (!v2) v2 = await defaultVideoFingerprintService.computeVideoFingerprint(r2.filePath)
+    if (!v1.dhash && !v1.duration) v1 = await defaultVideoFingerprintService.computeVideoFingerprint(r1.filePath)
+    if (!v2.dhash && !v2.duration) v2 = await defaultVideoFingerprintService.computeVideoFingerprint(r2.filePath)
 
     const vResult = defaultVideoFingerprintService.compareVideoFingerprints(v1, v2)
     if (vResult.isDuplicate) {

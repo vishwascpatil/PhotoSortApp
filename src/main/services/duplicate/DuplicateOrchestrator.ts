@@ -22,7 +22,8 @@ export class DuplicateOrchestrator {
     mimeType: string,
     width: number,
     height: number,
-    createdAt: string
+    createdAt: string,
+    thumbnailPath?: string | null
   ): Promise<PhotoFingerprintRecord> {
     const isVideo =
       mimeType?.startsWith('video') ||
@@ -30,10 +31,10 @@ export class DuplicateOrchestrator {
         filePath.toLowerCase().endsWith(ext)
       )
 
-    const partialSha256 = await defaultHashService.computePartialSha256(filePath)
+    const partialSha256 = await defaultHashService.computePartialSha256(filePath).catch(() => '')
 
     if (isVideo) {
-      const vfp = await defaultVideoFingerprintService.computeVideoFingerprint(filePath)
+      const vfp = await defaultVideoFingerprintService.computeVideoFingerprint(filePath, thumbnailPath)
       return {
         photoId,
         filePath,
@@ -43,15 +44,14 @@ export class DuplicateOrchestrator {
         height,
         createdAt,
         partialSha256,
+        dhash: vfp.dhash,
+        phash: vfp.phash,
         videoDuration: vfp.duration,
         videoKeyframes: vfp.keyframes
       }
     }
 
-    const [hashes, colorHistogram] = await Promise.all([
-      defaultPerceptualHashService.computeMultiHashes(filePath),
-      defaultFeatureVectorService.computeColorHistogram(filePath)
-    ])
+    const hashes = await defaultPerceptualHashService.computeMultiHashes(filePath, thumbnailPath)
 
     return {
       photoId,
@@ -65,8 +65,7 @@ export class DuplicateOrchestrator {
       phash: hashes.phash,
       dhash: hashes.dhash,
       ahash: hashes.ahash,
-      blockHash: hashes.blockHash,
-      colorHistogram
+      blockHash: hashes.blockHash
     }
   }
 
