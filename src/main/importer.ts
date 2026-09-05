@@ -98,11 +98,13 @@ export async function processFile(filePath: string): Promise<ImportedFile> {
   let height = 0
   let createdAt = fileStat.birthtime.toISOString()
   let exifData: ExifInsert | undefined
+  const isVideoOrDoc = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.m4v', '.3gp', '.flv', '.mts', '.m2ts', '.pdf', '.txt', '.doc', '.docx'].includes(ext)
 
-  try {
-    const metadata = await sharp(filePath).metadata()
-    width = metadata.width || 0
-    height = metadata.height || 0
+  if (!isVideoOrDoc) {
+    try {
+      const metadata = await sharp(filePath).metadata()
+      width = metadata.width || 0
+      height = metadata.height || 0
 
     // Try to extract EXIF data
     if (metadata.exif) {
@@ -150,6 +152,7 @@ export async function processFile(filePath: string): Promise<ImportedFile> {
   } catch {
     // If sharp can't read it, we still import with basic info
   }
+}
 
   const photo: PhotoInsert = {
     file_path: filePath,
@@ -168,18 +171,26 @@ export async function processFiles(
   filePaths: string[],
   onProgress?: (completed: number, total: number, currentFile: string) => void
 ): Promise<ImportedFile[]> {
-  const results: ImportedFile[] = []
   const total = filePaths.length
+  const results: ImportedFile[] = new Array(total)
+  const CONCURRENCY = 16
+  let completed = 0
 
-  for (let i = 0; i < filePaths.length; i++) {
-    try {
-      const result = await processFile(filePaths[i])
-      results.push(result)
-    } catch (err) {
-      console.error(`Error processing ${filePaths[i]}:`, err)
-    }
-    onProgress?.(i + 1, total, filePaths[i])
+  for (let i = 0; i < total; i += CONCURRENCY) {
+    const chunk = filePaths.slice(i, i + CONCURRENCY)
+    await Promise.all(
+      chunk.map(async (filePath, idx) => {
+        const fileIndex = i + idx
+        try {
+          results[fileIndex] = await processFile(filePath)
+        } catch (err) {
+          console.error(`Error processing ${filePath}:`, err)
+        }
+        completed++
+        onProgress?.(completed, total, filePath)
+      })
+    )
   }
 
-  return results
+  return results.filter(Boolean)
 }

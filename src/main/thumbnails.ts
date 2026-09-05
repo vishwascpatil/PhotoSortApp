@@ -7,6 +7,7 @@ import sharp from 'sharp'
 import heicConvert from 'heic-convert'
 import { isVideoFile } from './services/duplicate/mediaTypes'
 import { heicPool } from './heic-pool'
+import { wicHeicExtractor } from './wic-heic'
 import { createHash } from 'crypto'
 import ffmpegPath from 'ffmpeg-static'
 import { BrowserWindow } from 'electron'
@@ -25,15 +26,24 @@ try {
   sharp.concurrency(cpus().length)
 } catch {}
 
+export function getUserDataPath(): string {
+  try {
+    if (app && typeof app.getPath === 'function') {
+      return app.getPath('userData')
+    }
+  } catch {}
+  return join(process.env.APPDATA || tmpdir(), 'PhotoSort')
+}
+
 let thumbnailDir = ''
 
 export function ensureThumbnailDir(): void {
-  thumbnailDir = join(app.getPath('userData'), 'thumbnails')
+  thumbnailDir = join(getUserDataPath(), 'thumbnails')
   if (!existsSync(thumbnailDir)) {
     mkdirSync(thumbnailDir, { recursive: true })
   }
 
-  const previewDir = join(app.getPath('userData'), 'previews')
+  const previewDir = join(getUserDataPath(), 'previews')
   if (!existsSync(previewDir)) {
     mkdirSync(previewDir, { recursive: true })
   }
@@ -175,7 +185,7 @@ export async function generateThumbnail(
   filePath: string
 ): Promise<{ thumbnailPath: string; previewPath: string; width: number; height: number }> {
   const hash = getHashName(filePath)
-  const thumbnailPath = join(app.getPath('userData'), 'thumbnails', `${hash}.jpg`)
+  const thumbnailPath = join(getUserDataPath(), 'thumbnails', `${hash}.jpg`)
   const previewPath = thumbnailPath
 
   const ext = extname(filePath).toLowerCase()
@@ -193,8 +203,12 @@ export async function generateThumbnail(
     return { thumbnailPath, previewPath, width: 1280, height: 720 }
   }
 
-  // Handle HEIC / HEIF Apple images using multi-threaded Worker Pool
+  // Handle HEIC / HEIF Apple images using ultra-fast native WIC extractor with Worker Pool fallback
   if (isHeic) {
+    const wicRes = await wicHeicExtractor.extract(filePath, thumbnailPath)
+    if (wicRes.success && existsSync(thumbnailPath) && statSync(thumbnailPath).size > 0) {
+      return { thumbnailPath, previewPath, width: 0, height: 0 }
+    }
     const res = await heicPool.convert(0, filePath, thumbnailPath, THUMBNAIL_SIZE, 0.65)
     if (res.success) {
       return { thumbnailPath, previewPath, width: 0, height: 0 }
