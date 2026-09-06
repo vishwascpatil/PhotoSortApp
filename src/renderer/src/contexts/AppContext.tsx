@@ -167,7 +167,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const showToast = useCallback((message: string, undoAction?: () => void) => {
-    const id = Date.now().toString()
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
     dispatch({ type: 'ADD_TOAST', payload: { id, message, undoAction, duration: 5000 } })
     setTimeout(() => {
       dispatch({ type: 'REMOVE_TOAST', payload: id })

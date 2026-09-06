@@ -1,5 +1,11 @@
 import { BrowserWindow, net } from 'electron'
-import { getPhotosWithMissingLocation, savePhotoLocation, rebuildExifData } from './database'
+import {
+  getAllPhotosForLocationClustering,
+  savePhotoLocationAndCoords,
+  rebuildExifData,
+  saveDatabase
+} from './database'
+import { clusterAndPropagateLocations } from './services/location/sessionClusterer'
 
 export interface LocationScanProgress {
   isScanning: boolean
@@ -16,9 +22,6 @@ let currentProgress: LocationScanProgress = {
   status: 'Idle'
 }
 
-// In-memory cache to group nearby coordinates (~1.1km precision)
-const locationCache: Record<string, string> = {}
-
 function broadcastLocationProgress() {
   BrowserWindow.getAllWindows().forEach(w => {
     if (!w.isDestroyed()) {
@@ -34,23 +37,46 @@ export function stopLocationScanning() {
   broadcastLocationProgress()
 }
 
-// Fallback: extract location name from folder path structure
-function extractLocationFromPath(filePath: string): string | null {
+// Fallback: extract location name from folder path structure for organized folders
+export function extractLocationFromPath(filePath: string): string | null {
   if (!filePath) return null
   const parts = filePath.replace(/\\/g, '/').split('/')
   parts.pop() // remove filename
-  
+
+  const currentUserName = (process.env.USERNAME || '').toLowerCase()
+
   const ignoreFolders = new Set([
     'photos', 'dcim', 'camera', 'pictures', 'downloads', 'desktop',
-    'documents', 'users', 'vishwas photos', 'vishwas', '100apple',
-    '101apple', '102apple', '103apple', 'testfolder', 'new folder', 'temp', 'sorted'
+    'documents', 'users', 'vishwas photos', 'vishwas', 'vishw', '100apple',
+    '101apple', '102apple', '103apple', 'testfolder', 'new folder', 'temp', 'sorted',
+    '06-02-2022(f)', '17 pro max-backup'
   ])
-  
+
   for (let i = parts.length - 1; i >= 0; i--) {
     let folder = parts[i].trim()
     if (!folder) continue
     const lower = folder.toLowerCase()
-    
+
+    // NEVER use username, windows profile, drive root, device or backup names
+    if (
+      lower === currentUserName ||
+      lower === 'vishw' ||
+      lower === 'vishwas' ||
+      lower === 'users' ||
+      lower === 'c:' ||
+      lower === 'd:' ||
+      lower.includes('backup') ||
+      lower.includes('pro max') ||
+      lower.includes('iphone') ||
+      lower.includes('apple')
+    ) {
+      continue
+    }
+
+    if (ignoreFolders.has(lower)) {
+      continue
+    }
+
     // Clean folder names: remove dates, years, copy suffixes, "trip", "vacation"
     folder = folder
       .replace(/\s*\(\d{4}\)\s*/g, '')
@@ -58,15 +84,15 @@ function extractLocationFromPath(filePath: string): string | null {
       .replace(/\b(trip|tour|vacation|photos|pics|travel|visit|diaries)\b/gi, '')
       .replace(/[-_]+/g, ' ')
       .trim()
-    
+
     // Title Case format (e.g. "delhi agra" -> "Delhi Agra")
     const formatted = folder
       .split(' ')
       .filter(Boolean)
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ')
-    
-    if (formatted.length > 2 && !ignoreFolders.has(lower) && !/^\d+$/.test(folder)) {
+
+    if (formatted.length > 2 && !ignoreFolders.has(lower) && !/^\d+$/.test(folder) && !/^\d{2}-\d{2}-\d{4}/.test(folder)) {
       return formatted
     }
   }
@@ -81,11 +107,14 @@ export async function scanLocations() {
   broadcastLocationProgress()
 
   try {
+    // 1. Rebuild EXIF GPS data from disk files if missing
     await rebuildExifData()
-  } catch (e) { }
+  } catch (e) {
+    console.warn('rebuildExifData warning:', e)
+  }
 
-  const photosToScan = getPhotosWithMissingLocation()
-  if (photosToScan.length === 0) {
+  const allPhotos = getAllPhotosForLocationClustering()
+  if (allPhotos.length === 0) {
     isScanningLocations = false
     currentProgress = { isScanning: false, scannedCount: 0, totalCount: 0, status: 'No photos to scan' }
     broadcastLocationProgress()
@@ -95,81 +124,66 @@ export async function scanLocations() {
   currentProgress = {
     isScanning: true,
     scannedCount: 0,
-    totalCount: photosToScan.length,
-    status: `Starting location scan for ${photosToScan.length} photos...`
+    totalCount: allPhotos.length,
+    status: `Analyzing landmarks & GPS coordinates for ${allPhotos.length} photos...`
   }
   broadcastLocationProgress()
 
-  for (const photo of photosToScan) {
-    if (!isScanningLocations) break
+  try {
+    // 2. Run Spatio-Temporal Session Clustering & Offline Landmark Geofencing
+    const clusteredResults = clusterAndPropagateLocations(allPhotos)
 
-    try {
-      currentProgress.status = `Locating ${photo.filename}...`
-      broadcastLocationProgress()
+    // Map by photo ID for quick lookup
+    const clusteredMap = new Map(clusteredResults.map(r => [r.id, r]))
 
-      const lat = photo.gps_lat
-      const lon = photo.gps_lon
-      let locationName: string | null = null
+    let matchedCount = 0
 
-      if (lat !== null && lon !== null && typeof lat === 'number' && typeof lon === 'number') {
-        const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`
-        locationName = locationCache[cacheKey] || null
+    // 3. Apply results & folder fallbacks
+    for (const photo of allPhotos) {
+      if (!isScanningLocations) break
 
-        if (!locationName) {
-          try {
-            const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=jsonv2&zoom=10`
-            const response = await net.fetch(url, {
-              headers: {
-                'User-Agent': 'PhotoVaultApp/1.0 (contact@example.com)'
-              }
-            })
-            if (response.ok) {
-              const data = (await response.json()) as any
-              if (data && data.address) {
-                const city = data.address.city || data.address.town || data.address.village || data.address.municipality || data.address.suburb
-                const state = data.address.state
-                const country = data.address.country
-                if (city) {
-                  locationName = city
-                } else if (state) {
-                  locationName = state
-                } else if (country) {
-                  locationName = country
-                }
-              }
-            }
-          } catch { }
+      const match = clusteredMap.get(photo.id)
 
-          if (locationName) {
-            locationCache[`${lat.toFixed(2)},${lon.toFixed(2)}`] = locationName
-          }
-          await new Promise(r => setTimeout(r, 1200))
-        }
-      }
-
-      // Fallback: extract location from folder path if GPS reverse geocoding didn't return a name
-      if (!locationName || locationName === 'Unknown Location') {
-        const pathLocation = extractLocationFromPath(photo.file_path || photo.source_folder_path || '')
-        if (pathLocation) {
-          locationName = pathLocation
+      if (match) {
+        // Save verified landmark / city location and coordinates
+        savePhotoLocationAndCoords(photo.id, match.locationName, match.lat, match.lon)
+        matchedCount++
+      } else {
+        // Check folder path fallback
+        const pathLoc = extractLocationFromPath(photo.file_path || photo.source_folder_path || '')
+        if (pathLoc) {
+          savePhotoLocationAndCoords(photo.id, pathLoc)
+          matchedCount++
         } else {
-          locationName = 'Unknown Location'
+          // Leave NULL so unplaced photos do NOT pollute the Places page as "Unknown Location"
+          savePhotoLocationAndCoords(photo.id, null as any)
         }
       }
-
-      savePhotoLocation(photo.id, locationName)
 
       currentProgress.scannedCount++
-      if (currentProgress.scannedCount % 5 === 0 || currentProgress.scannedCount === currentProgress.totalCount) {
+      if (currentProgress.scannedCount % 20 === 0 || currentProgress.scannedCount === allPhotos.length) {
         broadcastLocationProgress()
       }
-    } catch (err) {
-      console.error('Error scanning location for photo', photo.id, err)
     }
-  }
 
-  isScanningLocations = false
-  currentProgress.isScanning = false
-  currentProgress.status = 'Completed'
-  broadcastLocationProgress()
+    saveDatabase()
+
+    currentProgress = {
+      isScanning: false,
+      scannedCount: allPhotos.length,
+      totalCount: allPhotos.length,
+      status: `Successfully mapped ${matchedCount} photos to places!`
+    }
+  } catch (err: any) {
+    console.error('Error during location scan:', err)
+    currentProgress = {
+      isScanning: false,
+      scannedCount: currentProgress.scannedCount,
+      totalCount: allPhotos.length,
+      status: `Scan error: ${err?.message || err}`
+    }
+  } finally {
+    isScanningLocations = false
+    broadcastLocationProgress()
+  }
 }

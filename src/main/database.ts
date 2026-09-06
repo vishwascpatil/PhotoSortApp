@@ -847,6 +847,16 @@ export function resetAllDocumentScans(): void {
 
 // ─── Location Scanning ───────────────────────────────────────────────────
 
+export function getAllPhotosForLocationClustering(): (PhotoRow & { gps_lat: number | null, gps_lon: number | null })[] {
+  return queryAll<PhotoRow & { gps_lat: number | null, gps_lon: number | null }>(`
+    SELECT p.*, e.gps_lat, e.gps_lon 
+    FROM photos p 
+    LEFT JOIN exif_data e ON p.id = e.photo_id 
+    WHERE p.is_trashed = 0
+    ORDER BY p.created_at ASC
+  `)
+}
+
 export function getPhotosWithMissingLocation(): (PhotoRow & { gps_lat: number | null, gps_lon: number | null })[] {
   return queryAll<PhotoRow & { gps_lat: number | null, gps_lon: number | null }>(`
     SELECT p.*, e.gps_lat, e.gps_lon 
@@ -857,8 +867,21 @@ export function getPhotosWithMissingLocation(): (PhotoRow & { gps_lat: number | 
   `)
 }
 
-export function savePhotoLocation(photoId: number, locationName: string): void {
+export function savePhotoLocation(photoId: number, locationName: string | null): void {
   runSql('UPDATE photos SET location_name = ? WHERE id = ?', [locationName, photoId])
+}
+
+export function savePhotoLocationAndCoords(photoId: number, locationName: string, lat?: number, lon?: number): void {
+  runSql('UPDATE photos SET location_name = ? WHERE id = ?', [locationName, photoId])
+  if (lat !== undefined && lon !== undefined && typeof lat === 'number' && typeof lon === 'number') {
+    runSql(`
+      INSERT INTO exif_data (photo_id, gps_lat, gps_lon)
+      VALUES (?, ?, ?)
+      ON CONFLICT(photo_id) DO UPDATE SET
+        gps_lat = COALESCE(exif_data.gps_lat, excluded.gps_lat),
+        gps_lon = COALESCE(exif_data.gps_lon, excluded.gps_lon)
+    `, [photoId, lat, lon])
+  }
 }
 
 export function updateLocationNameForPhotos(photoIds: number[], newLocationName: string): void {
@@ -1346,6 +1369,8 @@ export function mergePeople(primaryId: number, secondaryId: number): void {
 }
 
 export function deletePerson(personId: number): void {
+  runSql('DELETE FROM photo_people WHERE person_id = ?', [personId])
+  runSql('DELETE FROM face_descriptors WHERE person_id = ?', [personId])
   runSql('DELETE FROM people WHERE id = ?', [personId])
   saveDatabase()
 }
@@ -1448,6 +1473,9 @@ export interface MergeSuggestion {
   personA: PersonRow
   personB: PersonRow
   confidence: number
+  distance: number
+  samplePhotosA: { id: number; file_path: string; thumbnail_path: string | null; preview_path: string | null }[]
+  samplePhotosB: { id: number; file_path: string; thumbnail_path: string | null; preview_path: string | null }[]
 }
 
 function euclideanDistance(desc1: number[], desc2: number[]): number {
@@ -1473,31 +1501,75 @@ export function getMergeSuggestions(): MergeSuggestion[] {
     } catch { }
   }
 
+  function getSamplePhotos(personId: number) {
+    return queryAll<{ id: number; file_path: string; thumbnail_path: string | null; preview_path: string | null }>(`
+      SELECT ph.id, ph.file_path, ph.thumbnail_path, ph.preview_path
+      FROM photos ph
+      INNER JOIN photo_people pp ON ph.id = pp.photo_id
+      WHERE pp.person_id = ? AND ph.is_trashed = 0
+      ORDER BY ph.created_at DESC
+      LIMIT 3
+    `, [personId])
+  }
+
   const suggestions: MergeSuggestion[] = []
 
   // Compare all pairs of people
   for (let i = 0; i < people.length; i++) {
     for (let j = i + 1; j < people.length; j++) {
-      const p1 = people[i]
-      const p2 = people[j]
-      const descs1 = descriptorsByPerson.get(p1.id) || []
-      const descs2 = descriptorsByPerson.get(p2.id) || []
+      let pA = people[i]
+      let pB = people[j]
+      const descs1 = descriptorsByPerson.get(pA.id) || []
+      const descs2 = descriptorsByPerson.get(pB.id) || []
+      if (!descs1.length || !descs2.length) continue
 
       let minDistance = 1.0
+      let sumDistance = 0
+      let pairCount = 0
 
-      // Find the closest pair of faces between these two people
+      // Find the closest pair of faces and average distance
       for (const d1 of descs1) {
         for (const d2 of descs2) {
           const dist = euclideanDistance(d1, d2)
           if (dist < minDistance) minDistance = dist
+          sumDistance += dist
+          pairCount++
         }
       }
 
-      // 0.55 is our strict cutoff. 0.72 is our "they might be the same person" cutoff.
-      if (minDistance >= 0.55 && minDistance <= 0.72) {
-        // Map 0.55 -> 95%, 0.72 -> 50%
-        const confidence = Math.max(0, Math.min(100, Math.round(100 - ((minDistance - 0.55) / 0.17) * 50)))
-        suggestions.push({ personA: p1, personB: p2, confidence })
+      const avgDistance = pairCount > 0 ? sumDistance / pairCount : minDistance
+      // If both people have multiple face descriptors, blend min and avg to protect against single noisy outliers
+      const effDist = (descs1.length > 2 && descs2.length > 2) ? (0.65 * minDistance + 0.35 * avgDistance) : minDistance
+
+      // Threshold: effDist <= 0.48 or minDistance <= 0.44
+      if (minDistance <= 0.44 || effDist <= 0.48) {
+        let confidence: number
+        if (effDist <= 0.32) {
+          confidence = 99
+        } else if (effDist <= 0.48) {
+          confidence = Math.round(99 - ((effDist - 0.32) / (0.48 - 0.32)) * 24)
+        } else {
+          confidence = Math.max(50, Math.round(75 - ((effDist - 0.48) / 0.12) * 25))
+        }
+
+        // Prioritize: named person > unknown person, higher photo count > lower photo count
+        const aIsCustom = pA.name && !pA.name.startsWith('Unknown Person')
+        const bIsCustom = pB.name && !pB.name.startsWith('Unknown Person')
+
+        if ((!aIsCustom && bIsCustom) || (aIsCustom === bIsCustom && (pB.photo_count || 0) > (pA.photo_count || 0))) {
+          const tmp = pA
+          pA = pB
+          pB = tmp
+        }
+
+        suggestions.push({
+          personA: pA,
+          personB: pB,
+          confidence,
+          distance: Number(minDistance.toFixed(4)),
+          samplePhotosA: getSamplePhotos(pA.id),
+          samplePhotosB: getSamplePhotos(pB.id)
+        })
       }
     }
   }
