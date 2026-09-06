@@ -47,6 +47,8 @@ interface AppState {
   }
   exportModalOpen: boolean
   exportModalOptions: { mode?: 'copy' | 'move'; specificFolderFilter?: string } | null
+  cleanUpModalOpen: boolean
+  lastImportedCount: number
 }
 
 type AppAction =
@@ -62,6 +64,8 @@ type AppAction =
   | { type: 'SET_IMPORT_STATUS'; payload: AppState['importStatus'] }
   | { type: 'OPEN_EXPORT_MODAL'; payload?: { mode?: 'copy' | 'move'; specificFolderFilter?: string } }
   | { type: 'CLOSE_EXPORT_MODAL' }
+  | { type: 'OPEN_CLEANUP_MODAL'; payload?: { importedCount?: number } }
+  | { type: 'CLOSE_CLEANUP_MODAL' }
 
 const initialState: AppState = {
   currentView: 'loading',
@@ -80,7 +84,9 @@ const initialState: AppState = {
     completed: 0
   },
   exportModalOpen: false,
-  exportModalOptions: null
+  exportModalOptions: null,
+  cleanUpModalOpen: false,
+  lastImportedCount: 0
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -129,6 +135,17 @@ function appReducer(state: AppState, action: AppAction): AppState {
         exportModalOpen: false,
         exportModalOptions: null
       }
+    case 'OPEN_CLEANUP_MODAL':
+      return {
+        ...state,
+        cleanUpModalOpen: true,
+        lastImportedCount: action.payload?.importedCount || 0
+      }
+    case 'CLOSE_CLEANUP_MODAL':
+      return {
+        ...state,
+        cleanUpModalOpen: false
+      }
     default:
       return state
   }
@@ -143,6 +160,8 @@ interface AppContextType {
   toggleTheme: () => void
   openExportModal: (options?: { mode?: 'copy' | 'move'; specificFolderFilter?: string }) => void
   closeExportModal: () => void
+  openCleanUpModal: (importedCount?: number) => void
+  closeCleanUpModal: () => void
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -164,6 +183,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const closeExportModal = useCallback(() => {
     dispatch({ type: 'CLOSE_EXPORT_MODAL' })
+  }, [])
+
+  const openCleanUpModal = useCallback((importedCount?: number) => {
+    dispatch({ type: 'OPEN_CLEANUP_MODAL', payload: { importedCount } })
+  }, [])
+
+  const closeCleanUpModal = useCallback(() => {
+    dispatch({ type: 'CLOSE_CLEANUP_MODAL' })
   }, [])
 
   const showToast = useCallback((message: string, undoAction?: () => void) => {
@@ -216,6 +243,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (isDone) {
         // Scanning finished – go to main photos view
         dispatch({ type: 'SET_VIEW', payload: 'photos' })
+        // If photos were imported, automatically open the Google Photos-style Free Up Space suggestions!
+        if (status.total && status.total > 0) {
+          dispatch({ type: 'OPEN_CLEANUP_MODAL', payload: { importedCount: status.total } })
+        }
       }
     })
     return cleanup
@@ -231,7 +262,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         showToast,
         toggleTheme,
         openExportModal,
-        closeExportModal
+        closeExportModal,
+        openCleanUpModal,
+        closeCleanUpModal
       }}
     >
       {children}

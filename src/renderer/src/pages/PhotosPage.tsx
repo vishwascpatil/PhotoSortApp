@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { ImageIcon, Upload, Play } from 'lucide-react'
+import { ImageIcon, Upload, Play, Sparkles } from 'lucide-react'
 import { usePhotos } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
 import PhotoGrid from '../components/PhotoGrid'
@@ -15,7 +15,7 @@ import DateScrubber from '../components/DateScrubber'
 
 export default function PhotosPage() {
   const { state, dispatch, loadPhotos, refreshPhotos } = usePhotos()
-  const { showToast } = useApp()
+  const { showToast, openCleanUpModal } = useApp()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; photoId: number } | null>(null)
 
   const filterKey = JSON.stringify(state.activeFilter)
@@ -120,13 +120,37 @@ export default function PhotosPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <MemoriesCarousel photos={state.photos} onSelectMemory={(m) => setActiveMemory(m)} />
         {state.photos.length > 0 && (
-          <button
-            className="btn btn-ghost"
-            onClick={() => setSlideshowActive(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
-          >
-            <Play size={16} /> Slideshow
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => openCleanUpModal()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#60a5fa',
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                cursor: 'pointer'
+              }}
+              title="Clean Up Suggestions & Free Up Space (Large files, WhatsApp junk, screenshots, duplicates)"
+            >
+              <Sparkles size={15} color="#60a5fa" /> Free Up Space
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setSlideshowActive(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+            >
+              <Play size={16} /> Slideshow
+            </button>
+          </div>
         )}
       </div>
 

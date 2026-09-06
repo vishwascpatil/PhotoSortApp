@@ -1,18 +1,25 @@
 import sharp from 'sharp'
+import fs from 'fs'
 import { IFeatureVectorService } from './types'
 
 export class FeatureVectorService implements IFeatureVectorService {
-  async computeColorHistogram(imagePath: string): Promise<number[]> {
-    return this.computeHsvHistogram(imagePath)
+  private histogramCache = new Map<string, number[]>()
+
+  async computeColorHistogram(imagePath: string, thumbnailPath?: string | null): Promise<number[]> {
+    return this.computeHsvHistogram(imagePath, thumbnailPath)
   }
 
-  async computeRgbHistogram(imagePath: string): Promise<number[]> {
-    return this.computeHsvHistogram(imagePath)
+  async computeRgbHistogram(imagePath: string, thumbnailPath?: string | null): Promise<number[]> {
+    return this.computeHsvHistogram(imagePath, thumbnailPath)
   }
 
-  async computeHsvHistogram(imagePath: string): Promise<number[]> {
+  async computeHsvHistogram(imagePath: string, thumbnailPath?: string | null): Promise<number[]> {
+    const targetPath = (thumbnailPath && fs.existsSync(thumbnailPath)) ? thumbnailPath : imagePath
+    if (this.histogramCache.has(targetPath)) {
+      return this.histogramCache.get(targetPath)!
+    }
     try {
-      const { data } = await sharp(imagePath, { failOn: 'none' })
+      const { data } = await sharp(targetPath, { failOn: 'none' })
         .resize(128, 128, { fit: 'fill' })
         .ensureAlpha()
         .raw()
@@ -54,9 +61,12 @@ export class FeatureVectorService implements IFeatureVectorService {
       for (let i = 0; i < 64; i++) {
         histogram[i] = bins[i] / totalPixels
       }
+      this.histogramCache.set(targetPath, histogram)
       return histogram
     } catch {
-      return new Array(64).fill(0)
+      const empty = new Array(64).fill(0)
+      this.histogramCache.set(targetPath, empty)
+      return empty
     }
   }
 

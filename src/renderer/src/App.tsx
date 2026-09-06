@@ -25,6 +25,7 @@ import PlacesPage from './pages/PlacesPage'
 import FoldersPage from './pages/FoldersPage'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
 import FolderExportModal from './components/FolderExportModal'
+import CleanUpModal from './components/CleanUpModal'
 
 import WelcomePage from './pages/WelcomePage'
 
@@ -32,7 +33,7 @@ import OverviewPage from './pages/OverviewPage'
 import ScanningLibraryPage from './pages/ScanningLibraryPage'
 
 function AppContent() {
-  const { state, dispatch, closeExportModal } = useApp()
+  const { state, dispatch, closeExportModal, closeCleanUpModal } = useApp()
   const { state: photoState } = usePhotos()
   const [isDragging, setIsDragging] = useState(false)
 
@@ -173,6 +174,13 @@ function AppContent() {
           specificFolderFilter={state.exportModalOptions?.specificFolderFilter}
         />
       )}
+
+      {/* Clean Up & Free Up Space Modal (Google Photos Style) */}
+      <CleanUpModal
+        isOpen={state.cleanUpModalOpen}
+        onClose={closeCleanUpModal}
+        importedCount={state.lastImportedCount}
+      />
 
       {/* Drag & Drop Overlay */}
       {isDragging && (

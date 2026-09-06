@@ -62,9 +62,27 @@ export default function VideosPage() {
             <Film size={22} />
           </div>
           <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)' }}>Videos</h1>
-            <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary, #64748b)', margin: 0 }}>
-              {videos.length} {videos.length === 1 ? 'video' : 'videos'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h1 style={{ fontSize: '28px', fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)' }}>
+                Videos
+              </h1>
+              {videos.length > 0 && (
+                <span
+                  style={{
+                    background: 'rgba(99, 102, 241, 0.15)',
+                    color: '#6366f1',
+                    fontWeight: 700,
+                    fontSize: '12px',
+                    padding: '2px 9px',
+                    borderRadius: '12px'
+                  }}
+                >
+                  {videos.length} {videos.length === 1 ? 'video' : 'videos'}
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary, #64748b)', margin: '2px 0 0 0' }}>
+              All video recordings from your photo library.
             </p>
           </div>
         </div>

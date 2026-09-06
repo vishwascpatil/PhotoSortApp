@@ -116,6 +116,7 @@ export function detectJunk(photo: Photo): SocialAppOrigin {
   // NOT Social Media & Apps / Web Downloads.
   if (isScreenshot(photo)) {
     return {
+      isAppMedia: false,
       isJunk: false,
       isUncertain: false,
       classification: 'keep',
@@ -402,7 +403,7 @@ export function detectJunk(photo: Photo): SocialAppOrigin {
     // Large penalty for genuine camera photos so family photos are NEVER misclassified
     score -= 60
     matchedSignals.push(`Original camera hardware EXIF detected (${cameraMake} ${cameraModel})`)
-  } else if (!hasHardwareCamera && (ext === 'jpg' || ext === 'jpeg' || ext === 'png')) {
+  } else if (!hasHardwareCamera && (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'mov' || ext === 'mp4' || ext === 'webp' || ext === 'm4v')) {
     score += 25
     matchedSignals.push('Stripped camera hardware EXIF (Make/Model missing)')
   }
@@ -420,6 +421,7 @@ export function detectJunk(photo: Photo): SocialAppOrigin {
   const theme = APP_THEMES[category] || APP_THEMES['other-apps']
 
   return {
+    isAppMedia: classification === 'app-media' || classification === 'uncertain',
     isJunk: classification === 'app-media',
     isUncertain: classification === 'uncertain',
     classification,

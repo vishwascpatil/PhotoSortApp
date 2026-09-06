@@ -119,8 +119,8 @@ export interface IVideoFingerprintService {
 }
 
 export interface IFeatureVectorService {
-  computeRgbHistogram(imagePath: string): Promise<number[]>
-  computeHsvHistogram(imagePath: string): Promise<number[]>
+  computeRgbHistogram(imagePath: string, thumbnailPath?: string | null): Promise<number[]>
+  computeHsvHistogram(imagePath: string, thumbnailPath?: string | null): Promise<number[]>
   computeEdgeHistogram(imagePath: string): Promise<number[]>
   compareHistograms(h1: number[], h2: number[]): number
   computeSSIMScore(path1: string, path2: string): Promise<number>

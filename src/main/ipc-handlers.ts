@@ -40,6 +40,8 @@ import {
   generateOrganizationPreviewPlan,
   executeOrganization,
   cancelOrganization,
+  validateOrganizationPlan,
+  auditDestinationFolder,
   OrganizationOptions
 } from './services/organizer/libraryOrganizer'
 import { logErrorToFile } from './logger'
@@ -389,7 +391,7 @@ export function registerIpcHandlers(): void {
     }, true)
     return getUtilitiesData((scanned, total, currentFile) => {
       event.sender.send('duplicate-scan:progress', { scanned, total, currentFile })
-    })
+    }, true)
   })
 
   ipcMain.handle('photos:get-unanalyzed', () => {
@@ -823,6 +825,14 @@ export function registerIpcHandlers(): void {
       return true
     }
     return false
+  })
+
+  ipcMain.handle('organizer:validate-plan', (_event, options: OrganizationOptions) => {
+    return validateOrganizationPlan(options)
+  })
+
+  ipcMain.handle('organizer:audit-destination', (_event, destinationDir: string) => {
+    return auditDestinationFolder(destinationDir)
   })
 
   // ─── Window Controls ─────────────────────────────────────────────────

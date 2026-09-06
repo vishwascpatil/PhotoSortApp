@@ -19,11 +19,14 @@ interface DuplicateGroup {
   items: Photo[]
 }
 
+// Module-level cache so navigating to Duplicates is 0ms instant without repeated re-scanning
+let cachedDuplicatesData: { duplicates: Photo[][]; similar: Photo[][] } | null = null
+
 export default function DuplicatesPage() {
   const { state: photoState, dispatch: photoDispatch, loadPhotos, refreshPhotos } = usePhotos()
   const { state: appState, dispatch: appDispatch, showToast } = useApp()
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!cachedDuplicatesData)
   const [isScanning, setIsScanning] = useState(false)
   const [scanProgress, setScanProgress] = useState<{
     completed: number
@@ -33,10 +36,12 @@ export default function DuplicatesPage() {
     isComplete: boolean
     foundCount: number
   } | null>(null)
-  const [utilitiesData, setUtilitiesData] = useState<{ duplicates: Photo[][]; similar: Photo[][] }>({
-    duplicates: [],
-    similar: []
-  })
+  const [utilitiesData, setUtilitiesData] = useState<{ duplicates: Photo[][]; similar: Photo[][] }>(
+    cachedDuplicatesData || {
+      duplicates: [],
+      similar: []
+    }
+  )
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [minConfidence, setMinConfidence] = useState<number>(75)
   const [activeTab, setActiveTab] = useState<'all' | 'exact' | 'similar' | 'videos'>('all')
@@ -44,66 +49,31 @@ export default function DuplicatesPage() {
 
   const gridDensity = appState.gridDensity || 'dense'
 
-  // Load utilities data from IPC with live progressive scan
-  const fetchDuplicates = useCallback(async () => {
-    setIsScanning(true)
-
-    // Direct fetch to ensure accurate total count
-    let allPhotos: Photo[] = []
-    try {
-      allPhotos = (await window.photoVault?.getPhotos({})) || []
-    } catch {
-      allPhotos = []
+  // Load utilities data from IPC smoothly (instant if cached)
+  const fetchDuplicates = useCallback(async (isSilent: boolean = false) => {
+    if (!isSilent && !cachedDuplicatesData) {
+      setLoading(true)
     }
-    if (allPhotos.length === 0) {
-      allPhotos = photoState.photos || []
-    }
-    const total = allPhotos.length
-
-    setScanProgress({
-      completed: 0,
-      total,
-      percent: 0,
-      currentFile: allPhotos[0]?.filename ? `Scanning ${allPhotos[0].filename}...` : 'Analyzing duplicate candidates...',
-      isComplete: false,
-      foundCount: 0
-    })
 
     try {
       if (window.photoVault?.getUtilitiesData) {
         const data = await window.photoVault.getUtilitiesData()
-        const totalFound = (data.duplicates?.length || 0) + (data.similar?.length || 0)
-        const finalTotal = total > 0 ? total : (data.duplicates?.flat().length || 100)
-
-        // Reach 100% completion
-        setScanProgress({
-          completed: finalTotal,
-          total: finalTotal,
-          percent: 100,
-          currentFile: 'Complete Scan',
-          isComplete: true,
-          foundCount: totalFound
-        })
-
-        setUtilitiesData({
+        const result = {
           duplicates: data.duplicates || [],
           similar: data.similar || []
-        })
-
-        // Hold 100% completion banner for 1.8s so user clearly sees 100% confirmation
-        await new Promise((resolve) => setTimeout(resolve, 1800))
+        }
+        cachedDuplicatesData = result
+        setUtilitiesData(result)
       }
     } catch (err) {
       console.error('Failed to load duplicate data:', err)
     } finally {
-      setIsScanning(false)
-      setScanProgress(null)
       setLoading(false)
     }
-  }, [photoState.photos])
+  }, [])
 
   useEffect(() => {
-    fetchDuplicates()
+    fetchDuplicates(!!cachedDuplicatesData)
   }, [fetchDuplicates])
 
 
@@ -167,10 +137,12 @@ export default function DuplicatesPage() {
           foundCount: totalFound
         })
 
-        setUtilitiesData({
+        const result = {
           duplicates: data.duplicates || [],
           similar: data.similar || []
-        })
+        }
+        cachedDuplicatesData = result
+        setUtilitiesData(result)
 
         showToast(
           totalFound > 0
@@ -178,8 +150,8 @@ export default function DuplicatesPage() {
             : `Complete scan finished! No duplicates found in library.`
         )
 
-        // Keep 100% complete state visible for 2.5 seconds so user clearly sees 100%
-        await new Promise((resolve) => setTimeout(resolve, 2500))
+        // Brief 500ms confirmation
+        await new Promise((resolve) => setTimeout(resolve, 500))
       }
     } catch (err) {
       console.error('Scan failed:', err)
@@ -420,8 +392,10 @@ export default function DuplicatesPage() {
       showToast(`Moved ${idsToDelete.length} duplicates to Trash (${formatFileSize(selectedSavingsBytes || totalStats.recoverableBytes)} reclaimed)`, async () => {
         await window.photoVault.restore(idsToDelete)
         loadPhotos({})
+        cachedDuplicatesData = null
         fetchDuplicates()
       })
+      cachedDuplicatesData = null
       fetchDuplicates()
     } catch (err) {
       console.error('Batch clean duplicate error:', err)
@@ -624,7 +598,12 @@ export default function DuplicatesPage() {
       )}
 
       {/* Duplicates Dynamic Grid Responsive to gridDensity */}
-      {filteredGroups.length === 0 && !isScanning ? (
+      {loading && !cachedDuplicatesData ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '320px', gap: '14px' }}>
+          <Loader2 size={36} className="animate-spin" color="var(--primary, #3b82f6)" />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>Analyzing duplicate media...</span>
+        </div>
+      ) : filteredGroups.length === 0 && !isScanning ? (
         <EmptyState
           icon={<ShieldCheck size={48} />}
           title="No Duplicates Found"

@@ -510,6 +510,7 @@ export function insertPhoto(photo: PhotoInsert): number {
       ]
     )
     const row = queryOne<{ id: number }>('SELECT last_insert_rowid() as id')
+    invalidateUtilitiesCache()
     scheduleSave()
     return row?.id || 0
   } catch (err) {
@@ -725,6 +726,7 @@ export function setTrashed(ids: number[], trashed: boolean): void {
   } else {
     runSql(`UPDATE photos SET is_trashed = 0, trashed_at = NULL WHERE id IN (${placeholders})`, ids)
   }
+  invalidateUtilitiesCache()
 }
 
 function safeUnlink(filePath: string): void {
@@ -764,6 +766,7 @@ export function deletePermanently(ids: number[]): void {
   runSql(`DELETE FROM photos WHERE id IN (${placeholders})`, ids)
 
   cleanupOrphanedPeople()
+  invalidateUtilitiesCache()
   saveDatabase()
 }
 
@@ -1089,10 +1092,29 @@ export function getAllPhotoFingerprints(): PhotoFingerprintRecord[] {
   })
 }
 
+let cachedUtilitiesData: {
+  whatsapp: PhotoRow[]
+  blurry: PhotoRow[]
+  duplicates: PhotoRow[][]
+  similar: PhotoRow[][]
+  duplicateGroups: any[]
+} | null = null
+let cachedUtilitiesPhotoCount = -1
+
+export function invalidateUtilitiesCache(): void {
+  cachedUtilitiesData = null
+  cachedUtilitiesPhotoCount = -1
+}
+
 export async function getUtilitiesData(
-  onProgress?: (scanned: number, total: number, currentFile?: string) => void
+  onProgress?: (scanned: number, total: number, currentFile?: string) => void,
+  forceRefresh = false
 ) {
   const allPhotos = queryAll<PhotoRow>('SELECT * FROM photos WHERE is_trashed = 0 ORDER BY created_at DESC')
+
+  if (!forceRefresh && cachedUtilitiesData && cachedUtilitiesPhotoCount === allPhotos.length) {
+    return cachedUtilitiesData
+  }
 
   const whatsappPhotos = allPhotos.filter(p =>
     p.filename.toUpperCase().includes('WA') ||
@@ -1137,13 +1159,17 @@ export async function getUtilitiesData(
     }
   })
 
-  return {
+  const result = {
     whatsapp: whatsappPhotos,
     blurry: blurryPhotos,
     duplicates: exactGroupRows,
     similar: similarGroupRows,
     duplicateGroups // Rich production-grade DuplicateGroupResult[] metadata array
   }
+
+  cachedUtilitiesData = result
+  cachedUtilitiesPhotoCount = allPhotos.length
+  return result
 }
 
 export async function scanPerceptualHashesBatch(

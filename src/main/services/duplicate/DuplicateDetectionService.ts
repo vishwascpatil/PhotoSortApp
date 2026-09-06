@@ -67,10 +67,14 @@ export class DuplicateDetectionService implements IDuplicateDetectionService {
     // Content-Based On-The-Fly Binary Digest Verification (100% Filename Independent)
     if (r1.fileSize && r2.fileSize && r1.fileSize === r2.fileSize && r1.fileSize > 0) {
       const p1 = r1.partialSha256 || await defaultHashService.computePartialSha256(r1.filePath)
+      r1.partialSha256 = p1
       const p2 = r2.partialSha256 || await defaultHashService.computePartialSha256(r2.filePath)
+      r2.partialSha256 = p2
       if (p1 && p2 && p1 === p2) {
         const s1 = r1.sha256 || await defaultHashService.computeSha256(r1.filePath)
+        r1.sha256 = s1
         const s2 = r2.sha256 || await defaultHashService.computeSha256(r2.filePath)
+        r2.sha256 = s2
         if (s1 && s2 && s1 === s2) {
           matchReasons.push('100% Binary SHA-256 Digest Match')
           return {
@@ -204,9 +208,11 @@ export class DuplicateDetectionService implements IDuplicateDetectionService {
         histSim = defaultFeatureVectorService.compareHistograms(r1.colorHistogram, r2.colorHistogram)
       } else {
         const [h1, h2] = await Promise.all([
-          defaultFeatureVectorService.computeColorHistogram(r1.filePath),
-          defaultFeatureVectorService.computeColorHistogram(r2.filePath)
+          r1.colorHistogram || defaultFeatureVectorService.computeColorHistogram(r1.filePath, r1.thumbnailPath),
+          r2.colorHistogram || defaultFeatureVectorService.computeColorHistogram(r2.filePath, r2.thumbnailPath)
         ])
+        r1.colorHistogram = h1
+        r2.colorHistogram = h2
         histSim = defaultFeatureVectorService.compareHistograms(h1, h2)
       }
 

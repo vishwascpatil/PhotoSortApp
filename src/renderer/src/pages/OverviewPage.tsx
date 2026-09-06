@@ -10,7 +10,7 @@ import EmptyState from '../components/EmptyState'
 import { Folder } from 'lucide-react'
 
 export default function OverviewPage() {
-  const { state, navigateTo } = useApp()
+  const { state, navigateTo, openCleanUpModal } = useApp()
   const { state: photoState } = usePhotos()
 
   const [stats, setStats] = useState({ totalPhotos: 0, totalSize: 0, favorites: 0, albums: 0 })
@@ -159,6 +159,25 @@ export default function OverviewPage() {
             <div className="cat-info">
               <span className="cat-title">Duplicates & Similar</span>
               <span className="cat-count">Free up disk space</span>
+            </div>
+            <ArrowRight size={18} className="cat-arrow" />
+          </div>
+
+          {/* Free Up Space / Clean Up */}
+          <div className="category-card" onClick={() => openCleanUpModal()}>
+            <div
+              className="cat-icon-wrapper"
+              style={{
+                background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+                color: '#ffffff',
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+              }}
+            >
+              <Sparkles size={22} />
+            </div>
+            <div className="cat-info">
+              <span className="cat-title">Free Up Space</span>
+              <span className="cat-count">Smart clean-up suggestions</span>
             </div>
             <ArrowRight size={18} className="cat-arrow" />
           </div>

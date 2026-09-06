@@ -115,10 +115,15 @@ export class PerceptualHashService implements IPerceptualHashService {
     }
   }
 
+  private rotationCache = new Map<string, PerceptualHashes['rotations']>()
+
   /**
    * Computes hashes for 90°, 180°, 270° rotations and H/V flips to detect rotated/mirrored duplicates
    */
   async computeRotationVariants(imagePath: string): Promise<PerceptualHashes['rotations']> {
+    if (this.rotationCache.has(imagePath)) {
+      return this.rotationCache.get(imagePath)!
+    }
     try {
       const sharpImg = sharp(imagePath, { failOn: 'none' })
 
@@ -130,13 +135,15 @@ export class PerceptualHashService implements IPerceptualHashService {
         sharpImg.clone().flip().resize(17, 16, { fit: 'fill' }).grayscale().raw().toBuffer()
       ])
 
-      return {
+      const variants = {
         rot90: this.calculateDHashFromBuffer(r90, 17, 16),
         rot180: this.calculateDHashFromBuffer(r180, 17, 16),
         rot270: this.calculateDHashFromBuffer(r270, 17, 16),
         flipH: this.calculateDHashFromBuffer(fH, 17, 16),
         flipV: this.calculateDHashFromBuffer(fV, 17, 16)
       }
+      this.rotationCache.set(imagePath, variants)
+      return variants
     } catch {
       return {
         rot90: '0'.repeat(64),

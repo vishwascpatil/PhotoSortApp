@@ -369,6 +369,10 @@ const api = {
     ipcRenderer.invoke('organizer:cancel'),
   showInFolder: (folderPath: string): Promise<boolean> =>
     ipcRenderer.invoke('organizer:show-in-folder', folderPath),
+  validateOrganizationPlan: (options: any): Promise<any> =>
+    ipcRenderer.invoke('organizer:validate-plan', options),
+  auditDestinationFolder: (destinationDir: string): Promise<any> =>
+    ipcRenderer.invoke('organizer:audit-destination', destinationDir),
   onOrganizationProgress: (callback: (progress: any) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: any): void => {
       callback(progress)

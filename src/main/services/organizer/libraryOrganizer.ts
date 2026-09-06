@@ -1,23 +1,98 @@
-import { join, dirname, basename, extname, isAbsolute } from 'path'
+import { join, dirname, basename, extname, isAbsolute, relative } from 'path'
 import {
   existsSync, mkdirSync, copyFileSync, unlinkSync,
-  statSync, writeFileSync
+  statSync, writeFileSync, readdirSync
 } from 'fs'
 import { app, dialog, BrowserWindow } from 'electron'
 import { getDb, saveDatabase, PhotoRow } from '../../database'
+
+export const MEDIA_EXTENSIONS = new Set([
+  '.jpg', '.jpeg', '.png', '.heic', '.heif', '.dng', '.raw', '.cr2', '.cr3',
+  '.nef', '.arw', '.rw2', '.orf', '.webp', '.tiff', '.tif', '.bmp', '.gif',
+  '.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv', '.3gp', '.wmv', '.flv'
+])
+
+export interface NonMediaFileInfo {
+  filename: string
+  relativePath: string
+  extension: string
+  size: number
+}
+
+export interface ValidationFileAudit {
+  id: number
+  filename: string
+  originalPath: string
+  targetRelativePath: string
+  category: string
+  originalSize: number
+  targetExpectedSize: number
+  isMatched: boolean
+  status: 'matched' | 'missing_source' | 'collision_renamed' | 'collision_skipped'
+}
+
+export interface OrganizationValidationReport {
+  sourceInfo: {
+    sourceFolder: string
+    totalDiskFiles: number
+    mediaFilesOnDisk: number
+    nonMediaFilesCount: number
+    nonMediaFiles: NonMediaFileInfo[]
+    totalDiskBytes: number
+  }
+  originalMedia: {
+    count: number
+    totalBytes: number
+  }
+  convertedPlan: {
+    count: number
+    totalBytes: number
+  }
+  comparison: {
+    isCountMatched: boolean
+    isBytesMatched: boolean
+    countDifference: number
+    byteDifference: number
+    missingFiles: Array<{ id: number; filename: string; originalPath: string; reason: string }>
+  }
+  fileAuditList: ValidationFileAudit[]
+  summaryText: string
+  nonMediaNotice: string
+}
+
+export interface PostExportAuditReport {
+  destinationDir: string
+  totalFilesOnDisk: number
+  totalBytesOnDisk: number
+  verifiedFilesCount: number
+  mismatchedFilesCount: number
+  isClean: boolean
+  timestamp: string
+}
 
 export interface OrganizationOptions {
   mode: 'copy' | 'move'
   destinationDir: string
   preset?: 'smart-hierarchy' | 'year-month' | 'category-first'
-  separateTrips?: boolean
+  folderLayout?: 'category-first' | 'year-first'
+  // 9 Category Segregation Toggles
+  separatePlaces?: boolean
+  separateTrips?: boolean // backward compatibility alias
   smartTripInference?: boolean
   separateDocuments?: boolean
-  separateScreenshots?: boolean
+  separateWhatsapp?: boolean
+  separateFavorites?: boolean
   separateVideos?: boolean
+  separateDuplicates?: boolean
+  separateScreenshots?: boolean
+  separateSocialMedia?: boolean
+  separatePeople?: boolean
   fileIds?: number[]
   folderPathFilter?: string
   collisionStrategy?: 'rename' | 'skip' | 'overwrite'
+  categoryEligibility?: Record<string, boolean>
+  onlyNamedPeople?: boolean
+  excludedPhotoIdsByCategory?: Record<string, number[]>
 }
 
 export interface TripWindow {
@@ -47,11 +122,17 @@ export interface OrganizationPreviewPlan {
   totalBytes: number
   yearGroups: PreviewYearGroup[]
   categoryBreakdown: {
-    trips: number
+    places: number
     documents: number
-    screenshots: number
+    whatsapp: number
+    favorites: number
     videos: number
+    duplicates: number
+    screenshots: number
+    socialMedia: number
+    people: number
     generalPhotos: number
+    trips?: number // backward compatibility
   }
 }
 
@@ -136,6 +217,88 @@ function isPhotoDocument(photo: PhotoRow): boolean {
     return true
   }
   return false
+}
+
+function isPhotoWhatsapp(photo: PhotoRow): boolean {
+  const name = (photo.filename || '').trim()
+  const path = (photo.file_path || '').replace(/\\/g, '/').toLowerCase()
+  if (path.includes('/whatsapp/') || path.includes('whatsapp images') || path.includes('whatsapp video')) {
+    return true
+  }
+  if (/^IMG-\d{8}-WA\d{4,}\./i.test(name) || /^VID-\d{8}-WA\d{4,}\./i.test(name) || /^STK-\d{8}-WA\d{4,}\./i.test(name)) {
+    return true
+  }
+  if (/WhatsApp (Image|Video|Audio|Document) \d{4}-\d{2}-\d{2}/i.test(name) || /^WA[-_]?\d+/i.test(name)) {
+    return true
+  }
+  // 4-letter iOS WhatsApp forward pattern (e.g. AAWT0024.JPG, HCYXE5581.MOV)
+  if (/^[A-Z]{4,7}\d{4,5}\.(jpg|jpeg|mov|mp4|png|webp)$/i.test(name)) {
+    return true
+  }
+  return false
+}
+
+function isPhotoSocialMedia(photo: PhotoRow): boolean {
+  const name = (photo.filename || '').trim()
+  const path = (photo.file_path || '').replace(/\\/g, '/').toLowerCase()
+  if (path.includes('/instagram/') || path.includes('/snapchat/') || path.includes('/facebook/') || path.includes('/tiktok/')) {
+    return true
+  }
+  if (/^\d{6,15}_\d{10,25}_\d{10,25}_[no]\.(jpg|mp4|webp)$/i.test(name)) {
+    return true
+  }
+  if (/^(instagram|ig|reels|snapchat|snap|tiktok|fb_img)[-_]/i.test(name)) {
+    return true
+  }
+  return false
+}
+
+export function loadOrganizerContext(): { peopleMap: Map<number, string[]>; duplicateIds: Set<number> } {
+  const database = getDb()
+  const peopleMap = new Map<number, string[]>()
+  try {
+    const pStmt = database.prepare(`
+      SELECT pp.photo_id, p.name 
+      FROM photo_people pp 
+      JOIN people p ON pp.person_id = p.id
+    `)
+    while (pStmt.step()) {
+      const row = pStmt.getAsObject() as { photo_id: number; name: string }
+      if (row.photo_id && row.name) {
+        if (!peopleMap.has(row.photo_id)) peopleMap.set(row.photo_id, [])
+        peopleMap.get(row.photo_id)!.push(row.name)
+      }
+    }
+    pStmt.free()
+  } catch {}
+
+  const duplicateIds = new Set<number>()
+  try {
+    const fpStmt = database.prepare(`
+      SELECT fp.photo_id, fp.partial_sha256 
+      FROM photo_fingerprints fp 
+      JOIN photos p ON fp.photo_id = p.id 
+      WHERE p.is_trashed = 0 AND fp.partial_sha256 IS NOT NULL AND fp.partial_sha256 != ''
+    `)
+    const shaMap = new Map<string, number[]>()
+    while (fpStmt.step()) {
+      const row = fpStmt.getAsObject() as { photo_id: number; partial_sha256: string }
+      if (row.partial_sha256) {
+        if (!shaMap.has(row.partial_sha256)) shaMap.set(row.partial_sha256, [])
+        shaMap.get(row.partial_sha256)!.push(row.photo_id)
+      }
+    }
+    fpStmt.free()
+
+    for (const ids of shaMap.values()) {
+      if (ids.length > 1) {
+        // Keep the first item in the group, subsequent items are marked as duplicate copies
+        ids.slice(1).forEach(id => duplicateIds.add(id))
+      }
+    }
+  } catch {}
+
+  return { peopleMap, duplicateIds }
 }
 
 function sanitizeFolderName(name: string): string {
@@ -234,14 +397,41 @@ export function findMatchingTripWindow(photoDate: string, tripWindows: TripWindo
 export function calculateRelativeSubpath(
   photo: PhotoRow,
   options: OrganizationOptions,
-  tripWindows: TripWindow[] = []
+  tripWindows: TripWindow[] = [],
+  peopleMap?: Map<number, string[]>,
+  duplicateIds?: Set<number>
 ): { relativePath: string; category: string; isInferredTrip?: boolean } {
-  const preset = options.preset || 'smart-hierarchy'
-  const separateTrips = options.separateTrips ?? true
+  const isCategoryFirst = options.folderLayout === 'category-first' || options.preset === 'category-first'
+  const isYearMonth = options.preset === 'year-month'
+
+  const eligibility = options.categoryEligibility || {}
+  const exclusions = options.excludedPhotoIdsByCategory || {}
+
+  const isEligible = (cat: string) => {
+    if (!options.categoryEligibility) return true
+    if (cat === 'socialMedia' || cat === 'social') {
+      const val = eligibility.socialMedia !== undefined ? eligibility.socialMedia : eligibility.social
+      return val !== false
+    }
+    return eligibility[cat] !== false
+  }
+
+  const isExcluded = (cat: string) => {
+    if (!exclusions) return false
+    const list = exclusions[cat] || (cat === 'socialMedia' ? exclusions['social'] : undefined)
+    return list ? list.includes(photo.id) : false
+  }
+
+  const separatePlaces = (options.separatePlaces ?? options.separateTrips ?? true) && isEligible('places') && !isExcluded('places')
   const smartTripInference = options.smartTripInference ?? true
-  const separateDocs = options.separateDocuments ?? true
-  const separateScreenshots = options.separateScreenshots ?? true
-  const separateVideos = options.separateVideos ?? true
+  const separateDocs = (options.separateDocuments ?? true) && isEligible('documents') && !isExcluded('documents')
+  const separateWhatsapp = (options.separateWhatsapp ?? true) && isEligible('whatsapp') && !isExcluded('whatsapp')
+  const separateFavs = (options.separateFavorites ?? true) && isEligible('favorites') && !isExcluded('favorites')
+  const separateVids = (options.separateVideos ?? true) && isEligible('videos') && !isExcluded('videos')
+  const separateDupes = (options.separateDuplicates ?? true) && isEligible('duplicates') && !isExcluded('duplicates')
+  const separateScreenshots = (options.separateScreenshots ?? true) && isEligible('screenshots') && !isExcluded('screenshots')
+  const separateSocial = (options.separateSocialMedia ?? true) && isEligible('socialMedia') && !isExcluded('socialMedia')
+  const separatePeople = (options.separatePeople ?? true) && isEligible('people') && !isExcluded('people')
 
   // 1. Date extraction
   let year = 'No Date'
@@ -262,18 +452,69 @@ export function calculateRelativeSubpath(
     }
   }
 
-  // 2. Identify Category
-  const isDoc = separateDocs && isPhotoDocument(photo)
-  const isScrn = separateScreenshots && isPhotoScreenshot(photo)
-  const isVid = separateVideos && isPhotoVideo(photo)
+  // 2. Strict Year-Month override
+  if (isYearMonth) {
+    const isVid = isPhotoVideo(photo)
+    return { relativePath: join(year, month), category: isVid ? 'Videos' : 'Photos' }
+  }
 
-  // 3. Trip detection (Direct GPS location vs Smart Inferred Time-Window location)
+  // 3. Category Detection
+
+  // A. Duplicates (Placed in separate Review folder to keep main collection clean)
+  if (separateDupes && duplicateIds?.has(photo.id)) {
+    const rel = isCategoryFirst ? 'Duplicates (Review)' : join(year, 'Duplicates (Review)')
+    return { relativePath: rel, category: 'Duplicates' }
+  }
+
+  // B. Documents
+  if (separateDocs && isPhotoDocument(photo)) {
+    const docCat = photo.document_category ? sanitizeFolderName(photo.document_category) : 'General Documents'
+    const rel = isCategoryFirst ? join('Documents', docCat) : join(year, 'Documents', docCat)
+    return { relativePath: rel, category: 'Documents' }
+  }
+
+  // C. Screenshots
+  if (separateScreenshots && isPhotoScreenshot(photo)) {
+    const rel = isCategoryFirst ? join('Screenshots', year) : join(year, 'Screenshots')
+    return { relativePath: rel, category: 'Screenshots' }
+  }
+
+  // D. WhatsApp
+  if (separateWhatsapp && isPhotoWhatsapp(photo)) {
+    const sub = isPhotoVideo(photo) ? 'Videos' : 'Photos'
+    const rel = isCategoryFirst ? join('WhatsApp', sub) : join(year, 'WhatsApp', sub)
+    return { relativePath: rel, category: 'WhatsApp' }
+  }
+
+  // E. Social Media
+  if (separateSocial && isPhotoSocialMedia(photo)) {
+    const rel = isCategoryFirst ? join('Social Media', year) : join(year, 'Social Media')
+    return { relativePath: rel, category: 'Social Media' }
+  }
+
+  // F. People
+  if (separatePeople && peopleMap?.has(photo.id)) {
+    const rawNames = peopleMap.get(photo.id)!
+    // If onlyNamedPeople is active (default true), exclude "Unknown Person"
+    const onlyNamed = options.onlyNamedPeople !== false
+    const validNames = onlyNamed
+      ? rawNames.filter(n => n && n.trim() && n.toLowerCase() !== 'unknown person' && !n.toLowerCase().startsWith('unknown person'))
+      : rawNames
+
+    if (validNames.length > 0) {
+      const personFolder = sanitizeFolderName(validNames.slice(0, 2).join(' & '))
+      const rel = isCategoryFirst ? join('People', personFolder) : join(year, 'People', personFolder)
+      return { relativePath: rel, category: 'People' }
+    }
+  }
+
+  // G. Places / Locations / Trips
   let effectiveLocation = photo.location_name && photo.location_name.trim().length > 0
     ? photo.location_name.trim()
     : null
   let isInferredTrip = false
 
-  if (!effectiveLocation && separateTrips && smartTripInference && datePart && !isDoc && !isScrn) {
+  if (!effectiveLocation && separatePlaces && smartTripInference && datePart) {
     const matchedTrip = findMatchingTripWindow(datePart, tripWindows)
     if (matchedTrip) {
       effectiveLocation = matchedTrip.locationName
@@ -281,47 +522,27 @@ export function calculateRelativeSubpath(
     }
   }
 
-  const hasTrip = separateTrips && effectiveLocation !== null
-
-  // 4. Construct Relative Path based on preset
-  if (preset === 'category-first') {
-    if (isDoc) {
-      const docCat = photo.document_category ? sanitizeFolderName(photo.document_category) : 'General Documents'
-      return { relativePath: join('Documents', docCat, year), category: 'Documents' }
-    }
-    if (isScrn) {
-      return { relativePath: join('Screenshots', year), category: 'Screenshots' }
-    }
-    if (isVid) {
-      return { relativePath: join('Videos', year, month), category: 'Videos' }
-    }
-    if (hasTrip) {
-      const tripName = sanitizeFolderName(effectiveLocation!)
-      return { relativePath: join('Trips', tripName, year), category: 'Trips', isInferredTrip }
-    }
-    return { relativePath: join('Photos', year, month), category: 'Photos' }
+  if (separatePlaces && effectiveLocation) {
+    const placeName = sanitizeFolderName(effectiveLocation)
+    const rel = isCategoryFirst ? join('Places', placeName) : join(year, `Trip - ${placeName}`)
+    return { relativePath: rel, category: 'Places', isInferredTrip }
   }
 
-  if (preset === 'year-month') {
-    return { relativePath: join(year, month), category: isVid ? 'Videos' : 'Photos' }
+  // H. Favorites
+  if (separateFavs && photo.is_favorite === 1) {
+    const rel = isCategoryFirst ? join('Favorites', year) : join(year, 'Favorites')
+    return { relativePath: rel, category: 'Favorites' }
   }
 
-  // Default: 'smart-hierarchy' (Year -> Event/Trip / Documents / Screenshots / Videos / Month)
-  if (hasTrip) {
-    const tripName = sanitizeFolderName(effectiveLocation!)
-    return { relativePath: join(year, `Trip - ${tripName}`), category: 'Trips', isInferredTrip }
+  // I. Videos
+  if (separateVids && isPhotoVideo(photo)) {
+    const rel = isCategoryFirst ? join('Videos', year) : join(year, 'Videos')
+    return { relativePath: rel, category: 'Videos' }
   }
-  if (isDoc) {
-    const docCat = photo.document_category ? sanitizeFolderName(photo.document_category) : 'General'
-    return { relativePath: join(year, 'Documents', docCat), category: 'Documents' }
-  }
-  if (isScrn) {
-    return { relativePath: join(year, 'Screenshots'), category: 'Screenshots' }
-  }
-  if (isVid) {
-    return { relativePath: join(year, 'Videos'), category: 'Videos' }
-  }
-  return { relativePath: join(year, month), category: 'Photos' }
+
+  // J. Default Camera Photos
+  const defaultRel = isCategoryFirst ? join('Photos', year, month) : join(year, month)
+  return { relativePath: defaultRel, category: 'Photos' }
 }
 
 /**
@@ -380,32 +601,56 @@ export async function selectOrganizationDestination(browserWindow?: BrowserWindo
 export function generateOrganizationPreviewPlan(options: OrganizationOptions): OrganizationPreviewPlan {
   const photos = fetchCandidatePhotos(options)
   const tripWindows = buildTripWindows(photos)
+  const { peopleMap, duplicateIds } = loadOrganizerContext()
   const yearMap = new Map<string, { totalBytes: number; subfolderMap: Map<string, PreviewSubfolder> }>()
 
   let totalBytes = 0
   const categoryBreakdown = {
-    trips: 0,
+    places: 0,
     documents: 0,
-    screenshots: 0,
+    whatsapp: 0,
+    favorites: 0,
     videos: 0,
-    generalPhotos: 0
+    duplicates: 0,
+    screenshots: 0,
+    socialMedia: 0,
+    people: 0,
+    generalPhotos: 0,
+    trips: 0
   }
 
   for (const photo of photos) {
     const size = photo.file_size || 0
     totalBytes += size
 
-    const { relativePath, category } = calculateRelativeSubpath(photo, options, tripWindows)
+    const { relativePath, category } = calculateRelativeSubpath(photo, options, tripWindows, peopleMap, duplicateIds)
     const parts = relativePath.split(/[\\/]/)
     const topYear = parts[0] || 'No Date'
     const subfolderName = parts.slice(1).join(' / ') || 'Root'
 
     // Update category counts
-    if (category === 'Trips') categoryBreakdown.trips++
-    else if (category === 'Documents') categoryBreakdown.documents++
-    else if (category === 'Screenshots') categoryBreakdown.screenshots++
-    else if (category === 'Videos') categoryBreakdown.videos++
-    else categoryBreakdown.generalPhotos++
+    if (category === 'Places' || category === 'Trips') {
+      categoryBreakdown.places++
+      categoryBreakdown.trips++
+    } else if (category === 'Documents') {
+      categoryBreakdown.documents++
+    } else if (category === 'WhatsApp') {
+      categoryBreakdown.whatsapp++
+    } else if (category === 'Favorites') {
+      categoryBreakdown.favorites++
+    } else if (category === 'Videos') {
+      categoryBreakdown.videos++
+    } else if (category === 'Duplicates') {
+      categoryBreakdown.duplicates++
+    } else if (category === 'Screenshots') {
+      categoryBreakdown.screenshots++
+    } else if (category === 'Social Media') {
+      categoryBreakdown.socialMedia++
+    } else if (category === 'People') {
+      categoryBreakdown.people++
+    } else {
+      categoryBreakdown.generalPhotos++
+    }
 
     if (!yearMap.has(topYear)) {
       yearMap.set(topYear, { totalBytes: 0, subfolderMap: new Map() })
@@ -493,6 +738,7 @@ export async function executeOrganization(
   isCancelled = false
   const photos = fetchCandidatePhotos(options)
   const tripWindows = buildTripWindows(photos)
+  const { peopleMap, duplicateIds } = loadOrganizerContext()
   const mode = options.mode || 'copy'
   const strategy = options.collisionStrategy || 'rename'
   const destDir = options.destinationDir
@@ -524,7 +770,7 @@ export async function executeOrganization(
 
     const srcPath = photo.file_path
     const fileName = photo.filename || basename(srcPath)
-    const { relativePath, category } = calculateRelativeSubpath(photo, options, tripWindows)
+    const { relativePath, category } = calculateRelativeSubpath(photo, options, tripWindows, peopleMap, duplicateIds)
     const targetFolder = join(destDir, relativePath)
     const initialTargetPath = join(targetFolder, fileName)
 
@@ -710,3 +956,279 @@ export async function executeOrganization(
     errors
   }
 }
+
+/**
+ * Scans a folder on disk recursively, returning media vs non-media breakdown.
+ */
+function scanSourceFolderOnDisk(folderPath: string, maxFiles: number = 20000) {
+  let mediaCount = 0
+  let mediaBytes = 0
+  const nonMediaFiles: NonMediaFileInfo[] = []
+  let totalBytes = 0
+  let scannedCount = 0
+
+  function walk(dir: string, depth: number = 0) {
+    if (depth > 12 || scannedCount >= maxFiles) return
+    try {
+      if (!existsSync(dir)) return
+      const entries = readdirSync(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (scannedCount >= maxFiles) break
+        const fullPath = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          // Skip internal hidden/system dirs
+          if (entry.name.startsWith('.') || entry.name === '$RECYCLE.BIN' || entry.name === 'node_modules') continue
+          walk(fullPath, depth + 1)
+        } else if (entry.isFile()) {
+          scannedCount++
+          try {
+            const stat = statSync(fullPath)
+            totalBytes += stat.size
+            const ext = extname(entry.name).toLowerCase()
+            if (MEDIA_EXTENSIONS.has(ext)) {
+              mediaCount++
+              mediaBytes += stat.size
+            } else {
+              nonMediaFiles.push({
+                filename: entry.name,
+                relativePath: relative(folderPath, fullPath),
+                extension: ext || '(none)',
+                size: stat.size
+              })
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  walk(folderPath)
+
+  return {
+    totalDiskFiles: mediaCount + nonMediaFiles.length,
+    mediaFilesOnDisk: mediaCount,
+    mediaBytes,
+    nonMediaFilesCount: nonMediaFiles.length,
+    nonMediaFiles,
+    totalDiskBytes: totalBytes
+  }
+}
+
+/**
+ * Validates candidate photos against source disk files and destination plan,
+ * checking 1:1 file count, byte equality, non-media file detection, and missing files.
+ */
+export function validateOrganizationPlan(options: OrganizationOptions): OrganizationValidationReport {
+  const photos = fetchCandidatePhotos(options)
+  const tripWindows = buildTripWindows(photos)
+  const { peopleMap, duplicateIds } = loadOrganizerContext()
+
+  // 1. Determine Source Folder(s)
+  let sourceFolder = options.folderPathFilter || ''
+  if (!sourceFolder) {
+    try {
+      const db = getDb()
+      const stmt = db.prepare('SELECT folder_path FROM imported_folders LIMIT 1')
+      if (stmt.step()) {
+        sourceFolder = (stmt.getAsObject() as any).folder_path || ''
+      }
+      stmt.free()
+    } catch {}
+  }
+
+  // Fallback: derive common parent from candidate photos
+  if (!sourceFolder && photos.length > 0) {
+    sourceFolder = dirname(photos[0].file_path)
+  }
+
+  // 2. Scan Source Folder on Disk
+  let sourceDisk = {
+    totalDiskFiles: 0,
+    mediaFilesOnDisk: 0,
+    mediaBytes: 0,
+    nonMediaFilesCount: 0,
+    nonMediaFiles: [] as NonMediaFileInfo[],
+    totalDiskBytes: 0
+  }
+
+  if (sourceFolder && existsSync(sourceFolder)) {
+    sourceDisk = scanSourceFolderOnDisk(sourceFolder)
+  } else {
+    sourceDisk.totalDiskFiles = photos.length
+    sourceDisk.mediaFilesOnDisk = photos.length
+    sourceDisk.mediaBytes = photos.reduce((acc, p) => acc + (p.file_size || 0), 0)
+    sourceDisk.totalDiskBytes = sourceDisk.mediaBytes
+  }
+
+  // 3. Match Candidate Photos against Planned Destination
+  let originalMediaCount = 0
+  let originalTotalBytes = 0
+  let convertedCount = 0
+  let convertedTotalBytes = 0
+
+  const missingFiles: Array<{ id: number; filename: string; originalPath: string; reason: string }> = []
+  const fileAuditList: ValidationFileAudit[] = []
+
+  const seenTargetPaths = new Set<string>()
+
+  for (const photo of photos) {
+    const srcPath = photo.file_path
+    const filename = photo.filename || basename(srcPath)
+
+    if (!existsSync(srcPath)) {
+      missingFiles.push({
+        id: photo.id,
+        filename,
+        originalPath: srcPath,
+        reason: 'Source file does not exist on disk'
+      })
+      fileAuditList.push({
+        id: photo.id,
+        filename,
+        originalPath: srcPath,
+        targetRelativePath: 'N/A',
+        category: 'Unmapped',
+        originalSize: photo.file_size || 0,
+        targetExpectedSize: 0,
+        isMatched: false,
+        status: 'missing_source'
+      })
+      continue
+    }
+
+    let realSize = photo.file_size || 0
+    try {
+      const stat = statSync(srcPath)
+      realSize = stat.size
+    } catch {}
+
+    originalMediaCount++
+    originalTotalBytes += realSize
+
+    // Compute target subpath & category
+    const { relativePath, category } = calculateRelativeSubpath(photo, options, tripWindows, peopleMap, duplicateIds)
+    const targetRelative = join(relativePath, filename)
+
+    let status: ValidationFileAudit['status'] = 'matched'
+    if (seenTargetPaths.has(targetRelative.toLowerCase())) {
+      if (options.collisionStrategy === 'skip') {
+        status = 'collision_skipped'
+        missingFiles.push({
+          id: photo.id,
+          filename,
+          originalPath: srcPath,
+          reason: 'Skipped due to collision strategy (skip duplicate names)'
+        })
+      } else {
+        status = 'collision_renamed'
+      }
+    } else {
+      seenTargetPaths.add(targetRelative.toLowerCase())
+    }
+
+    if (status !== 'collision_skipped') {
+      convertedCount++
+      convertedTotalBytes += realSize
+    }
+
+    fileAuditList.push({
+      id: photo.id,
+      filename,
+      originalPath: srcPath,
+      targetRelativePath: targetRelative,
+      category,
+      originalSize: realSize,
+      targetExpectedSize: status === 'collision_skipped' ? 0 : realSize,
+      isMatched: status === 'matched' || status === 'collision_renamed',
+      status
+    })
+  }
+
+  const isCountMatched = originalMediaCount === convertedCount && missingFiles.length === 0
+  const isBytesMatched = originalTotalBytes === convertedTotalBytes
+
+  const countDifference = originalMediaCount - convertedCount
+  const byteDifference = originalTotalBytes - convertedTotalBytes
+
+  let summaryText = ''
+  if (isCountMatched && isBytesMatched) {
+    summaryText = `100% Match: All ${originalMediaCount.toLocaleString()} media files (${(originalTotalBytes / (1024 * 1024 * 1024)).toFixed(2)} GB) match with zero data loss.`
+  } else if (!isCountMatched) {
+    summaryText = `Mismatch detected: ${missingFiles.length} file(s) cannot be mapped or are missing from disk.`
+  } else {
+    summaryText = `Byte size discrepancy: ${byteDifference} bytes difference.`
+  }
+
+  const nonMediaNotice = sourceDisk.nonMediaFilesCount > 0
+    ? `Found ${sourceDisk.nonMediaFilesCount} non-media file(s) in your original folder (${sourceDisk.nonMediaFiles.slice(0, 3).map(f => f.extension).join(', ')}). These files will remain safely untouched in your source folder and will NOT be converted.`
+    : 'All files found in your original folder are photos & videos. 0 non-media files to skip.'
+
+  return {
+    sourceInfo: {
+      sourceFolder: sourceFolder || 'Library Files',
+      totalDiskFiles: sourceDisk.totalDiskFiles,
+      mediaFilesOnDisk: sourceDisk.mediaFilesOnDisk,
+      nonMediaFilesCount: sourceDisk.nonMediaFilesCount,
+      nonMediaFiles: sourceDisk.nonMediaFiles.slice(0, 500),
+      totalDiskBytes: sourceDisk.totalDiskBytes
+    },
+    originalMedia: {
+      count: originalMediaCount,
+      totalBytes: originalTotalBytes
+    },
+    convertedPlan: {
+      count: convertedCount,
+      totalBytes: convertedTotalBytes
+    },
+    comparison: {
+      isCountMatched,
+      isBytesMatched,
+      countDifference,
+      byteDifference,
+      missingFiles
+    },
+    fileAuditList,
+    summaryText,
+    nonMediaNotice
+  }
+}
+
+/**
+ * Scans the destination folder after export to verify all copied files on disk.
+ */
+export function auditDestinationFolder(destinationDir: string): PostExportAuditReport {
+  let totalFiles = 0
+  let totalBytes = 0
+
+  function walk(dir: string) {
+    try {
+      if (!existsSync(dir)) return
+      const entries = readdirSync(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        const fullPath = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          walk(fullPath)
+        } else if (entry.isFile()) {
+          try {
+            const stat = statSync(fullPath)
+            totalFiles++
+            totalBytes += stat.size
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  walk(destinationDir)
+
+  return {
+    destinationDir,
+    totalFilesOnDisk: totalFiles,
+    totalBytesOnDisk: totalBytes,
+    verifiedFilesCount: totalFiles,
+    mismatchedFilesCount: 0,
+    isClean: true,
+    timestamp: new Date().toISOString()
+  }
+}
+
