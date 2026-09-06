@@ -5,6 +5,7 @@ async function test() {
   const filePath = 'C:/Users/vishw/Downloads/17 pro max-backup/IMG_4762.JPG';
   const buf = await sharp(filePath)
     .resize(1000, 1000, { fit: 'inside' })
+    .extend({ top: 20, bottom: 20, left: 20, right: 20, background: { r: 255, g: 255, b: 255, alpha: 1 } })
     .grayscale()
     .normalize()
     .png()

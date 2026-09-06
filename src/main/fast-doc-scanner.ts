@@ -313,6 +313,13 @@ export async function getOcrBuffer(photo: PhotoRow): Promise<Buffer | null> {
 
     return await sharp(filePath)
       .resize(OCR_IMAGE_SIZE, OCR_IMAGE_SIZE, { fit: 'inside', withoutEnlargement: true })
+      .extend({
+        top: 20,
+        bottom: 20,
+        left: 20,
+        right: 20,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      })
       .sharpen()
       .grayscale()
       .normalize()

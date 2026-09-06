@@ -1135,8 +1135,16 @@ export async function detectDocument(filePath: string): Promise<DocumentDetectio
     }
 
     // 2c. Prepare optimal OCR buffer (950px sweet spot for Tesseract accuracy & speed)
+    // Add 20px white margin padding so Leptonica bounding boxes never clip outside image bounds
     const ocrReadyBuffer = await sharp(processedBuffer)
       .resize(950, 950, { fit: 'inside', withoutEnlargement: true })
+      .extend({
+        top: 20,
+        bottom: 20,
+        left: 20,
+        right: 20,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      })
       .grayscale()
       .normalize()
       .withMetadata({ density: 300 })
