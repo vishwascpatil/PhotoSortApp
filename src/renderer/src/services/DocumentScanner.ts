@@ -186,137 +186,49 @@ export async function scanDocuments() {
   isScanningDocs = true
 
   try {
-    // ═══════════════════════════════════════════════════════════════════
-    // PHASE 1: Fast Pre-filter in Main Process (sharp, ~5-15ms/photo)
-    // ═══════════════════════════════════════════════════════════════════
-    updateProgress({ scannedCount: 0, totalCount: 1, isScanning: true, phase: 'prefilter', status: 'Phase 1: Analyzing image features...' })
-
-    // Subscribe to progress from main process
-    const cleanup = window.photoVault.onDocScanProgress((progress: any) => {
-      if (progress.phase === 'prefilter') {
-        updateProgress({
-          scannedCount: progress.scannedCount,
-          totalCount: progress.totalCount,
-          isScanning: true,
-          phase: 'prefilter',
-          status: progress.status
-        })
-      }
-    })
-
-    const { candidateIds, totalPhotos } = await window.photoVault.fastDocPrefilter()
-
-    cleanup()
-
-    if (!isScanningDocs) {
-      updateProgress(null)
-      return
-    }
-
-    if (candidateIds.length === 0) {
-      updateProgress({ scannedCount: totalPhotos, totalCount: totalPhotos, isScanning: false, phase: 'done', status: 'No document candidates found.' })
-      isScanningDocs = false
-      return
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // PHASE 2: Parallel OCR on candidates only (much smaller set!)
-    // ═══════════════════════════════════════════════════════════════════
     updateProgress({
       scannedCount: 0,
-      totalCount: candidateIds.length,
+      totalCount: 1,
       isScanning: true,
-      phase: 'ocr',
-      status: `Phase 2: OCR on ${candidateIds.length} candidates (${totalPhotos - candidateIds.length} skipped)...`
+      phase: 'prefilter',
+      status: 'Phase 1/2: Analyzing image features with edge detection...'
     })
 
-    // Create worker pool
-    const workers: Tesseract.Worker[] = []
-    const workerCount = Math.min(OCR_CONCURRENCY, candidateIds.length)
-
-    for (let i = 0; i < workerCount; i++) {
-      const worker = await Tesseract.createWorker('eng', 1, {
-        // @ts-ignore - Tesseract options
-        langPath: undefined,
-        cacheMethod: 'readOnly',
-      })
-      workers.push(worker)
-    }
-
-    let ocrCompleted = 0
-    const batchResults: Array<{ id: number; text: string; isDocument: boolean; category: string | null }> = []
-    const SAVE_BATCH_SIZE = 10
-
-    // Process candidates using worker pool
-    const processQueue = [...candidateIds]
-    const activePromises: Promise<void>[] = []
-
-    for (let i = 0; i < workers.length && processQueue.length > 0; i++) {
-      const processWithWorker = async (workerIdx: number) => {
-        while (processQueue.length > 0 && isScanningDocs) {
-          const photoId = processQueue.shift()
-          if (photoId === undefined) break
-
-          const result = await ocrSinglePhoto(photoId, workers[workerIdx])
-          batchResults.push(result)
-          ocrCompleted++
-
-          // Save in batches to reduce IPC overhead
-          if (batchResults.length >= SAVE_BATCH_SIZE) {
-            const toSave = batchResults.splice(0, SAVE_BATCH_SIZE)
-            await window.photoVault.saveDocBatch(toSave)
-            
-            const docsFound = toSave.filter(r => r.isDocument).length
-            if (docsFound > 0 && onDocumentFound) {
-              onDocumentFound()
-            }
-          }
-
-          updateProgress({
-            scannedCount: ocrCompleted,
-            totalCount: candidateIds.length,
-            isScanning: true,
-            phase: 'ocr',
-            status: `OCR: ${ocrCompleted}/${candidateIds.length} candidates processed`
-          })
+    let unsubscribe: (() => void) | null = null
+    if (window.photoVault?.onDocDetectProgress) {
+      unsubscribe = window.photoVault.onDocDetectProgress((p: any) => {
+        updateProgress({
+          scannedCount: p.completed,
+          totalCount: p.total,
+          isScanning: p.isScanning,
+          currentFile: p.currentFile,
+          status: p.status,
+          phase: p.phase
+        })
+        if (p.docsFound > 0 && onDocumentFound) {
+          onDocumentFound()
         }
-      }
-      activePromises.push(processWithWorker(i))
+      })
     }
 
-    await Promise.all(activePromises)
-
-    // Save remaining batch
-    if (batchResults.length > 0) {
-      await window.photoVault.saveDocBatch(batchResults)
-      const docsFound = batchResults.filter(r => r.isDocument).length
-      if (docsFound > 0 && onDocumentFound) {
-        onDocumentFound()
-      }
+    if (window.photoVault?.startDocumentScan) {
+      await window.photoVault.startDocumentScan(true)
     }
 
-    // Terminate workers
-    for (const worker of workers) {
-      try { await worker.terminate() } catch { }
-    }
-
-    updateProgress({
-      scannedCount: candidateIds.length,
-      totalCount: candidateIds.length,
-      isScanning: false,
-      phase: 'done',
-      status: `Complete! Scanned ${totalPhotos} photos, found documents in ${candidateIds.length} candidates.`
-    })
-
+    if (unsubscribe) unsubscribe()
   } catch (err) {
     console.error('Error in scanDocuments:', err)
   } finally {
     isScanningDocs = false
-    updateProgress({ scannedCount: 0, totalCount: 0, isScanning: false, phase: 'done' })
+    updateProgress(null)
   }
 }
 
 export function stopDocumentScanning() {
   isScanningDocs = false
-  window.photoVault.stopFastDocScan().catch(() => {})
+  if (window.photoVault?.stopDocumentScan) {
+    window.photoVault.stopDocumentScan().catch(() => {})
+  }
+  updateProgress(null)
 }
+

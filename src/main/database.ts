@@ -143,8 +143,6 @@ function createTables(): void {
   try { database.run("ALTER TABLE tags ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP") } catch { }
   try { database.run("ALTER TABLE photo_tags ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP") } catch { }
 
-  // Now that document_category exists, we can safely run the reset
-  try { database.run("UPDATE photos SET extracted_text = '', is_document = 0, document_category = NULL") } catch (e) { console.error('reset fail 7', e) }
 
   database.run(`
     CREATE TABLE IF NOT EXISTS imported_folders (
@@ -840,6 +838,11 @@ export function getUnscannedDocuments(): PhotoRow[] {
 export function saveDocumentScan(photoId: number, extractedText: string, isDocument: boolean, category: string | null = null): void {
   const textToSave = extractedText.trim() === '' ? 'NONE' : extractedText
   runSql('UPDATE photos SET extracted_text = ?, is_document = ?, document_category = ? WHERE id = ?', [textToSave, isDocument ? 1 : 0, category, photoId])
+}
+
+export function resetAllDocumentScans(): void {
+  runSql('UPDATE photos SET is_document = 0, document_category = NULL, extracted_text = "" WHERE is_document = 1 OR extracted_text != ""')
+  saveDatabase()
 }
 
 // ─── Location Scanning ───────────────────────────────────────────────────

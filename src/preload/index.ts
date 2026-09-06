@@ -216,10 +216,21 @@ const api = {
     ipcRenderer.invoke('junk:classify-batch', filePaths),
 
   // Document Detector
+  startDocumentScan: (allLibrary?: boolean): Promise<{ total: number; candidatesCount: number; docsFound: number }> =>
+    ipcRenderer.invoke('documents:start-scan', allLibrary),
+  stopDocumentScan: (): Promise<boolean> =>
+    ipcRenderer.invoke('documents:stop-scan'),
   detectDocument: (filePath: string): Promise<any> =>
     ipcRenderer.invoke('documents:detect', filePath),
   detectDocumentBatch: (filePaths: string[]): Promise<any[]> =>
     ipcRenderer.invoke('documents:detect-batch', filePaths),
+  cleanFalsePositiveDocuments: (): Promise<{ cleared: number; kept: number }> =>
+    ipcRenderer.invoke('documents:clean-false-positives'),
+  onDocDetectProgress: (callback: (progress: any) => void): (() => void) => {
+    const handler = (_event: any, progress: any) => callback(progress)
+    ipcRenderer.on('doc-detect:progress', handler)
+    return () => ipcRenderer.removeListener('doc-detect:progress', handler)
+  },
 
   // Tags API
   getAllTags: (): Promise<Array<{ id: number; name: string; color: string; photo_count: number }>> =>

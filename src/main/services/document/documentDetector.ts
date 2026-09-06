@@ -2,7 +2,7 @@ import sharp from 'sharp'
 import { existsSync } from 'fs'
 import { basename } from 'path'
 import Tesseract from 'tesseract.js'
-import { ocrRules } from './ocrRulesData.ts'
+import { ocrRules } from './ocrRulesData'
 
 // ─── Interfaces & Types ───────────────────────────────────────────────────
 
@@ -20,8 +20,8 @@ export interface MatchedSignal {
 }
 
 export interface DocumentDetectionResult {
-  classification: string // matches existing 150+ type taxonomy, or "unknown" / "not_a_document"
-  category?: string | null // e.g. "Government & Identity", "Business & Commerce", etc.
+  classification: string // matches 165 type taxonomy, or "not_a_document"
+  category?: string | null // e.g. "Government & Identity", "Vehicle", "Banking & Finance", etc.
   confidence: number // 0-100
   ocrQualityScore: number // mean OCR word-confidence, 0-100
   matchedSignals: MatchedSignal[]
@@ -36,33 +36,72 @@ export interface Point {
 
 // ─── Configurable Constants & Thresholds ──────────────────────────────────
 
-/**
- * Blur detection threshold based on Laplacian variance.
- * Variance below this threshold indicates significant motion/focus blur.
- */
 export const BLUR_THRESHOLD = 120
+export const DOCUMENT_SCORE_THRESHOLD = 40
 
-/**
- * General document classification confidence threshold.
- * NOTE: This constant should be tuned empirically against a labeled test set
- * (real documents vs. real non-documents) to calibrate precision and recall.
- */
-export const DOCUMENT_SCORE_THRESHOLD = 45
-
-/**
- * Known standard document aspect ratios (width/height in landscape, or height/width in portrait)
- */
 export const DOCUMENT_ASPECT_RATIOS = {
   ID_CARD: 1.586, // ISO/IEC 7810 ID-1 (Aadhaar, PAN, Driving License: 85.60 × 53.98 mm)
   A4_DOCUMENT: 1.414, // ISO 216 A4 (297 × 210 mm)
   PASSPORT_PAGE: 1.42 // Standard ICAO Doc 9303 Passport booklet page
 }
 
-const FAST_PASS_KEYWORDS = [
-  'doc', 'scan', 'aadhaar', 'aadhar', 'adhar', 'adhaar',
-  'pan', 'card', 'id', 'bill', 'receipt', 'invoice',
-  'pdf', 'yebj', 'ycdo', 'statement', 'license', 'licence', 'certificate'
-]
+export function hasDocumentFilename(filename: string): boolean {
+  const lower = filename.toLowerCase()
+  if (lower.endsWith('.pdf')) return true
+  const docKeywords = [
+    'aadhaar', 'aadhar', 'pancard', 'pan_card', 'passport', 'voter_id',
+    'driving_licence', 'driving_license', 'marksheet', 'certificate',
+    'invoice', 'receipt', 'tax_invoice', 'salary_slip', 'payslip',
+    'bank_statement', 'passbook', 'electricity_bill', 'water_bill',
+    'rc_book', 'vehicle_rc', 'pollution_certificate', 'puc'
+  ]
+  return docKeywords.some(kw => lower.includes(kw))
+}
+
+export function detectMemeOrSocialSignals(text: string): { isMeme: boolean; matchedSignals: string[] } {
+  const lower = text.toLowerCase()
+  const memeMatches: string[] = []
+
+  // If text contains strong document signatures, do not discard as a meme
+  const hasStrongDocMarkers =
+    lower.includes('tax invoice') || lower.includes('bill of supply') ||
+    lower.includes('irctc') || lower.includes('aadhaar') || lower.includes('aadhar') ||
+    lower.includes('pancard') || lower.includes('birth certificate') || lower.includes('passport') ||
+    lower.includes('election commission') || lower.includes('electricity') ||
+    lower.includes('hospital') || lower.includes('clinic') || lower.includes('booking id') ||
+    lower.includes('hdfc bank') || lower.includes('icici bank') || lower.includes('state bank of india')
+
+  const memePatterns = [
+    /\bpov[:\s]/i,
+    /\b(me when|when you|when the|nobody:|no one:|literally no one:)\b/i,
+    /\b(bro really|bro thinks|mfw|tfw|my honest reaction|my reaction to)\b/i,
+    /\b(wait for it|swipe left|tag a friend|relatable)\b/i,
+    /\b(lmao|rofl|bruh|ngl|tbh|smh|wtf|stfu|fr fr|no cap)\b/i,
+    /\b(like and share|follow for more|comment below|link in bio|double tap|share this)\b/i,
+    /\br\/[a-zA-Z0-9_]{3,}\b/i,
+    /(?:follow|credit|via|source|by|ig|insta|tiktok)\s*[:\-]?\s*@[a-zA-Z0-9_]{3,}\b/i,
+    /\b(tiktok|instagram|9gag|ifunny|memedroid|reddit|tweet|retweet|upvote|downvote)\b/i,
+    /\b(verify your number|enter the 6-digit code|resend code in)\b/i,
+    /the only person who should be able to control your emotions/i,
+    /\b\d+\s+(?:years?|months?|weeks?|days?)\s+ago\b/i
+  ]
+
+  if (!hasStrongDocMarkers) {
+    for (const pattern of memePatterns) {
+      if (pattern.test(lower)) {
+        memeMatches.push(pattern.source)
+      }
+    }
+    if (/\b(business chat|last seen|typing\.\.\.)\b/i.test(lower) && !lower.includes('invoice') && !lower.includes('total')) {
+      memeMatches.push('Chat screenshot')
+    }
+  }
+
+  return {
+    isMeme: memeMatches.length > 0,
+    matchedSignals: memeMatches
+  }
+}
 
 // ─── Levenshtein Distance & Fuzzy Match Helper ───────────────────────────
 
@@ -340,8 +379,8 @@ export async function detectQuadrilateral(
     const matchesIdCard = aspectRatio >= 1.35 && aspectRatio <= 1.85
     const matchesA4OrPassport = aspectRatio >= 1.20 && aspectRatio <= 1.65
 
-    // Document quad must be an embedded physical page/card (area 20% - 88%), not the full camera photo
-    const isValidDocQuad = areaRatio >= 0.20 && areaRatio <= 0.88 && (matchesIdCard || matchesA4OrPassport)
+    // Document quad check: physical page/card or high-area rectangular paper
+    const isValidDocQuad = areaRatio >= 0.15 && (matchesIdCard || matchesA4OrPassport || areaRatio >= 0.35)
 
     return {
       hasQuad: isValidDocQuad,
@@ -466,6 +505,7 @@ async function getOcrWorker(): Promise<Tesseract.Worker> {
   }
 
   const worker = await Tesseract.createWorker('eng', 1, {
+    logger: () => {},
     errorHandler: () => {}
   })
   return worker
@@ -543,17 +583,24 @@ export function checkIdentitySignatures(
   rawText: string,
   ocrQualityScore: number
 ): { matched: boolean; classification: string; category: string; confidence: number; matchedSignals: MatchedSignal[] } {
+  // Reject immediately if text has meme or social media markers
+  const memeCheck = detectMemeOrSocialSignals(rawText)
+  if (memeCheck.isMeme) {
+    return { matched: false, classification: '', category: '', confidence: 0, matchedSignals: [] }
+  }
+
   const lowerText = rawText.toLowerCase()
   const normalizedText = normalizeOcrDigitSubstitutions(rawText)
   const signals: MatchedSignal[] = []
 
   // 1. Aadhaar Card Signature Check
-  const aadhaarKeywords = ['aadhaar', 'aadhar', 'uidai', 'unique identification', 'mera aadhaar', 'government of india', 'govt of india', 'enrolment']
-  const matchedAadhaarKw = aadhaarKeywords.filter(kw => fuzzyIncludes(lowerText, kw, 2))
-  const aadhaarRegex = /\b\d{4}\s?\d{4}\s?\d{4}\b/
-  const hasAadhaarNumber = aadhaarRegex.test(rawText) || aadhaarRegex.test(normalizedText)
+  const aadhaarKeywords = ['aadhaar', 'aadhar', 'uidai', 'unique identification', 'mera aadhaar', 'enrolment']
+  const matchedAadhaarKw = aadhaarKeywords.filter(kw => fuzzyIncludes(lowerText, kw, 1))
+  const aadhaarRegex = /\b[2-9]{1}[0-9]{3}\s?[0-9]{4}\s?[0-9]{4}\b/
+  const hasAadhaarNumber = (aadhaarRegex.test(rawText) || aadhaarRegex.test(normalizedText)) &&
+    (matchedAadhaarKw.length >= 1 || lowerText.includes('government of india') || lowerText.includes('govt of india'))
 
-  if (hasAadhaarNumber || matchedAadhaarKw.length >= 2 || (matchedAadhaarKw.length >= 1 && (lowerText.includes('dob') || lowerText.includes('male') || lowerText.includes('female')))) {
+  if (hasAadhaarNumber || matchedAadhaarKw.length >= 2) {
     const isHighQuality = ocrQualityScore >= 70
     signals.push({
       signal: 'Identity Signature: Aadhaar Card',
@@ -570,27 +617,31 @@ export function checkIdentitySignatures(
     }
   }
 
-  // 2. PAN Card Signature Check
-  const panRegex = /\b[A-Z]{5}\d{4}[A-Z]\b/
-  const hasPanNumber = panRegex.test(rawText)
-  const hasPanKeywords = fuzzyIncludes(lowerText, 'income tax', 2) ||
-                         fuzzyIncludes(lowerText, 'permanent account', 2) ||
-                         (lowerText.includes('income') && lowerText.includes('tax'))
+  // 2. PAN Card Signature Check (skip if commercial invoice with seller PAN)
+  const isCommercialInvoice = /\b(tax invoice|bill of supply|invoice number|order number|shipping address|billing address|sold by)\b/i.test(rawText)
+  if (!isCommercialInvoice) {
+    const panRegex = /\b[A-Z]{5}\d{4}[A-Z]\b/
+    const hasPanNumber = panRegex.test(rawText)
+    const hasPanKeywords = fuzzyIncludes(lowerText, 'income tax', 2) ||
+                           fuzzyIncludes(lowerText, 'permanent account', 2) ||
+                           (lowerText.includes('income') && lowerText.includes('tax'))
 
-  if (hasPanNumber || (hasPanKeywords && (lowerText.includes('father') || lowerText.includes('dob')))) {
-    const isHighQuality = ocrQualityScore >= 70
-    signals.push({
-      signal: 'Identity Signature: PAN Card',
-      points: isHighQuality ? 100 : 85,
-      reason: `PAN Card pattern detected (${hasPanNumber ? 'PAN Regex Match' : 'Income Tax Dept Keyword'}, OCR Quality: ${ocrQualityScore}%)`
-    })
+    if ((hasPanNumber && (hasPanKeywords || lowerText.includes('pan card') || lowerText.includes('father'))) ||
+        (hasPanKeywords && (lowerText.includes('father') || lowerText.includes('dob')))) {
+      const isHighQuality = ocrQualityScore >= 70
+      signals.push({
+        signal: 'Identity Signature: PAN Card',
+        points: isHighQuality ? 100 : 85,
+        reason: `PAN Card pattern detected (${hasPanNumber ? 'PAN Regex Match' : 'Income Tax Dept Keyword'}, OCR Quality: ${ocrQualityScore}%)`
+      })
 
-    return {
-      matched: true,
-      classification: 'PAN Card',
-      category: 'Government & Identity',
-      confidence: isHighQuality ? 100 : 85,
-      matchedSignals: signals
+      return {
+        matched: true,
+        classification: 'PAN Card',
+        category: 'Government & Identity',
+        confidence: isHighQuality ? 100 : 85,
+        matchedSignals: signals
+      }
     }
   }
 
@@ -648,7 +699,271 @@ export function checkIdentitySignatures(
     }
   }
 
+  // 6. Birth Certificate Signature Check
+  const hasBirthKeywords =
+    lowerText.includes('birth certificate') ||
+    lowerText.includes('certificate of birth') ||
+    lowerText.includes('art certihcate') ||
+    ((lowerText.includes('date of birth') || lowerText.includes('place of birth') || lowerText.includes('placo of birth')) &&
+     (lowerText.includes('mother') || lowerText.includes('father')) &&
+     (lowerText.includes('hospital') || lowerText.includes('registration') || lowerText.includes('medical officer')))
+
+  if (hasBirthKeywords) {
+    const isHighQuality = ocrQualityScore >= 70
+    signals.push({
+      signal: 'Identity Signature: Birth Certificate',
+      points: isHighQuality ? 100 : 85,
+      reason: `Birth Certificate pattern detected (OCR Quality: ${ocrQualityScore}%)`
+    })
+
+    return {
+      matched: true,
+      classification: 'Birth Certificate',
+      category: 'Government & Identity',
+      confidence: isHighQuality ? 100 : 85,
+      matchedSignals: signals
+    }
+  }
+
+  // 7. Commercial Tax Invoice / Bill of Supply Signature Check
+  const isTaxInvoice =
+    /\b(tax invoice|bill of supply|cash memo|invoice\/bill of supply)\b/i.test(lowerText) ||
+    (lowerText.includes('original for recipient') && lowerText.includes('sold by')) ||
+    (lowerText.includes('sold by') && (lowerText.includes('billing address') || lowerText.includes('pan no') || lowerText.includes('gstin')))
+
+  if (isTaxInvoice) {
+    const isHighQuality = ocrQualityScore >= 70
+    signals.push({
+      signal: 'Commercial Signature: Tax Invoice',
+      points: isHighQuality ? 100 : 90,
+      reason: `Tax Invoice / Bill of Supply detected (OCR Quality: ${ocrQualityScore}%)`
+    })
+
+    return {
+      matched: true,
+      classification: 'Tax Invoice',
+      category: 'Business & Commerce',
+      confidence: isHighQuality ? 100 : 90,
+      matchedSignals: signals
+    }
+  }
+
+  // 8. Train Ticket Signature Check
+  const isTrainTicket =
+    lowerText.includes('irctc') ||
+    (lowerText.includes('rail reservation') && lowerText.includes('ticket confirmation')) ||
+    (lowerText.includes('passenger details') && lowerText.includes('ticket fare') && lowerText.includes('convenience fee'))
+
+  if (isTrainTicket) {
+    const isHighQuality = ocrQualityScore >= 70
+    signals.push({
+      signal: 'Travel Signature: Train Ticket',
+      points: isHighQuality ? 100 : 90,
+      reason: `IRCTC / Railway Reservation Ticket detected (OCR Quality: ${ocrQualityScore}%)`
+    })
+
+    return {
+      matched: true,
+      classification: 'Train Ticket',
+      category: 'Travel',
+      confidence: isHighQuality ? 100 : 90,
+      matchedSignals: signals
+    }
+  }
+
+  // 9. Flight Ticket Signature Check
+  const isFlightTicket =
+    (lowerText.includes('indigo') || lowerText.includes('air india') || lowerText.includes('spicejet') || lowerText.includes('vistara') || lowerText.includes('flight to') || lowerText.includes('flight ticket') || lowerText.includes('boarding pass')) &&
+    (lowerText.includes('itinerary') || lowerText.includes('terminal') || lowerText.includes('departure') || lowerText.includes('arrival') || lowerText.includes('boarding'))
+
+  if (isFlightTicket) {
+    const isHighQuality = ocrQualityScore >= 70
+    signals.push({
+      signal: 'Travel Signature: Flight Ticket',
+      points: isHighQuality ? 100 : 90,
+      reason: `Flight Ticket / Itinerary detected (OCR Quality: ${ocrQualityScore}%)`
+    })
+
+    return {
+      matched: true,
+      classification: 'Flight Ticket',
+      category: 'Travel',
+      confidence: isHighQuality ? 100 : 90,
+      matchedSignals: signals
+    }
+  }
+
+  // 10. UPI Receipt Signature Check
+  const isUpiReceipt =
+    (lowerText.includes('transaction successful') || lowerText.includes('payment successful') || lowerText.includes('scan qr code to pay') || lowerText.includes('paid to')) &&
+    (lowerText.includes('utr') || lowerText.includes('transaction id') || lowerText.includes('debited from') || lowerText.includes('@kbl') || lowerText.includes('@upi') || lowerText.includes('upi ref'))
+
+  if (isUpiReceipt) {
+    const isHighQuality = ocrQualityScore >= 70
+    signals.push({
+      signal: 'Financial Signature: UPI Receipt',
+      points: isHighQuality ? 100 : 90,
+      reason: `UPI Payment Confirmation detected (OCR Quality: ${ocrQualityScore}%)`
+    })
+
+    return {
+      matched: true,
+      classification: 'UPI Receipt',
+      category: 'Banking & Finance',
+      confidence: isHighQuality ? 100 : 90,
+      matchedSignals: signals
+    }
+  }
+
+  // 11. Event / Movie Ticket Check
+  const isEventTicket =
+    (lowerText.includes('share your ticket') || lowerText.includes('booking id:')) &&
+    (lowerText.includes('pvr') || lowerText.includes('inox') || lowerText.includes('cinepolis') || lowerText.includes('audi') || lowerText.includes('ticket(s)'))
+
+  if (isEventTicket) {
+    signals.push({
+      signal: 'Travel & Leisure Signature: Event Ticket',
+      points: 90,
+      reason: `Cinema / Event Booking Ticket detected (OCR Quality: ${ocrQualityScore}%)`
+    })
+
+    return {
+      matched: true,
+      classification: 'Event Ticket',
+      category: 'Travel',
+      confidence: 90,
+      matchedSignals: signals
+    }
+  }
+
   return { matched: false, classification: '', category: '', confidence: 0, matchedSignals: [] }
+}
+
+export interface TextClassificationResult {
+  isDocument: boolean
+  classification: string
+  category: string | null
+  confidence: number
+  matchedSignals: MatchedSignal[]
+}
+
+export function classifyExtractedText(
+  extractedText: string,
+  ocrQualityScore = 85
+): TextClassificationResult {
+  const matchedSignals: MatchedSignal[] = []
+  const lowerText = extractedText.toLowerCase()
+  const words = extractedText.split(/\s+/).filter(w => w.length > 0)
+
+  // 1. Anti-Meme Check
+  const memeDetection = detectMemeOrSocialSignals(extractedText)
+  if (memeDetection.isMeme) {
+    return {
+      isDocument: false,
+      classification: 'not_a_document',
+      category: null,
+      confidence: 0,
+      matchedSignals: [{
+        signal: 'Meme / Social Media Disqualification',
+        points: -100,
+        reason: `Detected social/meme patterns: ${memeDetection.matchedSignals.join(', ')}`
+      }]
+    }
+  }
+
+  // 2. Identity Signatures Check
+  const identityMatch = checkIdentitySignatures(extractedText, ocrQualityScore)
+  if (identityMatch.matched) {
+    return {
+      isDocument: true,
+      classification: identityMatch.classification,
+      category: identityMatch.category,
+      confidence: identityMatch.confidence,
+      matchedSignals: identityMatch.matchedSignals
+    }
+  }
+
+  // 3. 165 Document Taxonomy Matching
+  let bestType = ''
+  let bestCategory: string | null = null
+  let bestRuleScore = 0
+
+  if (words.length >= 3) {
+    for (const rule of ocrRules) {
+      let hasNegative = false
+      for (const neg of rule.negativeKeywords) {
+        if (neg && neg.length >= 3 && lowerText.includes(neg.toLowerCase())) {
+          hasNegative = true
+          break
+        }
+      }
+      if (hasNegative) continue
+
+      let matchedRequired = false
+      for (const req of rule.requiredKeywords) {
+        if (req && fuzzyIncludes(lowerText, req.toLowerCase(), 1)) {
+          matchedRequired = true
+          break
+        }
+      }
+
+      let regexMatched = false
+      if (rule.regex && rule.regex.length >= 4) {
+        try {
+          const rx = new RegExp(rule.regex, 'i')
+          if (rx.test(extractedText)) regexMatched = true
+        } catch {}
+      }
+
+      if (!matchedRequired) continue
+
+      let rulePoints = 35
+      if (regexMatched) rulePoints += 30
+
+      for (const strong of rule.strongIndicators) {
+        if (strong && fuzzyIncludes(lowerText, strong.toLowerCase(), 1)) {
+          rulePoints += 15
+        }
+      }
+
+      for (const weak of rule.weakIndicators) {
+        if (weak && fuzzyIncludes(lowerText, weak.toLowerCase(), 0)) {
+          rulePoints += 5
+        }
+      }
+
+      if (rulePoints > bestRuleScore) {
+        bestRuleScore = rulePoints
+        bestType = rule.name
+        bestCategory = rule.category
+      }
+    }
+  }
+
+  let totalScore = bestRuleScore
+  if (bestRuleScore > 0 && bestCategory) {
+    matchedSignals.push({
+      signal: `Taxonomy Match: ${bestType}`,
+      points: bestRuleScore,
+      reason: `Matched category "${bestCategory}" (${bestType}) with verified required keywords`
+    })
+  }
+
+  if (/\b\d{2}[/.-]\d{2}[/.-]\d{4}\b/.test(extractedText)) totalScore += 10
+  if (/[$₹€£]\s?\d+/.test(extractedText) || /\b(total|amount|subtotal|balance)\s*:?\s*\d+/i.test(extractedText)) {
+    totalScore += 10
+  }
+
+  const finalConfidence = Math.max(0, Math.min(100, totalScore))
+  const isDocument = Boolean(bestCategory) && bestRuleScore >= 35 && finalConfidence >= DOCUMENT_SCORE_THRESHOLD
+
+  return {
+    isDocument,
+    classification: isDocument && bestCategory ? bestType : 'not_a_document',
+    category: isDocument && bestCategory ? bestCategory : null,
+    confidence: isDocument ? finalConfidence : 0,
+    matchedSignals
+  }
 }
 
 // ─── Main Document Detection Function ─────────────────────────────────────
@@ -685,7 +1000,7 @@ export async function detectDocument(filePath: string): Promise<DocumentDetectio
   const lowerFilename = filename.toLowerCase()
 
   // 1a. Filename fast-pass check
-  const hasFilenameKeyword = FAST_PASS_KEYWORDS.some(kw => lowerFilename.includes(kw))
+  const hasFilenameKeyword = hasDocumentFilename(filename)
   if (hasFilenameKeyword) {
     matchedSignals.push({
       signal: 'Filename Fast-Pass',
@@ -749,7 +1064,7 @@ export async function detectDocument(filePath: string): Promise<DocumentDetectio
         points: 30,
         reason: `Detected document rectangle (Area: ${Math.round(quadRes.areaRatio * 100)}%, Ratio: ${quadRes.aspectRatio.toFixed(2)})`
       })
-    } else if (edgeDensity >= 0.15 && edgeDensity <= 0.55) {
+    } else if (edgeDensity >= 0.05 && edgeDensity <= 0.65) {
       isCandidate = true
       matchedSignals.push({
         signal: 'Tightened Edge Density Match',
@@ -819,46 +1134,21 @@ export async function detectDocument(filePath: string): Promise<DocumentDetectio
       })
     }
 
-    // 2c. Targeted Upscale + Sharpen for compressed / low-res sources (WhatsApp images)
-    const longEdge = Math.max(srcWidth, srcHeight)
-    let ocrInput = sharp(processedBuffer)
-
-    if (longEdge < 1200) {
-      qualityFlags.lowResolution = true
-      ocrInput = ocrInput
-        .resize(Math.round(srcWidth * 2), Math.round(srcHeight * 2), {
-          kernel: sharp.kernel.lanczos3
-        })
-        .sharpen({ sigma: 1.5, m1: 0.8, m2: 2.0 })
-      matchedSignals.push({
-        signal: 'Quality Enhancement: 2x Lanczos3 Upscale',
-        points: 10,
-        reason: `Low resolution source (${longEdge}px) upscaled and sharpened for OCR clarity`
-      })
-    } else {
-      ocrInput = ocrInput.resize(1400, 1400, { fit: 'inside', withoutEnlargement: true })
-    }
-
-    // Optimize contrast & binarization for OCR
-    const ocrReadyBuffer = await ocrInput
+    // 2c. Prepare optimal OCR buffer (950px sweet spot for Tesseract accuracy & speed)
+    const ocrReadyBuffer = await sharp(processedBuffer)
+      .resize(950, 950, { fit: 'inside', withoutEnlargement: true })
       .grayscale()
       .normalize()
+      .withMetadata({ density: 300 })
       .png()
       .toBuffer()
 
-    // ─── Phase 3: Dual PSM OCR Comparison ─────────────────────────────────
-
+    // ─── Phase 3: Fast Reliable OCR ──────────────────────────────────────────
     const worker = await getOcrWorker()
     let winningOcr: OcrRunResult
 
     try {
-      const [resPsm6, resPsm11] = await Promise.all([
-        runOcrWithPsm(worker, ocrReadyBuffer, Tesseract.PSM.SINGLE_BLOCK),
-        runOcrWithPsm(worker, ocrReadyBuffer, Tesseract.PSM.SPARSE_TEXT)
-      ])
-
-      // Pick result with higher mean word confidence
-      winningOcr = resPsm6.confidence >= resPsm11.confidence ? resPsm6 : resPsm11
+      winningOcr = await runOcrWithPsm(worker, ocrReadyBuffer, Tesseract.PSM.AUTO)
     } finally {
       releaseOcrWorker(worker)
     }
@@ -866,189 +1156,21 @@ export async function detectDocument(filePath: string): Promise<DocumentDetectio
     const ocrQualityScore = winningOcr.confidence
     const extractedText = winningOcr.text.trim()
 
-    // ─── Phase 4: Classification & Scoring ────────────────────────────────
-
-    // 4a, 4b, 4c. Check High-Priority Identity Signatures
-    const identityMatch = checkIdentitySignatures(extractedText, ocrQualityScore)
-    if (identityMatch.matched) {
-      return {
-        classification: identityMatch.classification,
-        category: identityMatch.category,
-        confidence: identityMatch.confidence,
-        ocrQualityScore,
-        matchedSignals: [...matchedSignals, ...identityMatch.matchedSignals],
-        qualityFlags,
-        extractedText
-      }
-    }
-
-    // 4d. General Document Scoring
-    const lowerText = extractedText.toLowerCase()
-    const words = extractedText.split(/\s+/).filter(w => w.length > 0)
-
-    let totalScore = 0
-
-    // Text Density Score (0 - 20)
-    if (words.length >= 50) {
-      totalScore += 20
-      matchedSignals.push({ signal: 'High Text Density', points: 20, reason: `Found ${words.length} recognized words` })
-    } else if (words.length >= 20) {
-      totalScore += 15
-      matchedSignals.push({ signal: 'Moderate Text Density', points: 15, reason: `Found ${words.length} recognized words` })
-    } else if (words.length >= 6) {
-      totalScore += 10
-      matchedSignals.push({ signal: 'Sparse Text Density', points: 10, reason: `Found ${words.length} recognized words` })
-    }
-
-    // Layout Structure Score (0 - 20)
-    const kvMatches = extractedText.match(/[A-Za-z]+:/g)
-    if (kvMatches && kvMatches.length >= 2) {
-      totalScore += 15
-      matchedSignals.push({ signal: 'Structured Key-Value Layout', points: 15, reason: `Found ${kvMatches.length} field key-value pairs` })
-    }
-
-    // Regex Pattern Score (0 - 30)
-    if (/\b\d{2}[/.-]\d{2}[/.-]\d{4}\b/.test(extractedText)) {
-      totalScore += 10
-      matchedSignals.push({ signal: 'Date Pattern', points: 10, reason: 'Detected standard date format (DD/MM/YYYY)' })
-    }
-    if (/[$₹€£]\s?\d+/.test(extractedText) || /\b(total|amount|subtotal|balance)\s*:?\s*\d+/i.test(extractedText)) {
-      totalScore += 10
-      matchedSignals.push({ signal: 'Financial Currency / Amount Pattern', points: 10, reason: 'Detected monetary currency symbol or total amount' })
-    }
-    if (/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(extractedText)) {
-      totalScore += 10
-      matchedSignals.push({ signal: 'Official Email Pattern', points: 10, reason: 'Detected organization email address' })
-    }
-
-    // 4e. Junk Penalties
-    const junkKeywords = ['http://', 'https://', 'www.', 'subscribe', 'like and share', 'follow us']
-    for (const junk of junkKeywords) {
-      if (lowerText.includes(junk)) {
-        totalScore -= 30
-        matchedSignals.push({ signal: 'Social Media / Web Junk Penalty', points: -30, reason: `Contains social tag: "${junk}"` })
-        break
-      }
-    }
-
-    // Face-area penalty scoping fix:
-    // Only penalize large faces if they are outside the document quad (avoids false-penalizing ID card portrait photos)
-    try {
-      const rgbSample = await sharp(filePath, { failOn: 'none' })
-        .resize(200, 200, { fit: 'inside' })
-        .removeAlpha()
-        .raw()
-        .toBuffer({ resolveWithObject: true })
-
-      const detectedFaces = await detectFacesInFrame(
-        rgbSample.data,
-        rgbSample.info.width,
-        rgbSample.info.height
-      )
-
-      for (const face of detectedFaces) {
-        if (quadRes.hasQuad && quadRes.corners) {
-          // Scale face coordinates to prefilter space to check against quad corners
-          const scaleX = prefilterBuffer.info.width / rgbSample.info.width
-          const scaleY = prefilterBuffer.info.height / rgbSample.info.height
-          const faceCenterPrefilter: Point = {
-            x: face.center.x * scaleX,
-            y: face.center.y * scaleY
-          }
-
-          const isInsideQuad = isPointInsidePolygon(faceCenterPrefilter, quadRes.corners)
-
-          if (isInsideQuad) {
-            matchedSignals.push({
-              signal: 'Face Inside Document Region',
-              points: 0,
-              reason: 'face detected but inside document region — not penalized'
-            })
-          } else if (face.areaRatio > 0.30) {
-            totalScore -= 20
-            matchedSignals.push({
-              signal: 'Large Face / Portrait Penalty',
-              points: -20,
-              reason: `Detected large face (${Math.round(face.areaRatio * 100)}% area) outside document bounds`
-            })
-          }
-        } else {
-          // No quad detected: evaluate full frame
-          if (face.areaRatio > 0.30) {
-            totalScore -= 20
-            matchedSignals.push({
-              signal: 'Large Face / Portrait Penalty',
-              points: -20,
-              reason: `Detected large face (${Math.round(face.areaRatio * 100)}% frame area)`
-            })
-          }
-        }
-      }
-    } catch {}
-
-    // Taxonomy Rule Matching (150+ rules from ocr_rules.json)
-    let bestType = 'General Document'
-    let bestCategory: string | null = null
-    let bestRuleScore = 0
-
-    // Only match taxonomy rules if we have at least 3 OCR words
-    if (words.length >= 3) {
-      for (const rule of ocrRules) {
-        let rulePoints = 0
-        let matchedKeywordsCount = 0
-
-        for (const kw of rule.keywords) {
-          if (fuzzyIncludes(lowerText, kw, 1)) {
-            rulePoints += 6
-            matchedKeywordsCount++
-          }
-        }
-
-        let regexMatched = false
-        if (rule.regex && rule.regex.length >= 4 && !rule.regex.includes('Classification')) {
-          try {
-            const rx = new RegExp(rule.regex, 'i')
-            if (rx.test(extractedText)) {
-              rulePoints += 15
-              regexMatched = true
-            }
-          } catch {}
-        }
-
-        // Require at least 2 distinct keywords OR a verified regex match
-        if ((matchedKeywordsCount >= 2 || regexMatched) && rulePoints > bestRuleScore) {
-          bestRuleScore = rulePoints
-          bestType = rule.name
-          bestCategory = rule.category
-        }
-      }
-    }
-
-    if (bestRuleScore > 0 && bestCategory) {
-      totalScore += bestRuleScore
-      matchedSignals.push({
-        signal: `Taxonomy Match: ${bestType}`,
-        points: bestRuleScore,
-        reason: `Matched category "${bestCategory}" (${bestType})`
-      })
-    }
+    // ─── Phase 4: Anti-Meme Defense & 165-Taxonomy Classification ──────
+    const classResult = classifyExtractedText(extractedText, ocrQualityScore)
 
     // Cap confidence if blurry
-    let finalConfidence = Math.max(0, Math.min(100, totalScore))
+    let finalConfidence = classResult.confidence
     if (qualityFlags.blurry) {
       finalConfidence = Math.min(80, finalConfidence)
     }
 
-    // A document must pass the score threshold AND have either an identity signature or verified text/quad evidence
-    const hasSufficientEvidence = words.length >= 4 || identityMatch.matched || (quadRes.hasQuad && words.length >= 2)
-    const isDocument = finalConfidence >= DOCUMENT_SCORE_THRESHOLD && hasSufficientEvidence
-
     return {
-      classification: isDocument ? (bestCategory ? bestType : 'General Document') : 'not_a_document',
-      category: isDocument ? (bestCategory || 'Unknown / Other') : null,
-      confidence: finalConfidence,
+      classification: classResult.classification,
+      category: classResult.category,
+      confidence: classResult.isDocument ? finalConfidence : 0,
       ocrQualityScore,
-      matchedSignals,
+      matchedSignals: [...matchedSignals, ...classResult.matchedSignals],
       qualityFlags,
       extractedText
     }

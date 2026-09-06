@@ -23,11 +23,11 @@ import { scanDirectory, processFiles } from './importer'
 import { generateThumbnailBatch, generateThumbnail, applyEdits, pauseVideoQueue, resumeVideoQueue } from './thumbnails'
 import { syncFolder, syncAllTrackedFolders } from './syncer'
 import { scanLocations, stopLocationScanning } from './location-scanner'
-import { startFastDocScan, stopFastDocScan, getOcrBuffer } from './fast-doc-scanner'
+import { startFullDocumentScan, stopFullDocumentScan, startFastDocScan, stopFastDocScan, getOcrBuffer } from './fast-doc-scanner'
 import { getOrGenerateHighResPreview, prefetchHighResPreviews } from './highres'
 import { classifyScreenshot, classifyScreenshotBatch } from './services/screenshot/screenshotDetector'
 import { classifyJunkMedia, classifyJunkMediaBatch } from './services/junk/junkDetector'
-import { detectDocument } from './services/document/documentDetector'
+import { detectDocument, classifyExtractedText } from './services/document/documentDetector'
 import {
   selectDestinationDirectory,
   moveLargeFiles,
@@ -642,6 +642,15 @@ export function registerIpcHandlers(): void {
   })
 
   // ─── Document Detector ────────────────────────────────────────────────
+  ipcMain.handle('documents:start-scan', async (_event, allLibrary?: boolean) => {
+    return await startFullDocumentScan(allLibrary ?? true)
+  })
+
+  ipcMain.handle('documents:stop-scan', () => {
+    stopFullDocumentScan()
+    return true
+  })
+
   ipcMain.handle('documents:detect', (_event, filePath: string) => {
     return detectDocument(filePath)
   })
@@ -649,9 +658,19 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('documents:detect-batch', async (event, filePaths: string[]) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     const results: any[] = []
+    const allPhotos = getPhotos({})
     for (let i = 0; i < filePaths.length; i++) {
       const res = await detectDocument(filePaths[i])
       results.push({ filePath: filePaths[i], ...res })
+      const photo = allPhotos.find(p => p.file_path === filePaths[i])
+      if (photo) {
+        saveDocumentScan(
+          photo.id,
+          res.extractedText || photo.extracted_text || '',
+          res.classification !== 'not_a_document',
+          res.category || null
+        )
+      }
       if (win && !win.isDestroyed()) {
         win.webContents.send('doc-detect:progress', {
           completed: i + 1,
@@ -661,6 +680,35 @@ export function registerIpcHandlers(): void {
       }
     }
     return results
+  })
+
+  ipcMain.handle('documents:clean-false-positives', async () => {
+    const allPhotos = getPhotos({})
+    let cleared = 0
+    let kept = 0
+    for (const photo of allPhotos) {
+      if (photo.extracted_text && photo.extracted_text.length > 5 && photo.extracted_text !== 'NONE' && photo.extracted_text !== 'ERROR') {
+        const classRes = classifyExtractedText(photo.extracted_text)
+        if (classRes.isDocument && classRes.category) {
+          saveDocumentScan(photo.id, photo.extracted_text, true, classRes.category)
+          kept++
+        } else {
+          if (photo.is_document === 1) cleared++
+          saveDocumentScan(photo.id, photo.extracted_text, false, null)
+        }
+      } else if (photo.is_document === 1) {
+        // Run full detection on files marked as documents without saved text
+        const res = await detectDocument(photo.file_path)
+        if (res.classification === 'not_a_document') {
+          saveDocumentScan(photo.id, res.extractedText || photo.extracted_text || '', false, null)
+          cleared++
+        } else {
+          saveDocumentScan(photo.id, res.extractedText || photo.extracted_text || '', true, res.category || null)
+          kept++
+        }
+      }
+    }
+    return { cleared, kept }
   })
 
   // ─── Large Files Relocation & Undo ────────────────────────────────────
