@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join, extname } from 'path'
-import { existsSync, mkdirSync, statSync } from 'fs'
+import { existsSync, mkdirSync, statSync, openSync, readSync, closeSync, writeFileSync, readFileSync } from 'fs'
 import { createHash } from 'crypto'
 import sharp from 'sharp'
 import { heicPool } from './heic-pool'
@@ -40,6 +40,21 @@ export function isBrowserNativeImage(filePath: string): boolean {
   return BROWSER_NATIVE_EXTS.has(ext)
 }
 
+export function isHeicFile(filePath: string): boolean {
+  if (!filePath) return false
+  const ext = extname(filePath).toLowerCase()
+  if (ext === '.heic' || ext === '.heif') return true
+  try {
+    const fd = openSync(filePath, 'r')
+    const buf = Buffer.alloc(16)
+    readSync(fd, buf, 0, 16, 0)
+    closeSync(fd)
+    return buf.toString('ascii').includes('ftyp')
+  } catch {
+    return false
+  }
+}
+
 /**
  * On-demand High-Res image converter.
  * For browser-native images (.jpg, .png, .webp) and videos, returns the original filePath directly (0ms).
@@ -48,7 +63,9 @@ export function isBrowserNativeImage(filePath: string): boolean {
 export async function getOrGenerateHighResPreview(filePath: string): Promise<string> {
   if (!filePath || !existsSync(filePath)) return ''
 
-  if (isVideoFile(filePath) || isBrowserNativeImage(filePath)) {
+  const isHeic = isHeicFile(filePath)
+
+  if (isVideoFile(filePath) || (!isHeic && isBrowserNativeImage(filePath))) {
     return filePath
   }
 
@@ -65,16 +82,25 @@ export async function getOrGenerateHighResPreview(filePath: string): Promise<str
     } catch {}
   }
 
-  const ext = extname(filePath).toLowerCase()
-  const isHeic = ext === '.heic' || ext === '.heif'
-
   if (isHeic) {
     try {
       const res = await heicPool.convert(0, filePath, targetPath, 3840, 0.88)
-      if (res.success && existsSync(targetPath)) {
+      if (res.success && existsSync(targetPath) && statSync(targetPath).size > 0) {
         return targetPath
       }
     } catch {}
+    try {
+      const heicConvert = require('heic-convert')
+      const buf = readFileSync(filePath)
+      const converted = await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.88 })
+      writeFileSync(targetPath, converted)
+      if (existsSync(targetPath) && statSync(targetPath).size > 0) {
+        return targetPath
+      }
+    } catch (err: any) {
+      console.warn(`[HighRes] heicConvert fallback skipped for ${filePath}:`, err?.message || err)
+    }
+    return ''
   }
 
   // Handle DNG, Camera RAW (CR2, NEF, ARW, RAF, etc.) and TIFF via native Sharp

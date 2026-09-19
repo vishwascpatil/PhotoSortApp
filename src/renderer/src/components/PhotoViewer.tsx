@@ -117,17 +117,29 @@ export default function PhotoViewer() {
 
     const previewUrl = getThumbnailUrl(photo.preview_path || photo.thumbnail_path)
     const originalUrl = getOriginalUrl(photo.file_path)
-    const isNative = isBrowserNativeImage(photo.file_path)
+    const isNative = isBrowserNativeImage(photo.file_path) && photo.mime_type !== 'image/heic'
 
     // 1. Instantly display the fast thumbnail/preview so there is 0ms blank delay
-    setImgSrc(previewUrl || originalUrl)
+    if (previewUrl) {
+      setImgSrc(previewUrl)
+    } else {
+      setImgSrc(originalUrl)
+    }
 
     // 2. Load full-resolution image
-    if (isNative) {
-      // Browser-native format (.jpg, .png, .webp): load original file directly
+    if (isNative && previewUrl) {
+      // Browser-native format (.jpg, .png, .webp): verify and load original file directly
       const img = new Image()
       img.onload = () => {
         if (!isCancelled) setImgSrc(originalUrl)
+      }
+      img.onerror = () => {
+        // If native direct load fails (e.g. disguised HEIC or corrupted stream), request on-demand high-res preview
+        if (typeof window.photoVault?.getHighResPreview === 'function') {
+          window.photoVault.getHighResPreview(photo.file_path).then((highResPath) => {
+            if (!isCancelled && highResPath) setImgSrc(getThumbnailUrl(highResPath))
+          }).catch(() => {})
+        }
       }
       img.src = originalUrl
     } else if (typeof window.photoVault?.getHighResPreview === 'function') {
@@ -349,6 +361,15 @@ export default function PhotoViewer() {
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
+              onError={() => {
+                if (typeof window.photoVault?.getHighResPreview === 'function') {
+                  window.photoVault.getHighResPreview(photo.file_path).then((highResPath) => {
+                    if (highResPath) setImgSrc(getThumbnailUrl(highResPath))
+                  }).catch(() => {})
+                } else if (photo.preview_path || photo.thumbnail_path) {
+                  setImgSrc(getThumbnailUrl(photo.preview_path || photo.thumbnail_path))
+                }
+              }}
               style={{
                 transform: zoomScale > 1 ? `translate(${offset.x}px, ${offset.y}px) scale(${zoomScale})` : undefined,
                 transition: isDragging ? 'none' : 'transform 150ms ease-out',

@@ -27,6 +27,8 @@ export interface Photo {
   camera_make?: string | null
   camera_model?: string | null
   date_taken?: string | null
+  gps_lat?: number | null
+  gps_lon?: number | null
 }
 
 interface PhotoState {
@@ -81,13 +83,19 @@ function photoReducer(state: PhotoState, action: PhotoAction): PhotoState {
       return { ...state, photos: [...state.photos, ...action.payload], isLoading: false }
     case 'UPDATE_PHOTO': {
       const updated = state.photos.map(p => p.id === action.payload.id ? action.payload : p)
-      return { ...state, photos: updated }
+      const updatedViewerPhotos = state.viewerPhotos
+        ? state.viewerPhotos.map(p => p.id === action.payload.id ? action.payload : p)
+        : null
+      return { ...state, photos: updated, viewerPhotos: updatedViewerPhotos }
     }
     case 'REMOVE_PHOTOS': {
       const idsToRemove = new Set(action.payload)
       const filtered = state.photos.filter(p => !idsToRemove.has(p.id))
       const newSelected = new Set([...state.selectedIds].filter(id => !idsToRemove.has(id)))
-      return { ...state, photos: filtered, selectedIds: newSelected, isSelecting: newSelected.size > 0 }
+      const updatedViewerPhotos = state.viewerPhotos
+        ? state.viewerPhotos.filter(p => !idsToRemove.has(p.id))
+        : null
+      return { ...state, photos: filtered, viewerPhotos: updatedViewerPhotos, selectedIds: newSelected, isSelecting: newSelected.size > 0 }
     }
     case 'SELECT_PHOTO': {
       const newSelected = new Set(state.selectedIds)
@@ -136,7 +144,18 @@ function photoReducer(state: PhotoState, action: PhotoAction): PhotoState {
           thumbnail_path: `${updatedPhotos[idx].thumbnail_path!.split('?')[0]}?t=${action.payload.timestamp}`
         }
       }
-      return { ...state, photos: updatedPhotos }
+      let updatedViewerPhotos = state.viewerPhotos
+      if (state.viewerPhotos) {
+        const vIdx = state.viewerPhotos.findIndex(p => p.id === action.payload.id)
+        if (vIdx !== -1 && state.viewerPhotos[vIdx].thumbnail_path) {
+          updatedViewerPhotos = [...state.viewerPhotos]
+          updatedViewerPhotos[vIdx] = {
+            ...updatedViewerPhotos[vIdx],
+            thumbnail_path: `${updatedViewerPhotos[vIdx].thumbnail_path!.split('?')[0]}?t=${action.payload.timestamp}`
+          }
+        }
+      }
+      return { ...state, photos: updatedPhotos, viewerPhotos: updatedViewerPhotos }
     }
     case 'SET_VIEWER':
       return { ...state, viewerPhotoId: action.payload, viewerPhotos: null }

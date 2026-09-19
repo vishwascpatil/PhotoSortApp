@@ -63,81 +63,54 @@ export default function TrashPage() {
 
   return (
     <div className="photos-page" style={{ padding: '24px 32px' }}>
-      {/* Modern Apple HIG Header */}
+      {/* Action Header */}
       <div
         className="page-header"
         style={{
-          marginBottom: '20px',
+          marginBottom: '16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '14px'
+          gap: '12px'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 4px 14px rgba(239, 68, 68, 0.3)'
-            }}
-          >
-            <Trash2 size={22} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h1 style={{ fontSize: '28px', fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)' }}>
-                Trash
-              </h1>
-              {state.photos.length > 0 && (
-                <span
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    color: '#ef4444',
-                    fontWeight: 700,
-                    fontSize: '12px',
-                    padding: '2px 9px',
-                    borderRadius: '12px'
-                  }}
-                >
-                  {state.photos.length} items • {formatFileSize(totalTrashBytes)}
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary, #64748b)', margin: '2px 0 0 0' }}>
-              Items in trash can be restored anytime before permanent deletion.
-            </p>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {state.photos.length > 0 && (
+            <span className="apple-storage-pill">
+              {state.photos.length} items • {formatFileSize(totalTrashBytes)}
+            </span>
+          )}
         </div>
 
+        {/* Action Buttons */}
         {state.photos.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
             <button
               type="button"
-              className="btn btn-ghost"
+              className="apple-secondary-btn"
               onClick={handleRestoreAll}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 14px' }}
             >
-              <RotateCcw size={15} /> Restore All
+              <RotateCcw size={14} />
+              <span>Restore All</span>
             </button>
             <button
               type="button"
-              className="btn btn-danger"
+              className="apple-secondary-btn"
               onClick={(e) => {
                 e.stopPropagation()
                 setShowDeleteSelectedConfirm(false)
                 setShowEmptyConfirm(true)
               }}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 16px' }}
+              style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                color: '#ef4444',
+                borderColor: 'rgba(239, 68, 68, 0.25)',
+                gap: '6px'
+              }}
             >
-              <Trash2 size={15} /> Empty Trash
+              <Trash2 size={14} />
+              <span>Empty Trash</span>
             </button>
           </div>
         )}
@@ -193,8 +166,30 @@ export default function TrashPage() {
       {/* Photos Grid or Empty State */}
       {!state.isLoading && state.photos.length === 0 ? (
         <EmptyState
-          icon={<Trash2 size={48} />}
-          title="Trash is empty"
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="trashIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <Trash2
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#trashIconGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              Trash is <span className="title-sort-gradient">Empty</span>
+            </>
+          }
           description="Photos and videos you delete will appear here. Items in trash are saved before permanent deletion."
         />
       ) : (
@@ -219,10 +214,20 @@ export default function TrashPage() {
               </p>
             </div>
             <div className="modal-footer" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button className="btn btn-ghost" onClick={() => setShowEmptyConfirm(false)}>
+              <button type="button" className="apple-secondary-btn" onClick={() => setShowEmptyConfirm(false)}>
                 Cancel
               </button>
-              <button className="btn btn-danger" onClick={confirmAndEmptyTrash}>
+              <button
+                type="button"
+                className="apple-secondary-btn"
+                onClick={confirmAndEmptyTrash}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#ef4444',
+                  borderColor: 'rgba(239, 68, 68, 0.25)',
+                  fontWeight: 600
+                }}
+              >
                 Empty Trash Permanently
               </button>
             </div>
@@ -248,10 +253,20 @@ export default function TrashPage() {
               </p>
             </div>
             <div className="modal-footer" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button className="btn btn-ghost" onClick={() => setShowDeleteSelectedConfirm(false)}>
+              <button type="button" className="apple-secondary-btn" onClick={() => setShowDeleteSelectedConfirm(false)}>
                 Cancel
               </button>
-              <button className="btn btn-danger" onClick={confirmAndDeleteSelected}>
+              <button
+                type="button"
+                className="apple-secondary-btn"
+                onClick={confirmAndDeleteSelected}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#ef4444',
+                  borderColor: 'rgba(239, 68, 68, 0.25)',
+                  fontWeight: 600
+                }}
+              >
                 Delete Permanently
               </button>
             </div>

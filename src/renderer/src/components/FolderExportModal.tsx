@@ -43,6 +43,7 @@ export default function FolderExportModal({
   const [separateWhatsapp, setSeparateWhatsapp] = useState(true)
   const [separateFavorites, setSeparateFavorites] = useState(true)
   const [separateVideos, setSeparateVideos] = useState(true)
+  const [keepVideosWithPhotos, setKeepVideosWithPhotos] = useState(false)
   const [separateDuplicates, setSeparateDuplicates] = useState(true)
   const [separateScreenshots, setSeparateScreenshots] = useState(true)
   const [separateSocialMedia, setSeparateSocialMedia] = useState(true)
@@ -129,8 +130,20 @@ export default function FolderExportModal({
   const [excludedFromCategory, setExcludedFromCategory] = useState<Record<string, Set<number>>>({
     documents: new Set(),
     people: new Set(),
-    places: new Set()
+    places: new Set(),
+    whatsapp: new Set(),
+    socialMedia: new Set(),
+    social: new Set(),
+    screenshots: new Set(),
+    duplicates: new Set(),
+    favorites: new Set(),
+    videos: new Set()
   })
+  const [selectedPersonNames, setSelectedPersonNames] = useState<Set<string>>(new Set())
+  const [hasInitializedPeopleSelection, setHasInitializedPeopleSelection] = useState(false)
+  const [selectedPlaces, setSelectedPlaces] = useState<Set<string>>(new Set())
+  const [hasInitializedPlacesSelection, setHasInitializedPlacesSelection] = useState(false)
+  const [duplicatePhotoIds, setDuplicatePhotoIds] = useState<Set<number>>(new Set())
   const [showEligibilityGateModal, setShowEligibilityGateModal] = useState(false)
 
   // Execution & Progress
@@ -170,9 +183,10 @@ export default function FolderExportModal({
     let unscannedDocs = 0
 
     for (const p of photos) {
-      if (p.location_name && p.location_name.trim()) {
+      const hasGps = p.gps_lat !== undefined && p.gps_lat !== null && typeof p.gps_lat === 'number' && !isNaN(p.gps_lat)
+      if (hasGps && p.location_name && p.location_name.trim()) {
         placesCount++
-      } else if (p.created_at) {
+      } else if (hasGps && !p.location_name) {
         unscannedPlaces++
       }
 
@@ -227,11 +241,17 @@ export default function FolderExportModal({
           ...(utilData.duplicates || []),
           ...(utilData.similar || [])
         ]
+        const dIds = new Set<number>()
         for (const g of allGroups) {
           if (g.length > 1) {
             dupesCount += g.length - 1
+            g.slice(1).forEach((p: any) => {
+              const id = typeof p === 'object' ? p.id : p
+              if (id) dIds.add(id)
+            })
           }
         }
+        setDuplicatePhotoIds(dIds)
       }
     } catch {}
 
@@ -258,6 +278,13 @@ export default function FolderExportModal({
       if (window.photoVault?.getPeople) {
         const list = await window.photoVault.getPeople()
         setPeopleProfiles(list || [])
+        setSelectedPersonNames(prev => {
+          if (prev.size > 0) return prev
+          const named = (list || [])
+            .filter((p: any) => p.name && p.name.trim() && p.name.toLowerCase() !== 'unknown person')
+            .map((p: any) => p.name.trim())
+          return new Set(named)
+        })
       }
     } catch (err) {
       console.error('Failed to load people:', err)
@@ -266,6 +293,58 @@ export default function FolderExportModal({
     }
   }, [])
 
+  const togglePersonSelection = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed.toLowerCase() === 'unknown person') return
+    setSelectedPersonNames(prev => {
+      const next = new Set(prev)
+      if (next.has(trimmed)) {
+        next.delete(trimmed)
+      } else {
+        next.add(trimmed)
+      }
+      return next
+    })
+  }
+
+  const selectAllNamedPeople = () => {
+    const named = peopleProfiles
+      .filter(p => p.name && p.name.trim() && p.name.toLowerCase() !== 'unknown person')
+      .map(p => p.name.trim())
+    setSelectedPersonNames(new Set(named))
+    showToast(`Selected all ${named.length} named people for export`)
+  }
+
+  const deselectAllPeople = () => {
+    setSelectedPersonNames(new Set())
+    showToast('Deselected all people. All photos will export under Year/Month folders.')
+  }
+
+  const togglePlaceSelection = (loc: string) => {
+    const trimmed = loc.trim()
+    if (!trimmed) return
+    setSelectedPlaces(prev => {
+      const next = new Set(prev)
+      if (next.has(trimmed)) {
+        next.delete(trimmed)
+      } else {
+        next.add(trimmed)
+      }
+      return next
+    })
+  }
+
+  const selectAllPlaces = () => {
+    const all = reviewPlaceGroups.map(g => g.location)
+    setSelectedPlaces(new Set(all))
+    showToast(`Selected all ${all.length} destinations for Places export`)
+  }
+
+  const deselectAllPlaces = () => {
+    setSelectedPlaces(new Set())
+    showToast('Deselected all places. All photos will export under Year/Month folders.')
+  }
+
   const handleSavePersonName = async (personId: number, newName: string) => {
     const trimmed = newName.trim()
     if (!trimmed) return
@@ -273,9 +352,11 @@ export default function FolderExportModal({
       if (window.photoVault?.updatePersonName) {
         await window.photoVault.updatePersonName(personId, trimmed)
         setPeopleProfiles(prev => prev.map(p => p.id === personId ? { ...p, name: trimmed } : p))
+        // Automatically add newly named person to selected export list
+        setSelectedPersonNames(prev => new Set(prev).add(trimmed))
         setEditingPersonId(null)
         setEditingPersonName('')
-        showToast(`Saved name as "${trimmed}"`)
+        showToast(`Saved name as "${trimmed}" and included in People export`)
         refreshCategoryStats()
       }
     } catch (err: any) {
@@ -285,14 +366,45 @@ export default function FolderExportModal({
 
   const toggleExcludePhoto = (category: string, photoId: number) => {
     setExcludedFromCategory(prev => {
-      const set = new Set(prev[category] || [])
-      if (set.has(photoId)) {
-        set.delete(photoId)
+      const catKey = (category === 'social' || category === 'socialMedia') ? 'socialMedia' : category
+      const current = prev[catKey] || new Set()
+      const next = new Set(current)
+      if (next.has(photoId)) {
+        next.delete(photoId)
       } else {
-        set.add(photoId)
+        next.add(photoId)
       }
-      return { ...prev, [category]: set }
+      const updated = { ...prev, [catKey]: next }
+      if (catKey === 'socialMedia') {
+        updated['social'] = next
+      }
+      return updated
     })
+  }
+
+  const selectAllCategoryPhotos = (category: string) => {
+    setExcludedFromCategory(prev => {
+      const catKey = (category === 'social' || category === 'socialMedia') ? 'socialMedia' : category
+      const updated = { ...prev, [catKey]: new Set<number>() }
+      if (catKey === 'socialMedia') {
+        updated['social'] = new Set<number>()
+      }
+      return updated
+    })
+    showToast(`Included all items in ${category} export`)
+  }
+
+  const deselectAllCategoryPhotos = (category: string, items: { id: number }[]) => {
+    setExcludedFromCategory(prev => {
+      const catKey = (category === 'social' || category === 'socialMedia') ? 'socialMedia' : category
+      const allIds = new Set<number>(items.map(i => i.id))
+      const updated = { ...prev, [catKey]: allIds }
+      if (catKey === 'socialMedia') {
+        updated['social'] = allIds
+      }
+      return updated
+    })
+    showToast(`Deselected all items. They will export as regular photos under Year/Month.`)
   }
 
   const confirmCategoryEligibility = (category: string) => {
@@ -326,6 +438,8 @@ export default function FolderExportModal({
       setShowNonMediaList(false)
       setPostExportAudit(null)
       setIsAuditingPostExport(false)
+      setHasInitializedPlacesSelection(false)
+      setHasInitializedPeopleSelection(false)
       refreshCategoryStats()
       loadPeopleProfiles()
     }
@@ -565,7 +679,8 @@ export default function FolderExportModal({
           separateDocuments,
           separateWhatsapp,
           separateFavorites,
-          separateVideos,
+          separateVideos: !keepVideosWithPhotos && separateVideos,
+          keepVideosWithPhotos: keepVideosWithPhotos || !separateVideos,
           separateDuplicates,
           separateScreenshots,
           separateSocialMedia,
@@ -573,7 +688,9 @@ export default function FolderExportModal({
           folderPathFilter: specificFolderFilter,
           categoryEligibility,
           onlyNamedPeople,
-          excludedPhotoIdsByCategory
+          excludedPhotoIdsByCategory,
+          selectedPersonNames: Array.from(selectedPersonNames),
+          selectedPlaces: Array.from(selectedPlaces)
         }
         const report = await window.photoVault.validateOrganizationPlan(opts)
         setValidationReport(report)
@@ -641,7 +758,7 @@ export default function FolderExportModal({
       case 'documents':
         return all.filter(p => p.is_document === 1 || (p.document_category && p.document_category !== 'not_a_document'))
       case 'places':
-        return all.filter(p => p.location_name && p.location_name.trim().length > 0)
+        return all.filter(p => (p.gps_lat !== undefined && p.gps_lat !== null && typeof p.gps_lat === 'number' && !isNaN(p.gps_lat)) && p.location_name && p.location_name.trim().length > 0)
       case 'whatsapp':
         return all.filter(p => {
           const junk = detectJunk(p)
@@ -659,16 +776,19 @@ export default function FolderExportModal({
         return all.filter(p => p.is_favorite === 1)
       case 'videos':
         return all.filter(p => isVideoFile(p.file_path) || (p.mime_type && p.mime_type.startsWith('video')))
+      case 'duplicates':
+        return all.filter(p => duplicatePhotoIds.has(p.id))
       default:
         return []
     }
-  }, [reviewingCategory, photoState.photos])
+  }, [reviewingCategory, photoState.photos, duplicatePhotoIds])
 
   const reviewPlaceGroups = useMemo(() => {
     if (reviewingCategory !== 'places') return []
     const map = new Map<string, { location: string; count: number; samplePhoto: Photo }>()
     for (const p of photoState.photos) {
-      if (p.location_name && p.location_name.trim()) {
+      const hasGps = p.gps_lat !== undefined && p.gps_lat !== null && typeof p.gps_lat === 'number' && !isNaN(p.gps_lat)
+      if (hasGps && p.location_name && p.location_name.trim()) {
         const loc = p.location_name.trim()
         if (!map.has(loc)) {
           map.set(loc, { location: loc, count: 0, samplePhoto: p })
@@ -678,6 +798,14 @@ export default function FolderExportModal({
     }
     return Array.from(map.values()).sort((a, b) => b.count - a.count)
   }, [reviewingCategory, photoState.photos])
+
+  // Auto-initialize selectedPlaces with all detected places when loaded
+  useEffect(() => {
+    if (reviewPlaceGroups.length > 0 && !hasInitializedPlacesSelection) {
+      setSelectedPlaces(new Set(reviewPlaceGroups.map(g => g.location)))
+      setHasInitializedPlacesSelection(true)
+    }
+  }, [reviewPlaceGroups, hasInitializedPlacesSelection])
 
   const proceedWithPreview = async (customEligibility?: Record<string, boolean>) => {
     if (!destinationDir && mode === 'copy') {
@@ -704,7 +832,8 @@ export default function FolderExportModal({
           separateDocuments,
           separateWhatsapp,
           separateFavorites,
-          separateVideos,
+          separateVideos: !keepVideosWithPhotos && separateVideos,
+          keepVideosWithPhotos: keepVideosWithPhotos || !separateVideos,
           separateDuplicates,
           separateScreenshots,
           separateSocialMedia,
@@ -712,7 +841,9 @@ export default function FolderExportModal({
           folderPathFilter: specificFolderFilter,
           categoryEligibility: effectiveEligibility,
           onlyNamedPeople,
-          excludedPhotoIdsByCategory
+          excludedPhotoIdsByCategory,
+          selectedPersonNames: Array.from(selectedPersonNames),
+          selectedPlaces: Array.from(selectedPlaces)
         }
         const plan = await window.photoVault.previewOrganizationPlan(payload)
         setPreviewPlan(plan)
@@ -745,7 +876,7 @@ export default function FolderExportModal({
     if (separateDocuments && !categoryEligibility.documents) unconfirmedList.push({ id: 'documents', name: 'Documents' })
     if (separateWhatsapp && !categoryEligibility.whatsapp) unconfirmedList.push({ id: 'whatsapp', name: 'WhatsApp' })
     if (separateFavorites && !categoryEligibility.favorites) unconfirmedList.push({ id: 'favorites', name: 'Favorites' })
-    if (separateVideos && !categoryEligibility.videos) unconfirmedList.push({ id: 'videos', name: 'Videos' })
+    if (!keepVideosWithPhotos && separateVideos && !categoryEligibility.videos) unconfirmedList.push({ id: 'videos', name: 'Videos' })
     if (separateDuplicates && !categoryEligibility.duplicates) unconfirmedList.push({ id: 'duplicates', name: 'Duplicates' })
     if (separateScreenshots && !categoryEligibility.screenshots) unconfirmedList.push({ id: 'screenshots', name: 'Screenshots' })
     if (separateSocialMedia && !(categoryEligibility.socialMedia ?? categoryEligibility.social)) unconfirmedList.push({ id: 'social', name: 'Social Media' })
@@ -798,7 +929,8 @@ export default function FolderExportModal({
           separateDocuments,
           separateWhatsapp,
           separateFavorites,
-          separateVideos,
+          separateVideos: !keepVideosWithPhotos && separateVideos,
+          keepVideosWithPhotos: keepVideosWithPhotos || !separateVideos,
           separateDuplicates,
           separateScreenshots,
           separateSocialMedia,
@@ -806,7 +938,9 @@ export default function FolderExportModal({
           folderPathFilter: specificFolderFilter,
           categoryEligibility,
           onlyNamedPeople,
-          excludedPhotoIdsByCategory
+          excludedPhotoIdsByCategory,
+          selectedPersonNames: Array.from(selectedPersonNames),
+          selectedPlaces: Array.from(selectedPlaces)
         })
         setResult(res)
         setStep(4)
@@ -847,7 +981,7 @@ export default function FolderExportModal({
       toggle: () => setSeparatePlaces(prev => !prev),
       icon: <MapPin size={20} color="#0ea5e9" />,
       title: 'Places',
-      desc: 'Sort photos by city or trip name (e.g. Hampi, Delhi, Goa)',
+      desc: 'Sort photos with verified camera EXIF GPS into city destination folders',
       count: categoryCounts.places,
       countLabel: isScanningPlaces && scanProgressPlaces
         ? `Scanning (${scanProgressPlaces.scanned}/${scanProgressPlaces.total})`
@@ -906,14 +1040,26 @@ export default function FolderExportModal({
     },
     {
       id: 'videos',
-      checked: separateVideos,
+      checked: !keepVideosWithPhotos && separateVideos,
       isEligible: categoryEligibility.videos === true,
-      toggle: () => setSeparateVideos(prev => !prev),
+      toggle: () => {
+        if (keepVideosWithPhotos) {
+          setKeepVideosWithPhotos(false)
+          setSeparateVideos(true)
+        } else {
+          setKeepVideosWithPhotos(true)
+          setSeparateVideos(false)
+        }
+      },
       icon: <Film size={20} color="#8b5cf6" />,
-      title: 'Videos',
-      desc: 'Keep home videos, movies, and clips together',
+      title: keepVideosWithPhotos ? 'Photos & Videos (Together)' : 'Videos (Separate Folder)',
+      desc: keepVideosWithPhotos
+        ? 'Keep videos and photos together in the same date & trip folders'
+        : 'Extract all videos into a dedicated Videos folder',
       count: categoryCounts.videos,
-      countLabel: `${categoryCounts.videos} videos`,
+      countLabel: keepVideosWithPhotos
+        ? `${categoryCounts.videos} videos stay with photos`
+        : `${categoryCounts.videos} videos`,
       needsScan: false
     },
     {
@@ -1235,6 +1381,7 @@ export default function FolderExportModal({
                         setSeparateWhatsapp(true)
                         setSeparateFavorites(true)
                         setSeparateVideos(true)
+                        setKeepVideosWithPhotos(false)
                         setSeparateDuplicates(true)
                         setSeparateScreenshots(true)
                         setSeparateSocialMedia(true)
@@ -1261,6 +1408,7 @@ export default function FolderExportModal({
                         setSeparateWhatsapp(false)
                         setSeparateFavorites(false)
                         setSeparateVideos(false)
+                        setKeepVideosWithPhotos(true)
                         setSeparateDuplicates(false)
                         setSeparateScreenshots(false)
                         setSeparateSocialMedia(false)
@@ -1340,6 +1488,75 @@ export default function FolderExportModal({
                           <p style={{ margin: 0, fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: '1.3' }}>
                             {card.desc}
                           </p>
+
+                          {card.id === 'videos' && (
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                background: 'rgba(0, 0, 0, 0.45)',
+                                borderRadius: '8px',
+                                padding: '2px',
+                                marginTop: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                gap: '2px'
+                              }}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setKeepVideosWithPhotos(true)
+                                  setSeparateVideos(false)
+                                }}
+                                style={{
+                                  flex: 1,
+                                  padding: '4px 6px',
+                                  borderRadius: '6px',
+                                  fontSize: '10.5px',
+                                  fontWeight: keepVideosWithPhotos ? 700 : 500,
+                                  background: keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.35)' : 'transparent',
+                                  border: keepVideosWithPhotos ? '1px solid #8b5cf6' : '1px solid transparent',
+                                  color: keepVideosWithPhotos ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '4px'
+                                }}
+                                title="Keep videos and photos together in the same date/trip folders"
+                              >
+                                📸 Stay Together
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setKeepVideosWithPhotos(false)
+                                  setSeparateVideos(true)
+                                }}
+                                style={{
+                                  flex: 1,
+                                  padding: '4px 6px',
+                                  borderRadius: '6px',
+                                  fontSize: '10.5px',
+                                  fontWeight: !keepVideosWithPhotos ? 700 : 500,
+                                  background: !keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.35)' : 'transparent',
+                                  border: !keepVideosWithPhotos ? '1px solid #8b5cf6' : '1px solid transparent',
+                                  color: !keepVideosWithPhotos ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '4px'
+                                }}
+                                title="Organize videos into a dedicated Videos folder"
+                              >
+                                🎞️ Separate Folder
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Status, Eligibility & Action Row */}
@@ -2695,7 +2912,12 @@ export default function FolderExportModal({
                       <strong>Review WhatsApp media.</strong> Confirming eligibility permits WhatsApp forwarded clips and photos to be segregated away from your original camera pictures.
                     </>
                   )}
-                  {['social', 'socialMedia', 'screenshots', 'favorites', 'videos'].includes(reviewingCategory) && (
+                  {reviewingCategory === 'videos' && (
+                    <>
+                      <strong>Video & Photo Placement Choice:</strong> Choose whether videos should stay together in the same date/trip folders with photos, or be organized into a separate dedicated "Videos" folder.
+                    </>
+                  )}
+                  {['social', 'socialMedia', 'screenshots', 'favorites'].includes(reviewingCategory) && (
                     <>
                       <strong>Review detected items in this category.</strong> Confirm eligibility to create segregated folders for these files during export.
                     </>
@@ -2717,7 +2939,7 @@ export default function FolderExportModal({
                 {/* ── PEOPLE REVIEW ── */}
                 {reviewingCategory === 'people' && (
                   <div>
-                    {/* Controls Bar */}
+                    {/* Master Controls & Selection Action Bar */}
                     <div
                       style={{
                         display: 'flex',
@@ -2744,8 +2966,49 @@ export default function FolderExportModal({
                         </span>
                       </label>
 
-                      <span style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.6)' }}>
-                        <strong style={{ color: '#38bdf8' }}>{namedPeopleCount}</strong> named • <strong style={{ color: '#fbbf24' }}>{unnamedPeopleCount}</strong> unnamed
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={selectAllNamedPeople}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            background: 'rgba(14, 165, 233, 0.15)',
+                            border: '1px solid rgba(14, 165, 233, 0.3)',
+                            color: '#38bdf8',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Check size={12} strokeWidth={2.5} /> Select All Named ({namedPeopleCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={deselectAllPeople}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            color: 'rgba(255, 255, 255, 0.75)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Deselect All (Export all under Year/Month)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Notice bar */}
+                    <div style={{ marginBottom: '14px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
+                      <span>
+                        Exporting <strong style={{ color: '#38bdf8' }}>{selectedPersonNames.size}</strong> of <strong style={{ color: '#ffffff' }}>{namedPeopleCount}</strong> people to dedicated folders. Unselected & unnamed people's photos will export as normal photos under Year/Month.
                       </span>
                     </div>
 
@@ -2768,12 +3031,13 @@ export default function FolderExportModal({
                       <div
                         style={{
                           display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
                           gap: '12px'
                         }}
                       >
                         {peopleProfiles.map(person => {
                           const isUnknown = !person.name || person.name.trim().toLowerCase() === 'unknown person'
+                          const isSelected = !isUnknown && selectedPersonNames.has(person.name.trim())
                           const isEditing = editingPersonId === person.id
                           const faceSrc = person.cover_face_base64
                             ? person.cover_face_base64
@@ -2784,26 +3048,68 @@ export default function FolderExportModal({
                           return (
                             <div
                               key={person.id}
+                              onClick={() => {
+                                if (!isEditing && !isUnknown) {
+                                  togglePersonSelection(person.name)
+                                }
+                              }}
                               style={{
                                 padding: '12px 14px',
                                 borderRadius: '14px',
-                                background: isUnknown ? 'rgba(255, 255, 255, 0.02)' : 'rgba(14, 165, 233, 0.05)',
-                                border: isUnknown ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(14, 165, 233, 0.3)',
+                                background: isSelected ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                                border: isSelected ? '1.5px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.08)',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '12px'
+                                gap: '12px',
+                                cursor: isUnknown ? 'default' : 'pointer',
+                                transition: 'all 0.15s ease'
                               }}
                             >
+                              {/* Selection checkbox */}
+                              {!isUnknown ? (
+                                <div
+                                  style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    borderRadius: '6px',
+                                    border: isSelected ? '2px solid #0ea5e9' : '1.5px solid rgba(255, 255, 255, 0.3)',
+                                    background: isSelected ? '#0ea5e9' : 'transparent',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {isSelected && <Check size={14} color="#ffffff" strokeWidth={3} />}
+                                </div>
+                              ) : (
+                                <div
+                                  style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    borderRadius: '6px',
+                                    border: '1.5px dashed rgba(255, 255, 255, 0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                  }}
+                                  title="Name this person to export as a personal folder"
+                                >
+                                  <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.3)' }}>—</span>
+                                </div>
+                              )}
+
                               {/* Avatar */}
                               <div
                                 style={{
-                                  width: '46px',
-                                  height: '46px',
+                                  width: '44px',
+                                  height: '44px',
                                   borderRadius: '50%',
                                   overflow: 'hidden',
                                   backgroundColor: '#27272a',
                                   flexShrink: 0,
-                                  border: isUnknown ? '1.5px solid rgba(255, 255, 255, 0.15)' : '2px solid #0ea5e9',
+                                  border: isSelected ? '2px solid #0ea5e9' : '1.5px solid rgba(255, 255, 255, 0.15)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center'
@@ -2815,7 +3121,6 @@ export default function FolderExportModal({
                                     alt={person.name}
                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                     onError={e => {
-                                      // Fallback on broken image
                                       (e.target as HTMLElement).style.display = 'none'
                                     }}
                                   />
@@ -2829,7 +3134,10 @@ export default function FolderExportModal({
                               {/* Info & Name Editor */}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 {isEditing ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  <div
+                                    style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
+                                    onClick={e => e.stopPropagation()}
+                                  >
                                     <input
                                       type="text"
                                       autoFocus
@@ -2902,7 +3210,8 @@ export default function FolderExportModal({
                                       </span>
                                       <button
                                         type="button"
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                          e.stopPropagation()
                                           setEditingPersonId(person.id)
                                           setEditingPersonName(isUnknown ? '' : person.name)
                                         }}
@@ -2925,10 +3234,20 @@ export default function FolderExportModal({
                                       <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
                                         {person.photo_count || 0} photos
                                       </span>
+                                    </div>
 
-                                      {isUnknown && (
-                                        <span style={{ fontSize: '9.5px', color: '#fbbf24', fontWeight: 600 }}>
-                                          {onlyNamedPeople ? 'Will skip folder' : 'Will save as Unknown'}
+                                    <div style={{ marginTop: '4px' }}>
+                                      {isUnknown ? (
+                                        <span style={{ fontSize: '10px', color: '#fbbf24', fontWeight: 600 }}>
+                                          📁 Route under Year/Month (Unnamed)
+                                        </span>
+                                      ) : isSelected ? (
+                                        <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 700 }}>
+                                          ✓ Export to People/{person.name}
+                                        </span>
+                                      ) : (
+                                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.45)', fontWeight: 500 }}>
+                                          📁 Route under Year/Month (Unselected)
                                         </span>
                                       )}
                                     </div>
@@ -2946,6 +3265,67 @@ export default function FolderExportModal({
                 {/* ── DOCUMENTS REVIEW ── */}
                 {reviewingCategory === 'documents' && (
                   <div>
+                    {/* Master Controls & Selection Action Bar */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        marginBottom: '16px',
+                        flexWrap: 'wrap',
+                        gap: '10px'
+                      }}
+                    >
+                      <div style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                        Select documents to export into <code>Documents</code> folders. Excluded items will export as normal photos under Year/Month.
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => selectAllCategoryPhotos('documents')}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            background: 'rgba(14, 165, 233, 0.15)',
+                            border: '1px solid rgba(14, 165, 233, 0.3)',
+                            color: '#38bdf8',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Check size={12} strokeWidth={2.5} /> Select All ({categoryReviewItems.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deselectAllCategoryPhotos('documents', categoryReviewItems)}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            color: 'rgba(255, 255, 255, 0.75)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Deselect All (Export all under Year/Month)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '14px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', padding: '0 4px' }}>
+                      Exporting <strong style={{ color: '#38bdf8' }}>{categoryReviewItems.length - (excludedFromCategory.documents?.size || 0)}</strong> of <strong style={{ color: '#ffffff' }}>{categoryReviewItems.length}</strong> documents. Excluded items will route safely into regular Year/Month date albums.
+                    </div>
+
                     {categoryReviewItems.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255, 255, 255, 0.5)' }}>
                         <FileText size={36} style={{ margin: '0 auto 10px auto', opacity: 0.4 }} />
@@ -2968,13 +3348,16 @@ export default function FolderExportModal({
                           return (
                             <div
                               key={doc.id}
+                              onClick={() => toggleExcludePhoto('documents', doc.id)}
                               style={{
                                 borderRadius: '12px',
-                                background: isExcluded ? 'rgba(239, 68, 68, 0.06)' : 'rgba(255, 255, 255, 0.03)',
-                                border: isExcluded ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(255, 255, 255, 0.08)',
+                                background: isExcluded ? 'rgba(255, 255, 255, 0.02)' : 'rgba(14, 165, 233, 0.08)',
+                                border: isExcluded ? '1px solid rgba(255, 255, 255, 0.08)' : '1.5px solid #0ea5e9',
                                 overflow: 'hidden',
                                 display: 'flex',
-                                flexDirection: 'column'
+                                flexDirection: 'column',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
                               }}
                             >
                               <div style={{ height: '110px', backgroundColor: '#09090b', position: 'relative' }}>
@@ -2989,6 +3372,23 @@ export default function FolderExportModal({
                                     <FileText size={28} color="rgba(255, 255, 255, 0.3)" />
                                   </div>
                                 )}
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    top: '6px',
+                                    right: '6px',
+                                    width: '18px',
+                                    height: '18px',
+                                    borderRadius: '5px',
+                                    background: isExcluded ? 'rgba(0,0,0,0.6)' : '#0ea5e9',
+                                    border: isExcluded ? '1.5px solid rgba(255,255,255,0.3)' : '1.5px solid #0ea5e9',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                >
+                                  {!isExcluded && <Check size={12} color="#ffffff" strokeWidth={3} />}
+                                </div>
                                 {doc.document_category && (
                                   <span
                                     style={{
@@ -3024,27 +3424,18 @@ export default function FolderExportModal({
                                   {doc.filename}
                                 </span>
 
-                                <button
-                                  type="button"
-                                  onClick={() => toggleExcludePhoto('documents', doc.id)}
-                                  style={{
-                                    marginTop: 'auto',
-                                    padding: '4px',
-                                    borderRadius: '6px',
-                                    fontSize: '10.5px',
-                                    fontWeight: 700,
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    background: isExcluded ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                                    color: isExcluded ? '#f87171' : 'rgba(255, 255, 255, 0.75)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '4px'
-                                  }}
-                                >
-                                  {isExcluded ? 'Excluded (Kept in Photos)' : 'Exclude from Docs'}
-                                </button>
+                                <div style={{ marginTop: 'auto' }}>
+                                  <span
+                                    style={{
+                                      fontSize: '10px',
+                                      fontWeight: 600,
+                                      color: isExcluded ? '#fbbf24' : '#38bdf8',
+                                      display: 'block'
+                                    }}
+                                  >
+                                    {isExcluded ? '📁 Route under Year/Month' : '✓ Export to Documents'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           )
@@ -3057,6 +3448,67 @@ export default function FolderExportModal({
                 {/* ── PLACES REVIEW ── */}
                 {reviewingCategory === 'places' && (
                   <div>
+                    {/* Master Controls & Selection Action Bar */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        marginBottom: '16px',
+                        flexWrap: 'wrap',
+                        gap: '10px'
+                      }}
+                    >
+                      <div style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                        Select which destinations to export into dedicated <code>Places/{'{City}'}</code> folders. Unselected places will export as normal photos under Year/Month.
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={selectAllPlaces}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            background: 'rgba(14, 165, 233, 0.15)',
+                            border: '1px solid rgba(14, 165, 233, 0.3)',
+                            color: '#38bdf8',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Check size={12} strokeWidth={2.5} /> Select All ({reviewPlaceGroups.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={deselectAllPlaces}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            color: 'rgba(255, 255, 255, 0.75)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Deselect All (Export all under Year/Month)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '14px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', padding: '0 4px' }}>
+                      Exporting <strong style={{ color: '#38bdf8' }}>{selectedPlaces.size}</strong> of <strong style={{ color: '#ffffff' }}>{reviewPlaceGroups.length}</strong> destinations. Only photos with verified camera EXIF GPS coordinates are eligible for Places folders.
+                    </div>
+
                     {reviewPlaceGroups.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255, 255, 255, 0.5)' }}>
                         <MapPin size={36} style={{ margin: '0 auto 10px auto', opacity: 0.4 }} />
@@ -3071,26 +3523,46 @@ export default function FolderExportModal({
                       <div
                         style={{
                           display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
                           gap: '12px'
                         }}
                       >
                         {reviewPlaceGroups.map(group => {
+                          const isSelected = selectedPlaces.has(group.location)
                           const thumbUrl = getThumbnailUrl(group.samplePhoto.thumbnail_path, group.samplePhoto.file_path)
 
                           return (
                             <div
                               key={group.location}
+                              onClick={() => togglePlaceSelection(group.location)}
                               style={{
                                 padding: '12px 14px',
                                 borderRadius: '14px',
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                background: isSelected ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                                border: isSelected ? '1.5px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.08)',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '12px'
+                                gap: '12px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
                               }}
                             >
+                              <div
+                                style={{
+                                  width: '20px',
+                                  height: '20px',
+                                  borderRadius: '6px',
+                                  border: isSelected ? '2px solid #0ea5e9' : '1.5px solid rgba(255, 255, 255, 0.3)',
+                                  background: isSelected ? '#0ea5e9' : 'transparent',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}
+                              >
+                                {isSelected && <Check size={14} color="#ffffff" strokeWidth={3} />}
+                              </div>
+
                               <div
                                 style={{
                                   width: '44px',
@@ -3124,9 +3596,22 @@ export default function FolderExportModal({
                                 >
                                   {group.location}
                                 </h4>
-                                <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                                  {group.count} photos
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '3px' }}>
+                                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                    {group.count} photos
+                                  </span>
+                                </div>
+                                <div style={{ marginTop: '3px' }}>
+                                  {isSelected ? (
+                                    <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 700 }}>
+                                      ✓ Export to Places
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.45)', fontWeight: 500 }}>
+                                      📁 Route to Year/Month
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           )
@@ -3139,6 +3624,164 @@ export default function FolderExportModal({
                 {/* ── OTHER CATEGORIES (WhatsApp, Social, Duplicates, Screenshots, Favs, Videos) ── */}
                 {!['people', 'documents', 'places'].includes(reviewingCategory) && (
                   <div>
+                    {/* Videos Placement Choice Selector */}
+                    {reviewingCategory === 'videos' && (
+                      <div
+                        style={{
+                          padding: '16px 18px',
+                          borderRadius: '16px',
+                          background: 'rgba(139, 92, 246, 0.08)',
+                          border: '1.5px solid rgba(139, 92, 246, 0.25)',
+                          marginBottom: '16px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '12px'
+                        }}
+                      >
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: '#ffffff' }}>
+                            Where should your videos and photos be organized?
+                          </h4>
+                          <p style={{ margin: '3px 0 0 0', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.65)' }}>
+                            Choose whether videos stay together in the same date/trip folders with your photos, or are moved into a separate dedicated folder.
+                          </p>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                          <div
+                            onClick={() => {
+                              setKeepVideosWithPhotos(true)
+                              setSeparateVideos(false)
+                            }}
+                            style={{
+                              padding: '12px 14px',
+                              borderRadius: '12px',
+                              border: keepVideosWithPhotos ? '2px solid #8b5cf6' : '1px solid rgba(255, 255, 255, 0.1)',
+                              background: keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.18)' : 'rgba(255, 255, 255, 0.03)',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '16px' }}>📸</span>
+                                <strong style={{ fontSize: '12.5px', color: '#ffffff' }}>
+                                  Stay Together (Same Folder)
+                                </strong>
+                              </div>
+                              {keepVideosWithPhotos && <CheckCircle2 size={15} color="#a78bfa" strokeWidth={2.5} />}
+                            </div>
+                            <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: '1.3' }}>
+                              Videos & photos stay together in <code>Photos & Videos / Year / Month</code> and trip folders.
+                            </span>
+                          </div>
+
+                          <div
+                            onClick={() => {
+                              setKeepVideosWithPhotos(false)
+                              setSeparateVideos(true)
+                            }}
+                            style={{
+                              padding: '12px 14px',
+                              borderRadius: '12px',
+                              border: !keepVideosWithPhotos ? '2px solid #8b5cf6' : '1px solid rgba(255, 255, 255, 0.1)',
+                              background: !keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.18)' : 'rgba(255, 255, 255, 0.03)',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '16px' }}>🎞️</span>
+                                <strong style={{ fontSize: '12.5px', color: '#ffffff' }}>
+                                  Separate "Videos" Folder
+                                </strong>
+                              </div>
+                              {!keepVideosWithPhotos && <CheckCircle2 size={15} color="#a78bfa" strokeWidth={2.5} />}
+                            </div>
+                            <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: '1.3' }}>
+                              All videos are extracted into a dedicated <code>Videos / Year</code> folder.
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {/* Master Controls & Selection Action Bar for Other Categories */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        marginBottom: '16px',
+                        flexWrap: 'wrap',
+                        gap: '10px'
+                      }}
+                    >
+                      <div style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                        Select which {title} items to export into dedicated folders. Excluded items will export as regular photos under Year/Month.
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => selectAllCategoryPhotos(reviewingCategory)}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            background: 'rgba(14, 165, 233, 0.15)',
+                            border: '1px solid rgba(14, 165, 233, 0.3)',
+                            color: '#38bdf8',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Check size={12} strokeWidth={2.5} /> Select All ({categoryReviewItems.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deselectAllCategoryPhotos(reviewingCategory, categoryReviewItems)}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            color: 'rgba(255, 255, 255, 0.75)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Deselect All (Export all under Year/Month)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '14px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', padding: '0 4px' }}>
+                      {(() => {
+                        const catKey = (reviewingCategory === 'social' || reviewingCategory === 'socialMedia') ? 'socialMedia' : reviewingCategory
+                        const exCount = excludedFromCategory[catKey]?.size || 0
+                        const incCount = Math.max(0, categoryReviewItems.length - exCount)
+                        return (
+                          <span>
+                            Exporting <strong style={{ color: '#38bdf8' }}>{incCount}</strong> of <strong style={{ color: '#ffffff' }}>{categoryReviewItems.length}</strong> items to {title} folders. Excluded items route safely into regular Year/Month date albums.
+                          </span>
+                        )
+                      })()}
+                    </div>
+
                     {categoryReviewItems.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255, 255, 255, 0.5)' }}>
                         <p style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)' }}>
@@ -3147,44 +3790,68 @@ export default function FolderExportModal({
                       </div>
                     ) : (
                       <div>
-                        <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '14px' }}>
-                          Found <strong>{categoryReviewItems.length}</strong> matching photos/files for <strong>{title}</strong>. Showing sample items:
-                        </p>
                         <div
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
                             gap: '10px'
                           }}
                         >
-                          {categoryReviewItems.slice(0, 48).map(item => {
+                          {categoryReviewItems.slice(0, 100).map(item => {
+                            const catKey = (reviewingCategory === 'social' || reviewingCategory === 'socialMedia') ? 'socialMedia' : reviewingCategory
+                            const isExcluded = excludedFromCategory[catKey]?.has(item.id) || (catKey === 'socialMedia' && excludedFromCategory['social']?.has(item.id))
                             const thumbUrl = getThumbnailUrl(item.thumbnail_path, item.file_path)
+
                             return (
                               <div
                                 key={item.id}
+                                onClick={() => toggleExcludePhoto(reviewingCategory, item.id)}
                                 style={{
-                                  borderRadius: '10px',
+                                  borderRadius: '12px',
                                   overflow: 'hidden',
-                                  background: 'rgba(255, 255, 255, 0.03)',
-                                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                                  background: isExcluded ? 'rgba(255, 255, 255, 0.02)' : 'rgba(14, 165, 233, 0.08)',
+                                  border: isExcluded ? '1px solid rgba(255, 255, 255, 0.08)' : '1.5px solid #0ea5e9',
                                   display: 'flex',
-                                  flexDirection: 'column'
+                                  flexDirection: 'column',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
                                 }}
                               >
-                                <div style={{ height: '90px', backgroundColor: '#09090b' }}>
-                                  {thumbUrl && (
+                                <div style={{ height: '95px', backgroundColor: '#09090b', position: 'relative' }}>
+                                  {thumbUrl ? (
                                     <img
                                       src={thumbUrl}
                                       alt={item.filename}
                                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                     />
+                                  ) : (
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Film size={24} color="rgba(255, 255, 255, 0.3)" />
+                                    </div>
                                   )}
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: '6px',
+                                      right: '6px',
+                                      width: '18px',
+                                      height: '18px',
+                                      borderRadius: '5px',
+                                      background: isExcluded ? 'rgba(0,0,0,0.6)' : '#0ea5e9',
+                                      border: isExcluded ? '1.5px solid rgba(255,255,255,0.3)' : '1.5px solid #0ea5e9',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}
+                                  >
+                                    {!isExcluded && <Check size={12} color="#ffffff" strokeWidth={3} />}
+                                  </div>
                                 </div>
-                                <div style={{ padding: '6px 8px' }}>
+                                <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                   <span
                                     style={{
                                       fontSize: '10.5px',
-                                      color: 'rgba(255, 255, 255, 0.8)',
+                                      color: '#ffffff',
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
@@ -3193,6 +3860,9 @@ export default function FolderExportModal({
                                     title={item.filename}
                                   >
                                     {item.filename}
+                                  </span>
+                                  <span style={{ fontSize: '9.5px', color: isExcluded ? '#fbbf24' : '#38bdf8', fontWeight: 600 }}>
+                                    {isExcluded ? '📁 Route under Year/Month' : `✓ In ${title}`}
                                   </span>
                                 </div>
                               </div>
@@ -3265,7 +3935,7 @@ export default function FolderExportModal({
           if (separateDocuments && !categoryEligibility.documents) unconfirmedList.push({ id: 'documents', name: 'Documents' })
           if (separateWhatsapp && !categoryEligibility.whatsapp) unconfirmedList.push({ id: 'whatsapp', name: 'WhatsApp' })
           if (separateFavorites && !categoryEligibility.favorites) unconfirmedList.push({ id: 'favorites', name: 'Favorites' })
-          if (separateVideos && !categoryEligibility.videos) unconfirmedList.push({ id: 'videos', name: 'Videos' })
+          if (!keepVideosWithPhotos && separateVideos && !categoryEligibility.videos) unconfirmedList.push({ id: 'videos', name: 'Videos' })
           if (separateDuplicates && !categoryEligibility.duplicates) unconfirmedList.push({ id: 'duplicates', name: 'Duplicates' })
           if (separateScreenshots && !categoryEligibility.screenshots) unconfirmedList.push({ id: 'screenshots', name: 'Screenshots' })
           if (separateSocialMedia && !(categoryEligibility.socialMedia ?? categoryEligibility.social)) unconfirmedList.push({ id: 'social', name: 'Social Media' })

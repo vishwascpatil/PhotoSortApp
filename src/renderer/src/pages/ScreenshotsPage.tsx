@@ -113,93 +113,52 @@ export default function ScreenshotsPage() {
     <div className="photos-page" style={{ padding: '24px 32px' }}>
       {photoState.isSelecting && <SelectionBar />}
 
-      {/* Header */}
+      {/* Action Header */}
       <div
         className="page-header"
         style={{
-          marginBottom: '20px',
+          marginBottom: '16px',
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '16px'
+          gap: '12px'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div
-            style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 4px 14px rgba(14, 165, 233, 0.25)'
-            }}
-          >
-            <Monitor size={24} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h1 style={{ fontSize: '26px', fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)' }}>
-                Screenshots
-              </h1>
-              {totalCount > 0 && (
-                <span
-                  style={{
-                    background: 'rgba(14, 165, 233, 0.12)',
-                    color: '#0284c7',
-                    fontWeight: 700,
-                    fontSize: '12px',
-                    padding: '3px 10px',
-                    borderRadius: '20px',
-                    letterSpacing: '0.02em'
-                  }}
-                >
-                  {totalCount} items • {formatFileSize(totalBytes)}
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary, #64748b)', margin: '4px 0 0 0' }}>
-              Auto-detected screenshots, snips, and screen recordings across your library.
-            </p>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {totalCount > 0 && (
+            <span className="apple-storage-pill">
+              {totalCount} items • {formatFileSize(totalBytes)}
+            </span>
+          )}
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
           <button
             type="button"
-            className="btn btn-ghost"
+            className="apple-secondary-btn"
             onClick={handleRefresh}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
           >
-            <RefreshCw size={15} /> Refresh
+            <RefreshCw size={14} />
+            <span>Refresh</span>
           </button>
 
           {filteredScreenshots.length > 0 && (
             <button
               type="button"
-              className="btn btn-danger"
+              className="apple-secondary-btn"
               onClick={handleTrashAllScreenshots}
               disabled={isCleaning}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '13px',
-                background: 'rgba(239, 68, 68, 0.1)',
+                background: 'rgba(239, 68, 68, 0.12)',
                 color: '#ef4444',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                padding: '7px 14px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 600
+                borderColor: 'rgba(239, 68, 68, 0.25)',
+                gap: '6px'
               }}
             >
-              <Trash2 size={15} /> Move All to Trash
+              <Trash2 size={14} />
+              <span>Move All to Trash</span>
             </button>
           )}
         </div>
@@ -213,65 +172,102 @@ export default function ScreenshotsPage() {
             gap: '8px',
             marginBottom: '20px',
             borderBottom: '1px solid var(--border)',
-            paddingBottom: '12px'
+            paddingBottom: '12px',
+            flexWrap: 'wrap'
           }}
         >
-          <button
-            type="button"
-            className={`btn ${activeCategory === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setActiveCategory('all')}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
-          >
-            <Monitor size={15} /> All Screenshots ({totalCount})
-          </button>
-
-          <button
-            type="button"
-            className={`btn ${activeCategory === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setActiveCategory('mobile')}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
-          >
-            <Smartphone size={15} /> Mobile & Tablets ({mobileCount})
-          </button>
-
-          <button
-            type="button"
-            className={`btn ${activeCategory === 'desktop' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setActiveCategory('desktop')}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
-          >
-            <Laptop size={15} /> Desktop & Snips ({desktopCount})
-          </button>
-
-          {videoCount > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeCategory === 'video' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveCategory('video')}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
-            >
-              <Film size={15} /> Screen Recordings ({videoCount})
-            </button>
-          )}
+          {[
+            { id: 'all', label: `All Screenshots (${totalCount})`, icon: <Monitor size={14} /> },
+            { id: 'mobile', label: `Mobile & Tablets (${mobileCount})`, icon: <Smartphone size={14} /> },
+            { id: 'desktop', label: `Desktop & Snips (${desktopCount})`, icon: <Laptop size={14} /> },
+            ...(videoCount > 0 ? [{ id: 'video', label: `Screen Recordings (${videoCount})`, icon: <Film size={14} /> }] : [])
+          ].map(tab => {
+            const isActive = activeCategory === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveCategory(tab.id as any)}
+                style={{
+                  fontSize: '12px',
+                  padding: '5px 14px',
+                  borderRadius: '99px',
+                  fontWeight: isActive ? 600 : 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  border: isActive ? '1px solid transparent' : '1px solid var(--border)',
+                  background: isActive ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' : 'var(--bg-secondary)',
+                  color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                  boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none'
+                }}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
         </div>
       )}
 
       {/* Main Content */}
       {totalCount === 0 ? (
         <EmptyState
-          icon={<Monitor size={48} />}
-          title="No Screenshots Detected"
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="scrIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <Monitor
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#scrIconGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              No <span className="title-sort-gradient">Screenshots</span> Detected
+            </>
+          }
           description="Your library has no screenshot or screen capture images. Standard photos and imported pictures are sorted in All Photos."
-          actionLabel="Refresh Library"
-          onAction={handleRefresh}
         />
       ) : filteredScreenshots.length === 0 ? (
         <EmptyState
-          icon={<CheckCircle2 size={48} />}
-          title={`No ${activeCategory === 'mobile' ? 'Mobile' : activeCategory === 'desktop' ? 'Desktop' : 'Video'} Screenshots`}
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="scrCatIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <CheckCircle2
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#scrCatIconGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              No <span className="title-sort-gradient">{activeCategory === 'mobile' ? 'Mobile' : activeCategory === 'desktop' ? 'Desktop' : 'Video'}</span> Screenshots
+            </>
+          }
           description="There are no screenshots matching this category."
-          actionLabel="View All Screenshots"
-          onAction={() => setActiveCategory('all')}
         />
       ) : (
         <PhotoGrid photos={filteredScreenshots} showDateHeaders={true} />

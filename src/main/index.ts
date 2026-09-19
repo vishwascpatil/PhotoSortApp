@@ -51,6 +51,14 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:state-changed', true)
+  })
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:state-changed', false)
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }

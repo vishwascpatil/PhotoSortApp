@@ -403,23 +403,24 @@ export default function DuplicatesPage() {
   }
 
   const handleOpenViewer = (photo: Photo, groupItems?: Photo[]) => {
-    const allVisiblePhotos = filteredGroups.flatMap(g => g.items)
+    const targetPhotos = (groupItems && groupItems.length > 0)
+      ? groupItems
+      : (filteredGroups.flatMap(g => g.items).length > 0 ? filteredGroups.flatMap(g => g.items) : [photo])
     photoDispatch({
       type: 'SET_VIEWER_SCOPED',
       payload: {
         photoId: photo.id,
-        photos: allVisiblePhotos.length > 0 ? allVisiblePhotos : (groupItems || [photo])
+        photos: targetPhotos
       }
     })
   }
 
   return (
     <div className="apple-duplicates-page">
-      {/* Ultra-Clean Header */}
-      <header className="apple-page-header">
-        <div className="apple-header-title-row">
-          <div className="apple-header-left">
-            <h1 className="apple-page-title">Duplicates</h1>
+      {/* Action Header */}
+      <header className="apple-page-header" style={{ marginBottom: '16px' }}>
+        <div className="apple-header-title-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <div className="apple-header-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {groups.length > 0 && (
               <span className="apple-storage-pill">
                 +{formatFileSize(totalStats.recoverableBytes)} Reclaimable
@@ -427,7 +428,7 @@ export default function DuplicatesPage() {
             )}
           </div>
 
-          <div className="apple-header-actions">
+          <div className="apple-header-actions" style={{ marginLeft: 'auto' }}>
             {/* Segmented Tab Filter with live counts */}
             {groups.length > 0 && (
               <div className="apple-segmented-bar">
@@ -478,19 +479,19 @@ export default function DuplicatesPage() {
 
             <button
               type="button"
-              className="apple-secondary-btn"
+              className={groups.length > 0 ? 'apple-secondary-btn' : 'apple-primary-btn'}
               onClick={handleStartScan}
               disabled={isScanning}
             >
               {isScanning ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  <span>Scanning</span>
+                  <span>Scanning Duplicates...</span>
                 </>
               ) : (
                 <>
-                  <Search size={14} />
-                  <span>Rescan</span>
+                  <Sparkles size={14} />
+                  <span>Scan Duplicates</span>
                 </>
               )}
             </button>
@@ -512,87 +513,48 @@ export default function DuplicatesPage() {
         </div>
       </header>
 
-      {/* ─── Live Progressive Scan Banner (0% to 100%) ─────────────────── */}
-      {isScanning && scanProgress && (
+      {/* ─── Live Scanner Progress Banner (People / Documents / Places Pattern) ── */}
+      {isScanning && (
         <div
           style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '14px 18px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
-            position: 'relative',
-            overflow: 'hidden',
-            animation: 'fadeIn 0.2s ease-out'
+            background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
+            borderRadius: '16px',
+            padding: '14px 20px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px'
           }}
         >
-          {/* Top Row: Status Label & Percentage */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {scanProgress.isComplete ? (
-                <CheckCircle2 size={18} color="#10b981" />
-              ) : (
-                <Loader2 size={18} className="animate-spin" color="var(--primary, #3b82f6)" />
-              )}
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                {scanProgress.isComplete
-                  ? `Scan Complete! Analyzed all ${scanProgress.total.toLocaleString()} items (${scanProgress.foundCount} duplicate groups found)`
-                  : `Analyzing library media for exact & perceptual duplicates...`}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                {scanProgress.completed.toLocaleString()} / {scanProgress.total.toLocaleString()}
-              </span>
-              <span
-                style={{
-                  background: scanProgress.isComplete ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  color: scanProgress.isComplete ? '#10b981' : 'var(--primary, #3b82f6)',
-                  fontWeight: 800,
-                  fontSize: '12px',
-                  padding: '2px 8px',
-                  borderRadius: '12px'
-                }}
-              >
-                {scanProgress.percent}%
-              </span>
-            </div>
-          </div>
-
-          {/* Subtext: Current File being analyzed */}
-          {!scanProgress.isComplete && scanProgress.currentFile && (
-            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Analyzing: {scanProgress.currentFile}
-            </div>
-          )}
-
-          {/* Progressive Bar Track */}
-          <div
-            style={{
-              width: '100%',
-              height: '6px',
-              borderRadius: '6px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              overflow: 'hidden',
-              position: 'relative'
-            }}
-          >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: `${scanProgress.percent}%`,
-                height: '100%',
-                borderRadius: '6px',
-                background: scanProgress.isComplete
-                  ? 'linear-gradient(90deg, #10b981, #059669)'
-                  : 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%)',
-                transition: 'width 0.08s ease-out',
-                boxShadow: scanProgress.isComplete
-                  ? '0 0 12px rgba(16, 185, 129, 0.5)'
-                  : '0 0 12px rgba(59, 130, 246, 0.5)'
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(99, 102, 241, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#6366f1'
               }}
-            />
+            >
+              <Loader2 size={18} className="animate-spin" />
+            </div>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Scanning photo library for duplicates...
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Scanned {scanProgress?.completed || 0} of {scanProgress?.total || (photoState.photos.length || 0)} photos (
+                {scanProgress && scanProgress.total > 0
+                  ? Math.round((scanProgress.completed / scanProgress.total) * 100)
+                  : 0}
+                %){scanProgress && scanProgress.foundCount > 0 ? ` • ${scanProgress.foundCount} duplicate groups found` : ''}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -603,13 +565,33 @@ export default function DuplicatesPage() {
           <Loader2 size={36} className="animate-spin" color="var(--primary, #3b82f6)" />
           <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>Analyzing duplicate media...</span>
         </div>
-      ) : filteredGroups.length === 0 && !isScanning ? (
+      ) : filteredGroups.length === 0 ? (
         <EmptyState
-          icon={<ShieldCheck size={48} />}
-          title="No Duplicates Found"
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="dupIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <ShieldCheck
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#dupIconGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              No <span className="title-sort-gradient">Duplicates</span> Found
+            </>
+          }
           description="Your library photos and videos are clean!"
-          actionLabel={isScanning ? "Scanning..." : "Rescan"}
-          onAction={handleStartScan}
         />
       ) : (
         <div className={`apple-duplicates-container density-${gridDensity}`}>

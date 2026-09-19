@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   HardDrive, Film, ImageIcon, Folder, CheckSquare,
-  Square, Trash2, RefreshCw, History, Play, Loader2, X,
-  Check, CheckCircle2, ArrowUpDown
+  Square, Trash2, Loader2, X, Check, CheckCircle2, Play
 } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
@@ -31,7 +30,6 @@ export default function LargeFilesPage() {
   // Controls
   const [minBytes, setMinBytes] = useState<number>(50 * 1024 * 1024)
   const [mediaType, setMediaType] = useState<'all' | 'video' | 'image'>('all')
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   // Relocation Modal & Progress
@@ -53,10 +51,6 @@ export default function LargeFilesPage() {
     totalBytesMoved: number
     errors: string[]
   } | null>(null)
-
-  // History Drawer
-  const [showHistoryModal, setShowHistoryModal] = useState(false)
-  const [manifests, setManifests] = useState<any[]>([])
   const [isUndoing, setIsUndoing] = useState(false)
 
   // Ensure library photos are loaded
@@ -96,14 +90,10 @@ export default function LargeFilesPage() {
     })
   }, [photoState.photos, minBytes, mediaType])
 
-  // Sorted candidates
+  // Sorted candidates (always largest first)
   const sortedFiles = useMemo(() => {
-    return [...largeFiles].sort((a, b) => {
-      const sizeA = a.file_size || 0
-      const sizeB = b.file_size || 0
-      return sortOrder === 'desc' ? sizeB - sizeA : sizeA - sizeB
-    })
-  }, [largeFiles, sortOrder])
+    return [...largeFiles].sort((a, b) => (b.file_size || 0) - (a.file_size || 0))
+  }, [largeFiles])
 
   // Aggregate stats
   const totalBytes = useMemo(() => {
@@ -138,7 +128,10 @@ export default function LargeFilesPage() {
   }
 
   const handleTileClick = (photo: Photo) => {
-    photoDispatch({ type: 'SET_VIEWER', payload: photo.id })
+    photoDispatch({
+      type: 'SET_VIEWER_SCOPED',
+      payload: { photoId: photo.id, photos: sortedFiles }
+    })
   }
 
   // Choose destination directory
@@ -224,21 +217,6 @@ export default function LargeFilesPage() {
     }
   }
 
-  // History & Undo
-  const loadManifests = async () => {
-    try {
-      if (window.photoVault?.getLargeFileManifests) {
-        const list = await window.photoVault.getLargeFileManifests()
-        setManifests(list || [])
-      }
-    } catch {}
-  }
-
-  const handleOpenHistory = async () => {
-    await loadManifests()
-    setShowHistoryModal(true)
-  }
-
   const handleUndoMove = async (manifestId: string) => {
     if (!confirm('Undo relocation and restore files to original paths?')) return
 
@@ -248,7 +226,6 @@ export default function LargeFilesPage() {
         const res = await window.photoVault.undoLargeFileMove(manifestId)
         if (res.success) {
           showToast(`Restored ${res.restoredCount} files to original paths`)
-          await loadManifests()
           refreshPhotos()
           if (moveSummary?.manifestId === manifestId) {
             setMoveSummary(null)
@@ -268,7 +245,7 @@ export default function LargeFilesPage() {
 
   return (
     <div className="photos-page" style={{ padding: '20px 28px' }}>
-      {/* ─── Sleek Minimal Header ─────────────────────────────────────────── */}
+      {/* ─── Action Header ─────────────────────────────────────────── */}
       <div
         style={{
           display: 'flex',
@@ -279,210 +256,162 @@ export default function LargeFilesPage() {
           gap: '12px'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 3px 10px rgba(245, 158, 11, 0.25)'
-            }}
-          >
-            <HardDrive size={20} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                Large Files
-              </h1>
-              {sortedFiles.length > 0 && (
-                <span
-                  style={{
-                    background: 'rgba(245, 158, 11, 0.12)',
-                    color: '#d97706',
-                    fontWeight: 700,
-                    fontSize: '12px',
-                    padding: '2px 8px',
-                    borderRadius: '12px'
-                  }}
-                >
-                  {sortedFiles.length} files • {formatFileSize(totalBytes)}
-                </span>
-              )}
-            </div>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {sortedFiles.length > 0 && (
+            <span className="apple-storage-pill">
+              {sortedFiles.length} files • {formatFileSize(totalBytes)}
+            </span>
+          )}
         </div>
 
         {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
           {selectedPhotos.length > 0 && (
             <>
               <button
                 type="button"
-                className="btn btn-danger"
+                className="apple-secondary-btn"
                 onClick={handleTrashSelected}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '12px',
-                  background: 'rgba(239, 68, 68, 0.1)',
+                  background: 'rgba(239, 68, 68, 0.12)',
                   color: '#ef4444',
-                  border: '1px solid rgba(239, 68, 68, 0.2)',
-                  padding: '6px 12px',
-                  borderRadius: '8px'
+                  borderColor: 'rgba(239, 68, 68, 0.25)',
+                  gap: '6px'
                 }}
               >
-                <Trash2 size={14} /> Trash ({selectedPhotos.length})
+                <Trash2 size={14} />
+                <span>Trash ({selectedPhotos.length})</span>
               </button>
 
               <button
                 type="button"
-                className="btn btn-primary"
+                className="apple-primary-btn"
                 onClick={() => setShowMoveModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  padding: '6px 14px',
-                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                }}
               >
-                <Folder size={14} /> Relocate ({formatFileSize(selectedBytes)})
+                <Folder size={14} />
+                <span>Relocate ({formatFileSize(selectedBytes)})</span>
               </button>
             </>
           )}
 
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={handleOpenHistory}
-            title="Relocation History & Undo"
-            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', padding: '6px 10px' }}
-          >
-            <History size={15} /> History
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => { refreshPhotos(); showToast('Refreshed!') }}
-            title="Rescan"
-            style={{ display: 'flex', alignItems: 'center', padding: '6px 10px' }}
-          >
-            <RefreshCw size={15} />
-          </button>
         </div>
       </div>
 
       {/* ─── Compact Visual Controls Bar ─────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '16px',
-          flexWrap: 'wrap',
-          gap: '10px',
-          paddingBottom: '12px',
-          borderBottom: '1px solid var(--border)'
-        }}
-      >
-        {/* Threshold Pills */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          {THRESHOLD_OPTIONS.map((opt) => {
-            const isActive = minBytes === opt.bytes
-            return (
-              <button
-                key={opt.label}
-                type="button"
-                className={`btn ${isActive ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setMinBytes(opt.bytes)}
-                style={{
-                  fontSize: '12px',
-                  padding: '4px 10px',
-                  borderRadius: '16px',
-                  fontWeight: isActive ? 700 : 500
-                }}
-              >
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Media Filters & Select All */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '8px' }}>
-            <button
-              type="button"
-              className={`btn ${mediaType === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setMediaType('all')}
-              style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`btn ${mediaType === 'video' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setMediaType('video')}
-              style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <Film size={12} /> Videos
-            </button>
-            <button
-              type="button"
-              className={`btn ${mediaType === 'image' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setMediaType('image')}
-              style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <ImageIcon size={12} /> Photos
-            </button>
+      {sortedFiles.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            flexWrap: 'wrap',
+            gap: '10px',
+            paddingBottom: '12px',
+            borderBottom: '1px solid var(--border)'
+          }}
+        >
+          {/* Threshold Pills */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {THRESHOLD_OPTIONS.map((opt) => {
+              const isActive = minBytes === opt.bytes
+              return (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setMinBytes(opt.bytes)}
+                  style={{
+                    fontSize: '12px',
+                    padding: '5px 12px',
+                    borderRadius: '99px',
+                    fontWeight: isActive ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    border: isActive ? '1px solid transparent' : '1px solid var(--border)',
+                    background: isActive ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' : 'var(--bg-secondary)',
+                    color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                    boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none'
+                  }}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
           </div>
 
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-            title="Sort by size"
-            style={{ fontSize: '11px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            <ArrowUpDown size={12} /> {sortOrder === 'desc' ? 'Largest First' : 'Smallest First'}
-          </button>
+          {/* Media Filters & Select All */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div className="apple-segmented-bar">
+              <button
+                type="button"
+                className={`apple-segment-btn ${mediaType === 'all' ? 'active' : ''}`}
+                onClick={() => setMediaType('all')}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`apple-segment-btn ${mediaType === 'video' ? 'active' : ''}`}
+                onClick={() => setMediaType('video')}
+              >
+                <Film size={12} /> Videos
+              </button>
+              <button
+                type="button"
+                className={`apple-segment-btn ${mediaType === 'image' ? 'active' : ''}`}
+                onClick={() => setMediaType('image')}
+              >
+                <ImageIcon size={12} /> Photos
+              </button>
+            </div>
 
-          {sortedFiles.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={handleSelectAll}
-              style={{ fontSize: '12px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              {selectedIds.size === sortedFiles.length ? (
-                <CheckSquare size={15} color="var(--primary)" />
-              ) : (
-                <Square size={15} />
-              )}
-              {selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}
-            </button>
-          )}
+            {sortedFiles.length > 0 && (
+              <button
+                type="button"
+                className="apple-secondary-btn"
+                onClick={handleSelectAll}
+                style={{ fontSize: '12px', padding: '5px 12px', gap: '6px' }}
+              >
+                {selectedIds.size === sortedFiles.length ? (
+                  <CheckSquare size={14} color="#6366f1" />
+                ) : (
+                  <Square size={14} />
+                )}
+                <span>{selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ─── Media-First Grid ─────────────────────────────────────────────── */}
       {sortedFiles.length === 0 ? (
         <EmptyState
-          icon={<HardDrive size={48} />}
-          title="No Large Files Found"
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="largeIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <HardDrive
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#largeIconGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              No <span className="title-sort-gradient">Large Files</span> Found
+            </>
+          }
           description={`No media files exceed ${formatFileSize(minBytes)}.`}
-          actionLabel="Lower Threshold to 25 MB"
-          onAction={() => setMinBytes(25 * 1024 * 1024)}
         />
       ) : (
         <div
@@ -803,114 +732,6 @@ export default function LargeFilesPage() {
         </div>
       )}
 
-      {/* ─── Relocation History Modal ─────────────────────────────────────── */}
-      {showHistoryModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.75)',
-            backdropFilter: 'blur(6px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '16px'
-          }}
-        >
-          <div
-            style={{
-              background: 'var(--bg-primary, #ffffff)',
-              border: '1px solid var(--border)',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '560px',
-              maxHeight: '75vh',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
-          >
-            <div
-              style={{
-                padding: '16px 20px',
-                borderBottom: '1px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <History size={18} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Relocation History
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowHistoryModal(false)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {manifests.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 16px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                  No relocation history yet.
-                </div>
-              ) : (
-                manifests.map((m) => (
-                  <div
-                    key={m.manifestId}
-                    style={{
-                      background: 'var(--bg-secondary)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '10px',
-                      padding: '12px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px'
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {m.totalFiles} files ({formatFileSize(m.totalBytes)})
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }}>
-                        To: {m.destinationDir}
-                      </div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                        {new Date(m.timestamp).toLocaleString()}
-                      </div>
-                    </div>
-
-                    <div>
-                      {m.isUndone ? (
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', background: 'rgba(100, 116, 139, 0.12)', padding: '3px 8px', borderRadius: '4px' }}>
-                          Restored
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => handleUndoMove(m.manifestId)}
-                          disabled={isUndoing}
-                          style={{ fontSize: '11px', padding: '4px 10px' }}
-                        >
-                          {isUndoing ? 'Undoing...' : 'Undo'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

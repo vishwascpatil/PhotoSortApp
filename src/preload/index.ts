@@ -304,6 +304,13 @@ const api = {
     ipcRenderer.invoke('window:close'),
   isWindowMaximized: (): Promise<boolean> =>
     ipcRenderer.invoke('window:is-maximized'),
+  onWindowStateChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, isMaximized: boolean): void => {
+      callback(isMaximized)
+    }
+    ipcRenderer.on('window:state-changed', handler)
+    return () => ipcRenderer.removeListener('window:state-changed', handler)
+  },
 
   // Event listeners
   onImportStatus: (callback: (status: ImportStatus) => void): (() => void) => {

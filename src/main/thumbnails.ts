@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { join, extname } from 'path'
 import { cpus } from 'os'
-import { existsSync, mkdirSync, statSync, writeFileSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, statSync, writeFileSync, readFileSync, openSync, readSync, closeSync } from 'fs'
 import { readFile } from 'fs/promises'
 import sharp from 'sharp'
 import heicConvert from 'heic-convert'
@@ -25,6 +25,21 @@ try {
   sharp.cache(false)
   sharp.concurrency(cpus().length)
 } catch {}
+
+export function isHeicFileHeader(filePath: string): boolean {
+  if (!filePath) return false
+  const ext = extname(filePath).toLowerCase()
+  if (ext === '.heic' || ext === '.heif') return true
+  try {
+    const fd = openSync(filePath, 'r')
+    const buf = Buffer.alloc(16)
+    readSync(fd, buf, 0, 16, 0)
+    closeSync(fd)
+    return buf.toString('ascii').includes('ftyp')
+  } catch {
+    return false
+  }
+}
 
 export function getUserDataPath(): string {
   try {
@@ -190,7 +205,7 @@ export async function generateThumbnail(
 
   const ext = extname(filePath).toLowerCase()
   const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.m4v', '.3gp'].includes(ext)
-  const isHeic = ['.heic', '.heif'].includes(ext)
+  const isHeic = isHeicFileHeader(filePath)
 
   const thumbExists = existsSync(thumbnailPath)
   if (thumbExists && statSync(thumbnailPath).size > 0) {
@@ -203,31 +218,48 @@ export async function generateThumbnail(
     return { thumbnailPath, previewPath, width: 1280, height: 720 }
   }
 
-  // Handle HEIC / HEIF Apple images using ultra-fast native WIC extractor with Worker Pool fallback
+  // Handle HEIC / HEIF Apple images using ultra-fast native WIC extractor with Worker Pool & heicConvert fallback
   if (isHeic) {
     const wicRes = await wicHeicExtractor.extract(filePath, thumbnailPath)
     if (wicRes.success && existsSync(thumbnailPath) && statSync(thumbnailPath).size > 0) {
       return { thumbnailPath, previewPath, width: 0, height: 0 }
     }
     const res = await heicPool.convert(0, filePath, thumbnailPath, THUMBNAIL_SIZE, 0.65)
-    if (res.success) {
+    if (res.success && existsSync(thumbnailPath) && statSync(thumbnailPath).size > 0) {
       return { thumbnailPath, previewPath, width: 0, height: 0 }
     }
+    try {
+      const buf = await readFile(filePath)
+      const converted = await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.65 })
+      writeFileSync(thumbnailPath, converted)
+      return { thumbnailPath, previewPath, width: 0, height: 0 }
+    } catch {}
   }
 
   // Ultra-Fast Shrink-on-Load Sharp Pipeline for standard images
-  await sharp(filePath, { failOn: 'none' })
-    .rotate()
-    .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
-      fit: 'cover',
-      position: 'centre',
-      fastShrinkOnLoad: true,
-      kernel: 'nearest'
-    })
-    .jpeg({ quality: THUMBNAIL_QUALITY, mozjpeg: false })
-    .toFile(thumbnailPath)
+  try {
+    await sharp(filePath, { failOn: 'none' })
+      .rotate()
+      .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+        fit: 'cover',
+        position: 'centre',
+        fastShrinkOnLoad: true,
+        kernel: 'nearest'
+      })
+      .jpeg({ quality: THUMBNAIL_QUALITY, mozjpeg: false })
+      .toFile(thumbnailPath)
 
-  return { thumbnailPath, previewPath, width: 0, height: 0 }
+    return { thumbnailPath, previewPath, width: 0, height: 0 }
+  } catch (err: any) {
+    // If sharp failed (e.g. disguised HEIC or unsupported codec), try heicConvert fallback
+    try {
+      const buf = await readFile(filePath)
+      const converted = await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.65 })
+      writeFileSync(thumbnailPath, converted)
+      return { thumbnailPath, previewPath, width: 0, height: 0 }
+    } catch {}
+    throw err
+  }
 }
 
 export async function generateThumbnailBatch(

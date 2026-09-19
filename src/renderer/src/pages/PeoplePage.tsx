@@ -69,6 +69,7 @@ export default function PeoplePage() {
   const [showMergeModal, setShowMergeModal] = useState(false)
   const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(new Set())
   const [isAnalyzingDuplicates, setIsAnalyzingDuplicates] = useState(false)
+  const [isMergingBatch, setIsMergingBatch] = useState(false)
 
   // Photos for the currently reviewed merge pair
   const [primaryPhotos, setPrimaryPhotos] = useState<Photo[]>([])
@@ -128,7 +129,7 @@ export default function PeoplePage() {
         const list = await window.photoVault.getPeople()
         setPeople(list || [])
       }
-      refreshSuggestions()
+      await refreshSuggestions()
     } catch (err) {
       console.error('Failed to load people:', err)
     }
@@ -329,6 +330,43 @@ export default function PeoplePage() {
     }
   }
 
+  // One-click batch merge for duplicate face pairs
+  const handleBatchMergeMatches = async () => {
+    if (isMergingBatch) return
+    const highMatches = activeSuggestions.filter(s => s.confidence >= 90)
+    const pairsToMerge = highMatches.length > 0 ? highMatches : activeSuggestions
+
+    if (pairsToMerge.length === 0) {
+      showToast('No duplicate faces detected!')
+      return
+    }
+
+    setIsMergingBatch(true)
+    try {
+      let mergedCount = 0
+      const mergedSecondaryIds = new Set<number>()
+
+      if (window.photoVault?.mergePeople) {
+        for (const pair of pairsToMerge) {
+          if (mergedSecondaryIds.has(pair.personB.id) || mergedSecondaryIds.has(pair.personA.id)) {
+            continue
+          }
+          await window.photoVault.mergePeople(pair.personA.id, pair.personB.id)
+          mergedSecondaryIds.add(pair.personB.id)
+          mergedCount++
+        }
+      }
+
+      showToast(`Successfully merged ${mergedCount} duplicate person profile${mergedCount === 1 ? '' : 's'}!`)
+      await loadPeople()
+    } catch (err: any) {
+      console.error('Batch merge failed:', err)
+      showToast(`Merge failed: ${err?.message || err}`)
+    } finally {
+      setIsMergingBatch(false)
+    }
+  }
+
   // Open the interactive Merge Review flow
   const handleOpenMergeReview = (filter90Only = false) => {
     const highMatches = activeSuggestions.filter(s => s.confidence >= 90)
@@ -367,22 +405,26 @@ export default function PeoplePage() {
 
     const primaryId = current.personA.id
     const secondaryId = current.personB.id
-    const includedCount = secondaryPhotos.length - excludedPhotoIds.size
+    const totalCount = secondaryPhotos.length || current.personB.photo_count || 1
+    const includedCount = Math.max(0, (secondaryPhotos.length > 0 ? secondaryPhotos.length : totalCount) - excludedPhotoIds.size)
+    const allExplicitlyExcluded = excludedPhotoIds.size > 0 && excludedPhotoIds.size >= totalCount
 
     try {
-      // 1. Remove any excluded photos from Person B before merging
-      if (excludedPhotoIds.size > 0 && window.photoVault?.removePhotoFromPerson) {
-        for (const photoId of excludedPhotoIds) {
-          await window.photoVault.removePhotoFromPerson(secondaryId, photoId)
-        }
-      }
-
-      // 2. If there are included photos remaining, merge Person B into Person A
-      if (includedCount > 0 && window.photoVault?.mergePeople) {
-        await window.photoVault.mergePeople(primaryId, secondaryId)
-        showToast(`Merged ${includedCount} photo${includedCount === 1 ? '' : 's'} into "${current.personA.name}"!`)
+      if (allExplicitlyExcluded) {
+        showToast('All photos excluded. Profiles kept separate.')
       } else {
-        showToast(`All photos excluded. Profiles kept separate.`)
+        // 1. Remove any excluded photos from Person B before merging
+        if (excludedPhotoIds.size > 0 && window.photoVault?.removePhotoFromPerson) {
+          for (const photoId of excludedPhotoIds) {
+            await window.photoVault.removePhotoFromPerson(secondaryId, photoId)
+          }
+        }
+
+        // 2. Merge Person B into Person A
+        if (window.photoVault?.mergePeople) {
+          await window.photoVault.mergePeople(primaryId, secondaryId)
+          showToast(`Merged ${includedCount} photo${includedCount === 1 ? '' : 's'} into "${current.personA.name}"!`)
+        }
       }
 
       // 3. Remove secondaryId from suggestions & reviewQueue
@@ -403,9 +445,11 @@ export default function PeoplePage() {
       }
 
       // Check if more pairs to review
-      if (updatedQueue.length === 0 || currentMergeIndex >= updatedQueue.length) {
+      if (updatedQueue.length === 0) {
         setShowMergeModal(false)
         showToast('All duplicate reviews completed!')
+      } else if (currentMergeIndex >= updatedQueue.length) {
+        setCurrentMergeIndex(Math.max(0, updatedQueue.length - 1))
       }
     } catch (err: any) {
       showToast(`Merge error: ${err?.message || err}`)
@@ -1117,200 +1161,28 @@ export default function PeoplePage() {
               gap: '14px'
             }}
           >
-            {/* Title & Count */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#ffffff',
-                  boxShadow: '0 4px 14px rgba(236, 72, 153, 0.35)'
-                }}
-              >
-                <Users size={22} />
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <h1 style={{ fontSize: '24px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                    People & Pets
-                  </h1>
-                  {people.length > 0 && (
-                    <span
-                      style={{
-                        background: 'rgba(236, 72, 153, 0.15)',
-                        color: '#f472b6',
-                        fontWeight: 700,
-                        fontSize: '12px',
-                        padding: '2px 9px',
-                        borderRadius: '12px'
-                      }}
-                    >
-                      {people.length} people • {totalFacesCount} faces
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
             {/* Action Bar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              {/* Search Bar */}
-              <div style={{ position: 'relative', width: '220px' }}>
-                <Search
-                  size={14}
-                  style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--text-secondary)'
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Search people..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '7px 12px 7px 34px',
-                    borderRadius: '20px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--bg-secondary)',
-                    color: 'var(--text-primary)',
-                    fontSize: '13px',
-                    outline: 'none'
-                  }}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    style={{
-                      position: 'absolute',
-                      right: '10px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: 0
-                    }}
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-
-              {/* Sort selector */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'var(--bg-secondary)',
-                  padding: '4px 10px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)',
-                  fontSize: '12px'
-                }}
-              >
-                <ArrowUpDown size={13} color="var(--text-secondary)" />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-primary)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    outline: 'none'
-                  }}
-                >
-                  <option value="photos">Most Photos</option>
-                  <option value="name">Name (A–Z)</option>
-                  <option value="recent">Recently Added</option>
-                </select>
-              </div>
-
-              {/* Merge Duplicates Button */}
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => handleOpenMergeReview(false)}
-                style={{
-                  fontSize: '13px',
-                  padding: '7px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)'
-                }}
-                title="Scan for duplicate face clusters to merge"
-              >
-                <GitMerge size={15} /> Find Duplicates
-              </button>
-
-              {/* Add Person Button */}
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => {
-                  setEditingPerson(null)
-                  setPersonNameInput('')
-                  setNamingModalOpen(true)
-                }}
-                style={{
-                  fontSize: '13px',
-                  padding: '7px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)'
-                }}
-              >
-                <UserPlus size={15} /> Add Person
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
 
               {/* Scan Faces Button */}
-              {scanProgress?.isScanning ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleStopScan}
-                  style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '10px' }}
-                >
-                  Stop Scan
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleStartScan}
-                  style={{
-                    fontSize: '13px',
-                    padding: '7px 16px',
-                    borderRadius: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
-                    boxShadow: '0 4px 12px rgba(236, 72, 153, 0.3)'
-                  }}
-                >
-                  <Sparkles size={15} /> Scan Faces
-                </button>
-              )}
+              <button
+                type="button"
+                className="apple-primary-btn"
+                onClick={handleStartScan}
+                disabled={scanProgress?.isScanning}
+              >
+                {scanProgress?.isScanning ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    <span>Scanning Faces...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={15} />
+                    <span>Scan Faces</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -1360,9 +1232,9 @@ export default function PeoplePage() {
 
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="apple-secondary-btn"
                 onClick={handleStopScan}
-                style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                style={{ fontSize: '12px', padding: '4px 10px' }}
               >
                 Cancel
               </button>
@@ -1432,7 +1304,8 @@ export default function PeoplePage() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => handleOpenMergeReview(activeSuggestions.some(s => s.confidence >= 90))}
+                  onClick={handleBatchMergeMatches}
+                  disabled={isMergingBatch}
                   style={{
                     fontSize: '13px',
                     fontWeight: 700,
@@ -1445,13 +1318,45 @@ export default function PeoplePage() {
                     boxShadow: '0 4px 14px rgba(236, 72, 153, 0.35)',
                     color: '#ffffff',
                     border: 'none',
-                    cursor: 'pointer'
+                    cursor: isMergingBatch ? 'not-allowed' : 'pointer',
+                    opacity: isMergingBatch ? 0.75 : 1
                   }}
                 >
-                  <Zap size={15} color="#fef08a" fill="#fef08a" />
-                  {activeSuggestions.some(s => s.confidence >= 90)
-                    ? `Merge 90%+ Matches (${activeSuggestions.filter(s => s.confidence >= 90).length})`
-                    : `Merge Similar Faces (${activeSuggestions.length})`}
+                  {isMergingBatch ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>Merging Matches...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={15} color="#fef08a" fill="#fef08a" />
+                      <span>
+                        {activeSuggestions.some(s => s.confidence >= 90)
+                          ? `Merge 90%+ Matches (${activeSuggestions.filter(s => s.confidence >= 90).length})`
+                          : `Merge Similar Faces (${activeSuggestions.length})`}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="apple-secondary-btn"
+                  onClick={() => handleOpenMergeReview(false)}
+                  disabled={isMergingBatch}
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    padding: '8px 16px',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: isMergingBatch ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  <Eye size={15} />
+                  <span>Review Pairs ({activeSuggestions.length})</span>
                 </button>
               </div>
             </div>
@@ -1461,11 +1366,31 @@ export default function PeoplePage() {
           {people.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <EmptyState
-                icon={<Users size={56} color="#ec4899" />}
-                title="No People Identified Yet"
+                icon={
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="0" height="0" style={{ position: 'absolute' }}>
+                      <defs>
+                        <linearGradient id="peopleIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#4f46e5" />
+                          <stop offset="50%" stopColor="#6366f1" />
+                          <stop offset="100%" stopColor="#7c3aed" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <Users
+                      size={46}
+                      strokeWidth={1.8}
+                      stroke="url(#peopleIconGrad)"
+                      style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+                    />
+                  </div>
+                }
+                title={
+                  <>
+                    No <span className="title-sort-gradient">People</span> Identified Yet
+                  </>
+                }
                 description="PhotoSort uses on-device, private face detection to automatically group photos of family and friends."
-                actionLabel="Scan Library for Faces"
-                onAction={handleStartScan}
               />
             </div>
           ) : (
@@ -2166,7 +2091,8 @@ export default function PeoplePage() {
               {/* ─── Interactive Photo Selection Grid: Exclude or Include Faces ─── */}
               {(() => {
                 const current = reviewQueue[currentMergeIndex]
-                const includedCount = secondaryPhotos.length - excludedPhotoIds.size
+                const totalCount = secondaryPhotos.length || current.personB.photo_count || 1
+                const includedCount = Math.max(0, (secondaryPhotos.length > 0 ? secondaryPhotos.length : totalCount) - excludedPhotoIds.size)
                 return (
                   <div style={{ marginBottom: '20px' }}>
                     <div
@@ -2381,7 +2307,8 @@ export default function PeoplePage() {
             {/* Footer Navigation & Actions */}
             {(() => {
               const current = reviewQueue[currentMergeIndex]
-              const includedCount = secondaryPhotos.length - excludedPhotoIds.size
+              const totalCount = secondaryPhotos.length || current.personB.photo_count || 1
+              const includedCount = Math.max(0, (secondaryPhotos.length > 0 ? secondaryPhotos.length : totalCount) - excludedPhotoIds.size)
               return (
                 <div
                   style={{
@@ -2466,6 +2393,7 @@ export default function PeoplePage() {
                       type="button"
                       className="btn btn-primary"
                       onClick={handleAcceptAndMerge}
+                      disabled={isLoadingReviewPhotos}
                       style={{
                         fontSize: '13px',
                         fontWeight: 700,
@@ -2478,10 +2406,21 @@ export default function PeoplePage() {
                         gap: '6px',
                         color: '#ffffff',
                         border: 'none',
-                        cursor: 'pointer'
+                        cursor: isLoadingReviewPhotos ? 'not-allowed' : 'pointer',
+                        opacity: isLoadingReviewPhotos ? 0.75 : 1
                       }}
                     >
-                      <Check size={16} /> Accept & Merge ({includedCount} Photo{includedCount === 1 ? '' : 's'})
+                      {isLoadingReviewPhotos ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          <span>Loading Photos...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check size={16} />
+                          <span>Accept & Merge ({includedCount} Photo{includedCount === 1 ? '' : 's'})</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

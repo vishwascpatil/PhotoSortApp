@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
   Share2, Film, ImageIcon, CheckSquare,
   Square, Trash2, RefreshCw, CheckCircle2,
-  Play, Check, ShieldCheck, BookmarkCheck, Loader2
+  Play, Check, ShieldCheck, BookmarkCheck, Loader2,
+  Sparkles
 } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
@@ -241,7 +242,10 @@ export default function JunkPage() {
   }
 
   const handleTileClick = (photo: Photo) => {
-    photoDispatch({ type: 'SET_VIEWER', payload: photo.id })
+    photoDispatch({
+      type: 'SET_VIEWER_SCOPED',
+      payload: { photoId: photo.id, photos: appMediaCandidates }
+    })
   }
 
   // Move selected to Trash
@@ -275,7 +279,7 @@ export default function JunkPage() {
 
   return (
     <div className="photos-page" style={{ padding: '20px 28px' }}>
-      {/* ─── Header ──────────────────────────────────────────────────────── */}
+      {/* ─── Action Header ─────────────────────────────────────────── */}
       <div
         style={{
           display: 'flex',
@@ -286,417 +290,238 @@ export default function JunkPage() {
           gap: '12px'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 3px 12px rgba(59, 130, 246, 0.25)'
-            }}
-          >
-            <Share2 size={20} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                Social Media & Apps
-              </h1>
-              {appMediaCandidates.length > 0 && (
-                <span
-                  style={{
-                    background: 'rgba(59, 130, 246, 0.12)',
-                    color: 'var(--primary, #3b82f6)',
-                    fontWeight: 700,
-                    fontSize: '12px',
-                    padding: '2px 8px',
-                    borderRadius: '12px'
-                  }}
-                >
-                  {appMediaCandidates.length} items • {formatFileSize(totalBytes)}
-                </span>
-              )}
-            </div>
-            <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Organized by WhatsApp, Instagram, Snapchat, LinkedIn, Web Downloads & Editor Apps
-            </p>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {appMediaCandidates.length > 0 && (
+            <span className="apple-storage-pill">
+              {appMediaCandidates.length} items • {formatFileSize(totalBytes)}
+            </span>
+          )}
         </div>
 
         {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
           {selectedPhotos.length > 0 && (
             <>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="apple-secondary-btn"
                 onClick={handleKeepSelected}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  padding: '6px 12px',
-                  borderRadius: '8px'
-                }}
               >
-                <BookmarkCheck size={14} /> Keep Selected ({selectedPhotos.length})
+                <BookmarkCheck size={14} />
+                <span>Keep Selected ({selectedPhotos.length})</span>
               </button>
 
               <button
                 type="button"
-                className="btn btn-danger"
+                className="apple-secondary-btn"
                 onClick={handleTrashSelected}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                  color: '#ffffff',
-                  padding: '6px 14px',
-                  borderRadius: '8px',
-                  boxShadow: '0 3px 10px rgba(239, 68, 68, 0.3)'
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#ef4444',
+                  borderColor: 'rgba(239, 68, 68, 0.25)',
+                  gap: '6px'
                 }}
               >
-                <Trash2 size={14} /> Move to Trash ({selectedPhotos.length} • {formatFileSize(selectedBytes)})
+                <Trash2 size={14} />
+                <span>Move to Trash ({selectedPhotos.length} • {formatFileSize(selectedBytes)})</span>
               </button>
             </>
           )}
 
-          {/* Rescan Button with Spinning Indicator */}
+          {/* Scan Social Media Button */}
           <button
             type="button"
-            className="btn btn-ghost"
+            className={appMediaCandidates.length > 0 ? 'apple-secondary-btn' : 'apple-primary-btn'}
             onClick={handleStartRescan}
             disabled={isScanning}
-            title="Rescan Library"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: 600,
-              background: isScanning ? 'var(--bg-secondary)' : undefined,
-              cursor: isScanning ? 'not-allowed' : 'pointer'
-            }}
+            title="Scan Social Media & Apps"
           >
-            <RefreshCw size={14} className={isScanning ? 'animate-spin' : ''} />
-            {isScanning ? 'Scanning...' : 'Rescan'}
+            {isScanning ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Scanning Social Media...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} />
+                <span>Scan Social Media</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* ─── Progressive Scan Banner (0% to 100%) ───────────────────────── */}
-      {isScanning && scanProgress && (
+      {/* ─── Live Scanner Progress Banner (People / Documents / Places Pattern) ── */}
+      {isScanning && (
         <div
           style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '14px 18px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
-            position: 'relative',
-            overflow: 'hidden',
-            animation: 'fadeIn 0.2s ease-out'
+            background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
+            borderRadius: '16px',
+            padding: '14px 20px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px'
           }}
         >
-          {/* Top Row: Status Label & Percentage */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {scanProgress.isComplete ? (
-                <CheckCircle2 size={18} color="#10b981" />
-              ) : (
-                <Loader2 size={18} className="animate-spin" color="var(--primary, #3b82f6)" />
-              )}
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                {scanProgress.isComplete
-                  ? `Scan Complete! Analyzed all ${scanProgress.total.toLocaleString()} items (${scanProgress.foundCount} social media & app files found)`
-                  : `Analyzing library media for social forwards, web downloads & editor apps...`}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                {scanProgress.completed.toLocaleString()} / {scanProgress.total.toLocaleString()}
-              </span>
-              <span
-                style={{
-                  background: scanProgress.isComplete ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  color: scanProgress.isComplete ? '#10b981' : 'var(--primary, #3b82f6)',
-                  fontWeight: 800,
-                  fontSize: '12px',
-                  padding: '2px 8px',
-                  borderRadius: '12px'
-                }}
-              >
-                {scanProgress.percent}%
-              </span>
-            </div>
-          </div>
-
-          {/* Subtext: Current File being analyzed */}
-          {!scanProgress.isComplete && scanProgress.currentFile && (
-            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Analyzing: {scanProgress.currentFile}
-            </div>
-          )}
-
-          {/* Progressive Bar Track */}
-          <div
-            style={{
-              width: '100%',
-              height: '6px',
-              borderRadius: '6px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              overflow: 'hidden',
-              position: 'relative'
-            }}
-          >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: `${scanProgress.percent}%`,
-                height: '100%',
-                borderRadius: '6px',
-                background: scanProgress.isComplete
-                  ? 'linear-gradient(90deg, #10b981, #059669)'
-                  : 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%)',
-                transition: 'width 0.08s ease-out',
-                boxShadow: scanProgress.isComplete
-                  ? '0 0 12px rgba(16, 185, 129, 0.5)'
-                  : '0 0 12px rgba(59, 130, 246, 0.5)'
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(99, 102, 241, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#6366f1'
               }}
-            />
+            >
+              <Loader2 size={18} className="animate-spin" />
+            </div>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Scanning photo library for social media & apps...
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Scanned {scanProgress?.completed || 0} of {scanProgress?.total || (photoState.photos.length || 0)} photos (
+                {scanProgress && scanProgress.total > 0
+                  ? Math.round((scanProgress.completed / scanProgress.total) * 100)
+                  : 0}
+                %){scanProgress && scanProgress.foundCount > 0 ? ` • ${scanProgress.foundCount} media items found` : ''}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* ─── Filter Bar ──────────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '16px',
-          flexWrap: 'wrap',
-          gap: '10px',
-          paddingBottom: '12px',
-          borderBottom: '1px solid var(--border)'
-        }}
-      >
-        {/* App Platform Origin Tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className={`btn ${activeTab === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setActiveTab('all')}
-            style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '16px', fontWeight: activeTab === 'all' ? 700 : 500 }}
-          >
-            All Apps ({tabCounts.all})
-          </button>
-
-          {tabCounts.whatsapp > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeTab === 'whatsapp' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveTab('whatsapp')}
-              style={{
-                fontSize: '12px',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                fontWeight: activeTab === 'whatsapp' ? 700 : 500,
-                color: activeTab === 'whatsapp' ? '#ffffff' : '#10b981'
-              }}
-            >
-              WhatsApp ({tabCounts.whatsapp})
-            </button>
-          )}
-
-          {tabCounts.instagram > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeTab === 'instagram' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveTab('instagram')}
-              style={{
-                fontSize: '12px',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                fontWeight: activeTab === 'instagram' ? 700 : 500,
-                color: activeTab === 'instagram' ? '#ffffff' : '#ec4899'
-              }}
-            >
-              Instagram ({tabCounts.instagram})
-            </button>
-          )}
-
-          {tabCounts.snapchat > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeTab === 'snapchat' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveTab('snapchat')}
-              style={{
-                fontSize: '12px',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                fontWeight: activeTab === 'snapchat' ? 700 : 500,
-                color: activeTab === 'snapchat' ? '#ffffff' : '#eab308'
-              }}
-            >
-              Snapchat ({tabCounts.snapchat})
-            </button>
-          )}
-
-          {tabCounts.linkedin > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeTab === 'linkedin' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveTab('linkedin')}
-              style={{
-                fontSize: '12px',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                fontWeight: activeTab === 'linkedin' ? 700 : 500,
-                color: activeTab === 'linkedin' ? '#ffffff' : '#0284c7'
-              }}
-            >
-              LinkedIn ({tabCounts.linkedin})
-            </button>
-          )}
-
-          {tabCounts.browser > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeTab === 'browser' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveTab('browser')}
-              style={{
-                fontSize: '12px',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                fontWeight: activeTab === 'browser' ? 700 : 500,
-                color: activeTab === 'browser' ? '#ffffff' : '#06b6d4'
-              }}
-            >
-              Web Downloads ({tabCounts.browser})
-            </button>
-          )}
-
-          {tabCounts.editor > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeTab === 'editor' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveTab('editor')}
-              style={{
-                fontSize: '12px',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                fontWeight: activeTab === 'editor' ? 700 : 500,
-                color: activeTab === 'editor' ? '#ffffff' : '#8b5cf6'
-              }}
-            >
-              Editor Apps ({tabCounts.editor})
-            </button>
-          )}
-
-          {tabCounts['other-social'] > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeTab === 'other-social' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveTab('other-social')}
-              style={{
-                fontSize: '12px',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                fontWeight: activeTab === 'other-social' ? 700 : 500,
-                color: activeTab === 'other-social' ? '#ffffff' : '#6366f1'
-              }}
-            >
-              Other Social ({tabCounts['other-social']})
-            </button>
-          )}
-
-          {tabCounts['other-apps'] > 0 && (
-            <button
-              type="button"
-              className={`btn ${activeTab === 'other-apps' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setActiveTab('other-apps')}
-              style={{
-                fontSize: '12px',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                fontWeight: activeTab === 'other-apps' ? 700 : 500,
-                color: activeTab === 'other-apps' ? '#ffffff' : '#94a3b8'
-              }}
-            >
-              Unidentified Apps ({tabCounts['other-apps']})
-            </button>
-          )}
-        </div>
-
-        {/* Media Filters & Select All */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '8px' }}>
-            <button
-              type="button"
-              className={`btn ${mediaTypeFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setMediaTypeFilter('all')}
-              style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`btn ${mediaTypeFilter === 'video' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setMediaTypeFilter('video')}
-              style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <Film size={12} /> Videos
-            </button>
-            <button
-              type="button"
-              className={`btn ${mediaTypeFilter === 'image' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setMediaTypeFilter('image')}
-              style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <ImageIcon size={12} /> Photos
-            </button>
+      {appMediaCandidates.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            flexWrap: 'wrap',
+            gap: '10px',
+            paddingBottom: '12px',
+            borderBottom: '1px solid var(--border)'
+          }}
+        >
+          {/* App Platform Origin Tabs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {[
+              { id: 'all', label: `All Apps (${tabCounts.all})`, show: true },
+              { id: 'whatsapp', label: `WhatsApp (${tabCounts.whatsapp})`, show: tabCounts.whatsapp > 0 },
+              { id: 'instagram', label: `Instagram (${tabCounts.instagram})`, show: tabCounts.instagram > 0 },
+              { id: 'snapchat', label: `Snapchat (${tabCounts.snapchat})`, show: tabCounts.snapchat > 0 },
+              { id: 'linkedin', label: `LinkedIn (${tabCounts.linkedin})`, show: tabCounts.linkedin > 0 },
+              { id: 'browser', label: `Web Downloads (${tabCounts.browser})`, show: tabCounts.browser > 0 },
+              { id: 'editor', label: `Editor Apps (${tabCounts.editor})`, show: tabCounts.editor > 0 },
+              { id: 'other-social', label: `Other Social (${tabCounts['other-social']})`, show: tabCounts['other-social'] > 0 },
+              { id: 'other-apps', label: `Unidentified Apps (${tabCounts['other-apps']})`, show: tabCounts['other-apps'] > 0 }
+            ].filter(t => t.show).map(tab => {
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as any)}
+                  style={{
+                    fontSize: '12px',
+                    padding: '5px 12px',
+                    borderRadius: '99px',
+                    fontWeight: isActive ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    border: isActive ? '1px solid transparent' : '1px solid var(--border)',
+                    background: isActive ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' : 'var(--bg-secondary)',
+                    color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                    boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              )
+            })}
           </div>
 
-          {appMediaCandidates.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={handleSelectAll}
-              style={{ fontSize: '12px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              {selectedIds.size === appMediaCandidates.length ? (
-                <CheckSquare size={15} color="var(--primary)" />
-              ) : (
-                <Square size={15} />
-              )}
-              {selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}
-            </button>
-          )}
+          {/* Media Filters & Select All */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div className="apple-segmented-bar">
+              <button
+                type="button"
+                className={`apple-segment-btn ${mediaTypeFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setMediaTypeFilter('all')}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`apple-segment-btn ${mediaTypeFilter === 'video' ? 'active' : ''}`}
+                onClick={() => setMediaTypeFilter('video')}
+              >
+                <Film size={12} /> Videos
+              </button>
+              <button
+                type="button"
+                className={`apple-segment-btn ${mediaTypeFilter === 'image' ? 'active' : ''}`}
+                onClick={() => setMediaTypeFilter('image')}
+              >
+                <ImageIcon size={12} /> Photos
+              </button>
+            </div>
+
+            {appMediaCandidates.length > 0 && (
+              <button
+                type="button"
+                className="apple-secondary-btn"
+                onClick={handleSelectAll}
+                style={{ fontSize: '12px', padding: '5px 12px', gap: '6px' }}
+              >
+                {selectedIds.size === appMediaCandidates.length ? (
+                  <CheckSquare size={14} color="#6366f1" />
+                ) : (
+                  <Square size={14} />
+                )}
+                <span>{selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ─── Media-First Grid ─────────────────────────────────────────────── */}
       {appMediaCandidates.length === 0 ? (
         <EmptyState
-          icon={<ShieldCheck size={48} />}
-          title="No Social Media or App Forwards Found"
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="junkIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <Share2
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#junkIconGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              No <span className="title-sort-gradient">Social Media</span> Found
+            </>
+          }
           description="All media in your library are genuine camera photos or screenshots."
-          actionLabel={isScanning ? 'Scanning...' : 'Rescan Library'}
-          onAction={handleStartRescan}
         />
       ) : (
         <div

@@ -180,6 +180,45 @@ export function clusterAndPropagateLocations(photos: ClusterInputPhoto[]): Clust
     }
   }
 
+  // Step 5: Camera Outing Sequence Propagation (IMG_xxxx)
+  // Companion photos taken consecutively on the same camera (within 35 frames of an anchor)
+  const anchorNums = resolved
+    .filter(r => r.isAnchor && r.locationName && r.photo.filename)
+    .map(r => {
+      const m = r.photo.filename.match(/IMG_(\d+)\./i)
+      return m ? { num: parseInt(m[1], 10), item: r } : null
+    })
+    .filter(Boolean) as { num: number; item: (typeof resolved)[0] }[]
+
+  if (anchorNums.length > 0) {
+    for (const r of resolved) {
+      if (!r.locationName && r.photo.filename) {
+        const m = r.photo.filename.match(/IMG_(\d+)\./i)
+        if (m) {
+          const num = parseInt(m[1], 10)
+          let closestAnchor: { num: number; item: (typeof resolved)[0] } | null = null
+          let minDist = Infinity
+          for (const a of anchorNums) {
+            const diff = Math.abs(num - a.num)
+            if (diff <= 35 && diff < minDist) {
+              minDist = diff
+              closestAnchor = a
+            }
+          }
+          if (closestAnchor) {
+            r.locationName = closestAnchor.item.locationName
+            r.city = closestAnchor.item.city
+            r.landmark = closestAnchor.item.landmark
+            r.lat = closestAnchor.item.lat
+            r.lon = closestAnchor.item.lon
+            r.isInferred = true
+            r.confidence = 70
+          }
+        }
+      }
+    }
+  }
+
   // Return final clustered results (ONLY items with a verified or inferred location)
   const results: ClusteredPhotoResult[] = []
   for (const item of resolved) {

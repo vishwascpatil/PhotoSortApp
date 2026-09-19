@@ -1,5 +1,5 @@
 import React from 'react'
-import { X, Heart, Trash2, FolderPlus, Layout, Columns } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { usePhotos } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
 
@@ -9,7 +9,7 @@ interface SelectionBarProps {
   onCompare?: () => void
 }
 
-export default function SelectionBar({ onAddToAlbum, onCollage, onCompare }: SelectionBarProps) {
+export default function SelectionBar({}: SelectionBarProps = {}) {
   const { state, dispatch, refreshPhotos } = usePhotos()
   const { showToast } = useApp()
 
@@ -17,13 +17,6 @@ export default function SelectionBar({ onAddToAlbum, onCollage, onCompare }: Sel
   if (count === 0) return null
 
   const ids = Array.from(state.selectedIds)
-
-  async function handleFavorite() {
-    await window.photoVault.batchFavorite(ids, true)
-    showToast(`${count} photo${count > 1 ? 's' : ''} added to favorites`)
-    dispatch({ type: 'DESELECT_ALL' })
-    refreshPhotos()
-  }
 
   async function handleTrash() {
     await window.photoVault.trash(ids)
@@ -35,30 +28,32 @@ export default function SelectionBar({ onAddToAlbum, onCollage, onCompare }: Sel
   }
 
   return (
-    <div className="selection-bar">
-      <div className="selection-bar-count">
-        <button className="selection-bar-btn" onClick={() => dispatch({ type: 'DESELECT_ALL' })}>
-          <X size={20} />
-        </button>
-        {count} selected
-      </div>
-
-      <button className="selection-bar-btn" onClick={handleFavorite} title="Add to favorites">
-        <Heart size={20} />
+    <div className="selection-floating-dock">
+      {/* Dismiss / Close Button */}
+      <button 
+        className="dock-btn-circle" 
+        onClick={() => dispatch({ type: 'DESELECT_ALL' })}
+        title="Clear selection (Esc)"
+      >
+        <X size={15} />
       </button>
 
-      {count >= 2 && count <= 9 && onCollage && (
-        <button className="selection-bar-btn" onClick={onCollage} title="Create Collage">
-          <Layout size={20} />
-        </button>
-      )}
-      {count === 2 && onCompare && (
-        <button className="selection-bar-btn" onClick={onCompare} title="Compare Side-by-Side">
-          <Columns size={20} />
-        </button>
-      )}
-      <button className="selection-bar-btn" onClick={handleTrash} title="Move to trash">
-        <Trash2 size={20} />
+      {/* Purple-Blue Glowing Count Badge */}
+      <div className="dock-count-badge">
+        <span className="dock-count-number">{count}</span>
+        <span className="dock-count-text">selected</span>
+      </div>
+
+      <div className="dock-divider" />
+
+      {/* Delete / Trash Button */}
+      <button 
+        className="dock-action-btn dock-action-trash" 
+        onClick={handleTrash} 
+        title="Delete selected photos"
+      >
+        <Trash2 size={15} />
+        <span>Delete</span>
       </button>
     </div>
   )

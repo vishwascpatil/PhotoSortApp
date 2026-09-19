@@ -351,29 +351,89 @@ export const LANDMARKS: LandmarkDef[] = [
 
 // ─── Curated Major Cities (Fast Nearest-Bounding Lookup) ──────────────────────
 export const CITIES: CityDef[] = [
+  // Karnataka
+  { name: 'Bangalore', state: 'Karnataka', country: 'India', lat: 12.9716, lon: 77.5946, radiusKm: 40 },
+  { name: 'Mysuru', state: 'Karnataka', country: 'India', lat: 12.2958, lon: 76.6394, radiusKm: 25 },
+  { name: 'Hampi', state: 'Karnataka', country: 'India', lat: 15.3350, lon: 76.4600, radiusKm: 20 },
+  { name: 'Coorg', state: 'Karnataka', country: 'India', lat: 12.3375, lon: 75.8069, radiusKm: 35 },
+  { name: 'Mangalore', state: 'Karnataka', country: 'India', lat: 12.9141, lon: 74.8560, radiusKm: 25 },
+  { name: 'Gokarna', state: 'Karnataka', country: 'India', lat: 14.5479, lon: 74.3188, radiusKm: 20 },
+  { name: 'Chikmagalur', state: 'Karnataka', country: 'India', lat: 13.3161, lon: 75.7720, radiusKm: 25 },
+
+  // Maharashtra & Goa
+  { name: 'Mumbai', state: 'Maharashtra', country: 'India', lat: 19.0760, lon: 72.8777, radiusKm: 40 },
+  { name: 'Pune', state: 'Maharashtra', country: 'India', lat: 18.5204, lon: 73.8567, radiusKm: 30 },
+  { name: 'Goa', state: 'Goa', country: 'India', lat: 15.2993, lon: 74.1240, radiusKm: 50 },
+  { name: 'Kolhapur', state: 'Maharashtra', country: 'India', lat: 16.7050, lon: 74.2433, radiusKm: 25 },
+  { name: 'Mahabaleshwar', state: 'Maharashtra', country: 'India', lat: 17.9237, lon: 73.6586, radiusKm: 25 },
+  { name: 'Lonavala', state: 'Maharashtra', country: 'India', lat: 18.7557, lon: 73.4091, radiusKm: 20 },
+  { name: 'Nagpur', state: 'Maharashtra', country: 'India', lat: 21.1458, lon: 79.0882, radiusKm: 30 },
+  { name: 'Nashik', state: 'Maharashtra', country: 'India', lat: 19.9975, lon: 73.7898, radiusKm: 25 },
+  { name: 'Shirdi', state: 'Maharashtra', country: 'India', lat: 19.7645, lon: 74.4762, radiusKm: 20 },
+  { name: 'Aurangabad', state: 'Maharashtra', country: 'India', lat: 19.8762, lon: 75.3433, radiusKm: 25 },
+
+  // Tamil Nadu & Kerala
+  { name: 'Chennai', state: 'Tamil Nadu', country: 'India', lat: 13.0827, lon: 80.2707, radiusKm: 35 },
+  { name: 'Pondicherry', state: 'Puducherry', country: 'India', lat: 11.9416, lon: 79.8083, radiusKm: 25 },
+  { name: 'Ooty', state: 'Tamil Nadu', country: 'India', lat: 11.4102, lon: 76.6950, radiusKm: 25 },
+  { name: 'Kodaikanal', state: 'Tamil Nadu', country: 'India', lat: 10.2381, lon: 77.4892, radiusKm: 20 },
+  { name: 'Coimbatore', state: 'Tamil Nadu', country: 'India', lat: 11.0168, lon: 76.9558, radiusKm: 30 },
+  { name: 'Madurai', state: 'Tamil Nadu', country: 'India', lat: 9.9252, lon: 78.1198, radiusKm: 25 },
+  { name: 'Kochi', state: 'Kerala', country: 'India', lat: 9.9312, lon: 76.2673, radiusKm: 30 },
+  { name: 'Munnar', state: 'Kerala', country: 'India', lat: 10.0889, lon: 77.0595, radiusKm: 25 },
+  { name: 'Alleppey', state: 'Kerala', country: 'India', lat: 9.4981, lon: 76.3388, radiusKm: 25 },
+  { name: 'Wayanad', state: 'Kerala', country: 'India', lat: 11.6854, lon: 76.1320, radiusKm: 30 },
+  { name: 'Trivandrum', state: 'Kerala', country: 'India', lat: 8.5241, lon: 76.9366, radiusKm: 25 },
+
+  // Andhra Pradesh & Telangana
+  { name: 'Hyderabad', state: 'Telangana', country: 'India', lat: 17.3850, lon: 78.4867, radiusKm: 35 },
+  { name: 'Visakhapatnam', state: 'Andhra Pradesh', country: 'India', lat: 17.6868, lon: 83.2185, radiusKm: 30 },
+  { name: 'Tirupati', state: 'Andhra Pradesh', country: 'India', lat: 13.6288, lon: 79.4192, radiusKm: 25 },
+  { name: 'Vijayawada', state: 'Andhra Pradesh', country: 'India', lat: 16.5062, lon: 80.6480, radiusKm: 25 },
+
+  // North India
   { name: 'Delhi', state: 'Delhi', country: 'India', lat: 28.6139, lon: 77.2090, radiusKm: 35 },
   { name: 'Agra', state: 'Uttar Pradesh', country: 'India', lat: 27.1767, lon: 78.0081, radiusKm: 25 },
-  { name: 'Bangalore', state: 'Karnataka', country: 'India', lat: 12.9716, lon: 77.5946, radiusKm: 40 },
-  { name: 'Hampi', state: 'Karnataka', country: 'India', lat: 15.3350, lon: 76.4600, radiusKm: 20 },
-  { name: 'Kolhapur', state: 'Maharashtra', country: 'India', lat: 16.7050, lon: 74.2433, radiusKm: 25 },
   { name: 'Jaipur', state: 'Rajasthan', country: 'India', lat: 26.9124, lon: 75.7873, radiusKm: 30 },
-  { name: 'Mumbai', state: 'Maharashtra', country: 'India', lat: 19.0760, lon: 72.8777, radiusKm: 40 },
-  { name: 'Goa', state: 'Goa', country: 'India', lat: 15.2993, lon: 74.1240, radiusKm: 50 },
-  { name: 'Hyderabad', state: 'Telangana', country: 'India', lat: 17.3850, lon: 78.4867, radiusKm: 35 },
-  { name: 'Kolkata', state: 'West Bengal', country: 'India', lat: 22.5726, lon: 88.3639, radiusKm: 35 },
-  { name: 'Chennai', state: 'Tamil Nadu', country: 'India', lat: 13.0827, lon: 80.2707, radiusKm: 35 },
-  { name: 'Pune', state: 'Maharashtra', country: 'India', lat: 18.5204, lon: 73.8567, radiusKm: 30 },
-  { name: 'Ahmedabad', state: 'Gujarat', country: 'India', lat: 23.0225, lon: 72.5714, radiusKm: 30 },
-  { name: 'Varanasi', state: 'Uttar Pradesh', country: 'India', lat: 25.3176, lon: 82.9739, radiusKm: 25 },
   { name: 'Udaipur', state: 'Rajasthan', country: 'India', lat: 24.5854, lon: 73.7125, radiusKm: 25 },
+  { name: 'Jodhpur', state: 'Rajasthan', country: 'India', lat: 26.2389, lon: 73.0243, radiusKm: 25 },
+  { name: 'Jaisalmer', state: 'Rajasthan', country: 'India', lat: 26.9157, lon: 70.9083, radiusKm: 25 },
+  { name: 'Varanasi', state: 'Uttar Pradesh', country: 'India', lat: 25.3176, lon: 82.9739, radiusKm: 25 },
+  { name: 'Lucknow', state: 'Uttar Pradesh', country: 'India', lat: 26.8467, lon: 80.9462, radiusKm: 30 },
   { name: 'Manali', state: 'Himachal Pradesh', country: 'India', lat: 32.2396, lon: 77.1887, radiusKm: 20 },
   { name: 'Shimla', state: 'Himachal Pradesh', country: 'India', lat: 31.1048, lon: 77.1734, radiusKm: 20 },
+  { name: 'Rishikesh', state: 'Uttarakhand', country: 'India', lat: 30.0869, lon: 78.2676, radiusKm: 20 },
+  { name: 'Chandigarh', state: 'Punjab', country: 'India', lat: 30.7333, lon: 76.7794, radiusKm: 25 },
+  { name: 'Amritsar', state: 'Punjab', country: 'India', lat: 31.6340, lon: 74.8723, radiusKm: 25 },
+  { name: 'Srinagar', state: 'Jammu & Kashmir', country: 'India', lat: 34.0837, lon: 74.7973, radiusKm: 25 },
+  { name: 'Leh', state: 'Ladakh', country: 'India', lat: 34.1526, lon: 77.5771, radiusKm: 25 },
+
+  // East & Central India
+  { name: 'Kolkata', state: 'West Bengal', country: 'India', lat: 22.5726, lon: 88.3639, radiusKm: 35 },
+  { name: 'Darjeeling', state: 'West Bengal', country: 'India', lat: 27.0410, lon: 88.2663, radiusKm: 20 },
+  { name: 'Gangtok', state: 'Sikkim', country: 'India', lat: 27.3389, lon: 88.6065, radiusKm: 20 },
+  { name: 'Bhubaneswar', state: 'Odisha', country: 'India', lat: 20.2961, lon: 85.8245, radiusKm: 25 },
+  { name: 'Puri', state: 'Odisha', country: 'India', lat: 19.8135, lon: 85.8312, radiusKm: 20 },
+  { name: 'Ahmedabad', state: 'Gujarat', country: 'India', lat: 23.0225, lon: 72.5714, radiusKm: 30 },
+  { name: 'Bhopal', state: 'Madhya Pradesh', country: 'India', lat: 23.2599, lon: 77.4126, radiusKm: 30 },
+  { name: 'Indore', state: 'Madhya Pradesh', country: 'India', lat: 22.7196, lon: 75.8577, radiusKm: 25 },
+
+  // International Destinations
   { name: 'Dubai', country: 'UAE', lat: 25.2048, lon: 55.2708, radiusKm: 40 },
   { name: 'Singapore', country: 'Singapore', lat: 1.3521, lon: 103.8198, radiusKm: 30 },
   { name: 'London', country: 'UK', lat: 51.5074, lon: -0.1278, radiusKm: 40 },
   { name: 'Paris', country: 'France', lat: 48.8566, lon: 2.3522, radiusKm: 35 },
+  { name: 'Rome', country: 'Italy', lat: 41.9028, lon: 12.4964, radiusKm: 35 },
+  { name: 'Barcelona', country: 'Spain', lat: 41.3879, lon: 2.1699, radiusKm: 30 },
+  { name: 'Amsterdam', country: 'Netherlands', lat: 52.3676, lon: 4.9041, radiusKm: 30 },
+  { name: 'Bangkok', country: 'Thailand', lat: 13.7563, lon: 100.5018, radiusKm: 35 },
+  { name: 'Bali', country: 'Indonesia', lat: -8.3405, lon: 115.0920, radiusKm: 50 },
+  { name: 'Tokyo', country: 'Japan', lat: 35.6762, lon: 139.6503, radiusKm: 45 },
   { name: 'New York', country: 'USA', lat: 40.7128, lon: -74.0060, radiusKm: 40 },
-  { name: 'Tokyo', country: 'Japan', lat: 35.6762, lon: 139.6503, radiusKm: 45 }
+  { name: 'San Francisco', country: 'USA', lat: 37.7749, lon: -122.4194, radiusKm: 35 },
+  { name: 'Los Angeles', country: 'USA', lat: 34.0522, lon: -118.2437, radiusKm: 45 },
+  { name: 'Sydney', country: 'Australia', lat: -33.8688, lon: 151.2093, radiusKm: 40 },
+  { name: 'Melbourne', country: 'Australia', lat: -37.8136, lon: 144.9631, radiusKm: 40 }
 ]
 
 // ─── Haversine Distance in Meters ───────────────────────────────────────────
@@ -394,8 +454,13 @@ export function getHaversineDistanceMeters(lat1: number, lon1: number, lat2: num
 
 /**
  * Fast offline lookup: matches GPS coordinates against landmarks, then cities.
+ * HARD RULE: Only called when valid EXIF GPS coordinates exist.
  */
 export function lookupCoordinatesOffline(lat: number, lon: number): LocationLookupResult | null {
+  if (lat === null || lon === null || typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) {
+    return null
+  }
+
   // 1. Check Landmark proximity first (highest precision)
   let bestLandmark: LandmarkDef | null = null
   let minLandmarkDist = Infinity
@@ -412,7 +477,7 @@ export function lookupCoordinatesOffline(lat: number, lon: number): LocationLook
     return {
       city: bestLandmark.city,
       landmark: bestLandmark.name,
-      locationName: `${bestLandmark.city} (${bestLandmark.name})`,
+      locationName: `${bestLandmark.city} • ${bestLandmark.name}`,
       country: bestLandmark.country,
       confidence: 95
     }
@@ -439,7 +504,37 @@ export function lookupCoordinatesOffline(lat: number, lon: number): LocationLook
     }
   }
 
-  return null
+  // 3. Nearest City within 120km
+  let nearestCity: CityDef | null = null
+  let nearestDistKm = Infinity
+
+  for (const city of CITIES) {
+    const distKm = getHaversineDistanceMeters(lat, lon, city.lat, city.lon) / 1000
+    if (distKm <= 120 && distKm < nearestDistKm) {
+      nearestDistKm = distKm
+      nearestCity = city
+    }
+  }
+
+  if (nearestCity) {
+    return {
+      city: nearestCity.name,
+      locationName: nearestCity.name,
+      country: nearestCity.country,
+      confidence: 70
+    }
+  }
+
+  // 4. Formatted clean GPS coordinates if outside all recognized city zones
+  const latStr = Math.abs(lat).toFixed(2) + (lat >= 0 ? '°N' : '°S')
+  const lonStr = Math.abs(lon).toFixed(2) + (lon >= 0 ? '°E' : '°W')
+  const name = `GPS (${latStr}, ${lonStr})`
+  return {
+    city: name,
+    locationName: name,
+    country: '',
+    confidence: 60
+  }
 }
 
 /**

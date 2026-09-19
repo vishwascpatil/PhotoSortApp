@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Pause, Play, FileText, Sparkles, Folder, Check, Loader2
+  Pause, Play, Compass, Sparkles, Folder, Check, Loader2
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { usePhotos } from '../contexts/PhotoContext'
@@ -132,14 +132,35 @@ export default function ScanningLibraryPage() {
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - (displayedPercent / 100) * circumference
 
-  // Render Empty State if no folder imported and not actively importing
   if (importedFolders.length === 0 && stats.totalPhotos === 0 && !isImporting) {
     return (
       <div className="scanning-page-container">
         <EmptyState
-          icon={<Folder size={48} />}
-          title="No Folder Imported"
-          description="Please select or import a folder from your computer to start scanning and organizing media."
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="scanEmptyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <Folder
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#scanEmptyGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              No Folders to <span className="title-sort-gradient">Scan</span>
+            </>
+          }
+          description="Import a folder from your computer to let PhotoSort curate your timeline and make your memories shine."
           actionLabel="Select Folder"
           onAction={handleImportFolder}
         />
@@ -152,9 +173,11 @@ export default function ScanningLibraryPage() {
       {/* Top Header */}
       <header className="scanning-page-header">
         <div>
-          <h1 className="scanning-page-title">Scanning Your Library</h1>
+          <h1 className="scanning-page-title">
+            Curating Your <span className="title-sort-gradient">Library</span>
+          </h1>
           <p className="scanning-page-subtitle">
-            This may take a while depending on the size of your library.
+            Sit tight — we're organizing your shots, indexing dates, and getting every photo ready to shine.
           </p>
         </div>
 
@@ -195,10 +218,10 @@ export default function ScanningLibraryPage() {
             <div className="progress-ring-center-content">
               <span className="ring-pct-text">{Math.round(displayedPercent)}%</span>
               <span className="ring-sub-text">
-                {completed.toLocaleString()} of {total.toLocaleString()}
+                {completed.toLocaleString()} of {total.toLocaleString()} moments
               </span>
               <span className="ring-sub-text-small">
-                {importStatus.stage === 'thumbnails' ? 'thumbnails generated' : (importStatus.stage === 'processing' ? 'items processed' : 'items ready')}
+                {importStatus.stage === 'thumbnails' ? 'polishing shots' : (importStatus.stage === 'processing' ? 'discovering moments' : (percent === 100 ? 'ready to explore' : 'curating moments'))}
               </span>
             </div>
           </div>
@@ -225,7 +248,7 @@ export default function ScanningLibraryPage() {
 
         {/* Right Column: Pipeline Stages */}
         <div className="scanning-right-col">
-          {/* Stage 1: Extracting Metadata */}
+          {/* Stage 1: Discovering Moments */}
           <div className="scan-stage-item">
             <div className={`stage-icon-wrapper ${stage1Pct === 100 ? 'stage-green-done' : 'stage-green'}`}>
               {isStage1Processing ? (
@@ -233,19 +256,19 @@ export default function ScanningLibraryPage() {
               ) : stage1Pct === 100 ? (
                 <Check size={18} />
               ) : (
-                <FileText size={18} />
+                <Compass size={18} />
               )}
             </div>
             <div className="stage-content">
               <div className="stage-header-row">
-                <span className="stage-title">Extracting Metadata</span>
+                <span className="stage-title">Discovering Moments</span>
                 <div className="stage-right-stats">
                   <span className="stage-counts">{stage1CountStr}</span>
                   <span className="stage-pct green-pct">{stage1Pct}%</span>
                 </div>
               </div>
               <span className="stage-subtitle">
-                {stage1Pct === 100 ? 'Metadata extraction complete' : (isStage1Processing ? 'Reading file metadata...' : 'Waiting for scan...')}
+                {stage1Pct === 100 ? 'All dates, places, and stories neatly cataloged' : (isStage1Processing ? 'Pinpointing dates, locations, and your best memories...' : 'Ready to explore your photo timeline...')}
               </span>
               <div className="stage-bar-track">
                 <div className="stage-bar-fill green-bar" style={{ width: `${stage1Pct}%` }} />
@@ -253,7 +276,7 @@ export default function ScanningLibraryPage() {
             </div>
           </div>
 
-          {/* Stage 2: Generating Thumbnails & Media Previews */}
+          {/* Stage 2: Polishing Visuals */}
           <div className="scan-stage-item">
             <div className={`stage-icon-wrapper ${stage2Done ? 'stage-green-done' : 'stage-purple'}`}>
               {isThumbnailStage ? (
@@ -266,14 +289,14 @@ export default function ScanningLibraryPage() {
             </div>
             <div className="stage-content">
               <div className="stage-header-row">
-                <span className="stage-title">Generating Thumbnails & Previews</span>
+                <span className="stage-title">Polishing Visuals</span>
                 <div className="stage-right-stats">
                   <span className="stage-counts">{stage2CountStr}</span>
                   <span className="stage-pct purple-pct">{stage2Pct}%</span>
                 </div>
               </div>
               <span className="stage-subtitle">
-                {stage2Done ? 'Library thumbnails ready!' : (isThumbnailStage ? 'Generating thumbnails & media previews...' : 'Almost done...')}
+                {stage2Done ? 'Every shot looks crisp, vibrant, and ready to enjoy' : (isThumbnailStage ? 'Tuning lightning-fast previews so your memories pop...' : 'Standing by to make every preview shine...')}
               </span>
               <div className="stage-bar-track">
                 <div className="stage-bar-fill purple-bar" style={{ width: `${stage2Pct}%` }} />

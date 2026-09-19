@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import {
   Compass, ImageIcon, Star, Film, FolderKanban, Users, MapPin, FileText,
-  Copy, Sparkles, Monitor, HardDrive, MessageSquare, Folder, Cloud, Images, Loader2, Trash2, Flame, Share2
+  Copy, Sparkles, Monitor, HardDrive, MessageSquare, Folder, Images, Loader2, Trash2, Flame, Share2
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { formatFileSize } from '../utils/helpers'
@@ -67,8 +67,7 @@ export default function Sidebar() {
     {
       sectionTitle: 'IMPORTED FOLDERS',
       items: [
-        { id: 'folders', icon: Folder, label: 'Imported Folders' },
-        { id: 'google-photos', icon: Cloud, label: 'Google Photos' }
+        { id: 'folders', icon: Folder, label: 'Imported Folders' }
       ]
     }
   ]
@@ -84,8 +83,8 @@ export default function Sidebar() {
         <div className="sidebar-logo">
           {!state.sidebarCollapsed && (
             <h1 className="sidebar-logo-text-themed">
-              <span className="title-photo-dark" style={{ color: 'var(--text-primary, #0f172a)', fontWeight: 800 }}>Photo</span>
-              <span className="title-sort-gradient" style={{ fontWeight: 800 }}>Sort</span>
+              <span className="title-photo-dark" style={{ color: 'var(--text-primary, #0f172a)', fontWeight: 900 }}>Photo</span>
+              <span className="title-sort-gradient" style={{ fontWeight: 900 }}>Sort</span>
             </h1>
           )}
         </div>

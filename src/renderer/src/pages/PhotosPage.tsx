@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { ImageIcon, Upload, Play, Sparkles } from 'lucide-react'
+import { ImageIcon, Upload, Sparkles } from 'lucide-react'
 import { usePhotos } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
 import PhotoGrid from '../components/PhotoGrid'
@@ -8,9 +8,6 @@ import ContextMenu from '../components/ContextMenu'
 import EmptyState from '../components/EmptyState'
 import CollageModal from '../components/CollageModal'
 import PhotoCompareModal from '../components/PhotoCompareModal'
-import MemoriesCarousel, { Memory } from '../components/MemoriesCarousel'
-import MemoriesViewer from '../components/MemoriesViewer'
-import SlideshowViewer from '../components/SlideshowViewer'
 import DateScrubber from '../components/DateScrubber'
 
 export default function PhotosPage() {
@@ -78,19 +75,37 @@ export default function PhotosPage() {
     if (photo) window.photoVault.openInExplorer(photo.file_path)
   }
 
-  const [activeMemory, setActiveMemory] = useState<Memory | null>(null)
-  const [slideshowActive, setSlideshowActive] = useState(false)
   const [collageModal, setCollageModal] = useState(false)
   const [compareModal, setCompareModal] = useState(false)
 
   if (!state.isLoading && state.photos.length === 0) {
     return (
       <EmptyState
-        icon={<ImageIcon size={48} />}
-        title="Your photo library is empty"
-        description="Import photos from your computer to get started. You can import entire folders or individual files."
-        actionLabel="Import Photos"
-        onAction={handleImport}
+        icon={
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="0" height="0" style={{ position: 'absolute' }}>
+              <defs>
+                <linearGradient id="photoIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#4f46e5" />
+                  <stop offset="50%" stopColor="#6366f1" />
+                  <stop offset="100%" stopColor="#7c3aed" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <ImageIcon
+              size={46}
+              strokeWidth={1.8}
+              stroke="url(#photoIconGrad)"
+              style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+            />
+          </div>
+        }
+        title={
+          <>
+            Your Photo Library is <span className="title-sort-gradient">Empty</span>
+          </>
+        }
+        description="Photos and videos from your imported folders will appear here automatically."
       />
     )
   }
@@ -102,7 +117,7 @@ export default function PhotosPage() {
   ).filter(y => !isNaN(y))
 
   return (
-    <>
+    <div className="photos-page-container">
       <SelectionBar
         onCollage={() => setCollageModal(true)}
         onCompare={() => setCompareModal(true)}
@@ -117,58 +132,24 @@ export default function PhotosPage() {
       />
 
       {/* Top Header Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <MemoriesCarousel photos={state.photos} onSelectMemory={(m) => setActiveMemory(m)} />
-        {state.photos.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => openCleanUpModal()}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#60a5fa',
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.25)',
-                borderRadius: '8px',
-                padding: '6px 12px',
-                cursor: 'pointer'
-              }}
-              title="Clean Up Suggestions & Free Up Space (Large files, WhatsApp junk, screenshots, duplicates)"
-            >
-              <Sparkles size={15} color="#60a5fa" /> Free Up Space
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setSlideshowActive(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
-            >
-              <Play size={16} /> Slideshow
-            </button>
-          </div>
-        )}
-      </div>
+      {state.photos.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px', padding: '0 16px' }}>
+          <button
+            type="button"
+            className="btn-free-up-space"
+            onClick={() => openCleanUpModal()}
+            title="Clean Up Suggestions & Free Up Space (Large files, WhatsApp junk, screenshots, duplicates)"
+          >
+            <Sparkles size={15} /> Free Up Space
+          </button>
+        </div>
+      )}
 
       <PhotoGrid
         photos={state.photos}
         showDateHeaders={true}
         onContextMenu={handleContextMenu}
       />
-
-      {/* Memories Story Overlay */}
-      {activeMemory && (
-        <MemoriesViewer memory={activeMemory} onClose={() => setActiveMemory(null)} />
-      )}
-
-      {/* Fullscreen Slideshow Overlay */}
-      {slideshowActive && (
-        <SlideshowViewer photos={state.photos} onClose={() => setSlideshowActive(false)} />
-      )}
 
       {/* Collage Modal */}
       {collageModal && (
@@ -203,6 +184,6 @@ export default function PhotosPage() {
           onOpenInExplorer={handleContextOpenInExplorer}
         />
       )}
-    </>
+    </div>
   )
 }

@@ -30,31 +30,41 @@ export function saveDatabase(): void {
   }
 }
 
+let dbInitPromise: Promise<void> | null = null
+
 export async function initDatabase(): Promise<void> {
-  const dbDir = app.getPath('userData')
-  if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true })
+  if (db) return
+  if (dbInitPromise) return dbInitPromise
 
-  dbPath = join(dbDir, 'photovault.db')
+  dbInitPromise = (async () => {
+    const dbDir = app.getPath('userData')
+    if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true })
 
-  const SQL = await initSqlJs()
+    dbPath = join(dbDir, 'photovault.db')
 
-  if (existsSync(dbPath)) {
-    const fileBuffer = readFileSync(dbPath)
-    db = new SQL.Database(fileBuffer)
-  } else {
-    db = new SQL.Database()
-  }
+    const SQL = await initSqlJs()
 
-  // Performance settings
-  db.run('PRAGMA journal_mode = WAL')
-  db.run('PRAGMA synchronous = NORMAL')
-  db.run('PRAGMA foreign_keys = ON')
+    if (existsSync(dbPath)) {
+      const fileBuffer = readFileSync(dbPath)
+      db = new SQL.Database(fileBuffer)
+    } else {
+      db = new SQL.Database()
+    }
 
-  createTables()
-  cleanupOrphanedPhotos()
-  cleanupOrphanedPeople()
-  rebuildExifData()
-  saveDatabase()
+    // Performance settings
+    db.run('PRAGMA journal_mode = WAL')
+    db.run('PRAGMA synchronous = NORMAL')
+    db.run('PRAGMA foreign_keys = ON')
+
+    createTables()
+    cleanupOrphanedPhotos()
+    cleanupOrphanedPeople()
+    rebuildExifData()
+    cleanupNonExifLocations()
+    saveDatabase()
+  })()
+
+  return dbInitPromise
 }
 
 function cleanupOrphanedPhotos(): void {
@@ -340,6 +350,7 @@ export async function rebuildExifData(): Promise<void> {
     const { existsSync } = require('fs')
     const sharp = require('sharp')
     const exifReader = require('exif-reader')
+    const exifr = require('exifr')
 
     function convertDMSToDecimal(dms: number[] | undefined, ref: string | undefined): number | undefined {
       if (!dms || !Array.isArray(dms) || dms.length !== 3) return undefined
@@ -353,39 +364,63 @@ export async function rebuildExifData(): Promise<void> {
     for (const photo of photos) {
       if (!photo.file_path || !existsSync(photo.file_path)) continue
       try {
-        const metadata = await sharp(photo.file_path, { failOn: 'none' }).metadata()
-        if (metadata && metadata.exif) {
-          const parsed: any = exifReader(metadata.exif)
-          const photoObj = parsed.Photo || parsed.exif || parsed.image || {}
-          const imageObj = parsed.Image || parsed.image || {}
-          const gpsObj = parsed.GPSInfo || parsed.gps || {}
+        let lat: number | undefined
+        let lon: number | undefined
+        let make: string | undefined
+        let model: string | undefined
+        let dateStr: string | null = null
 
-          const lat = convertDMSToDecimal(gpsObj.GPSLatitude as number[] | undefined, gpsObj.GPSLatitudeRef as string | undefined)
-          const lon = convertDMSToDecimal(gpsObj.GPSLongitude as number[] | undefined, gpsObj.GPSLongitudeRef as string | undefined)
-
-          if (lat !== undefined && lon !== undefined) {
-            const make = imageObj.Make as string | undefined
-            const model = imageObj.Model as string | undefined
-            const iso = photoObj.ISO as number | undefined
-            const fNumber = photoObj.FNumber as number | undefined
-            const exposureTime = photoObj.ExposureTime ? `1/${Math.round(1 / (photoObj.ExposureTime as number))}` : undefined
-            const focalLength = photoObj.FocalLength as number | undefined
-            const lensModel = photoObj.LensModel as string | undefined
-            const dateTaken = photoObj.DateTimeOriginal || photoObj.DateTimeDigitized || null
-            const dateStr = dateTaken instanceof Date ? dateTaken.toISOString() : null
-
-            runSql(`
-              INSERT INTO exif_data (photo_id, make, model, iso, f_number, exposure_time, focal_length, gps_lat, gps_lon, date_taken, lens_model)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              ON CONFLICT(photo_id) DO UPDATE SET
-                make = COALESCE(excluded.make, exif_data.make),
-                model = COALESCE(excluded.model, exif_data.model),
-                gps_lat = excluded.gps_lat,
-                gps_lon = excluded.gps_lon
-            `, [photo.id, make || null, model || null, iso || null, fNumber || null, exposureTime || null, focalLength || null, lat, lon, dateStr, lensModel || null])
+        // 1. High-speed direct EXIF / GPS parser (supports JPEG, HEIC, TIFF, PNG, etc.)
+        try {
+          const parsed = await exifr.parse(photo.file_path, ['latitude', 'longitude', 'Make', 'Model', 'DateTimeOriginal'])
+          if (parsed) {
+            if (typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+              lat = parsed.latitude
+              lon = parsed.longitude
+            }
+            if (parsed.Make) make = String(parsed.Make)
+            if (parsed.Model) model = String(parsed.Model)
+            if (parsed.DateTimeOriginal instanceof Date) dateStr = parsed.DateTimeOriginal.toISOString()
           }
+        } catch {}
+
+        // 2. Fallback to sharp + exifReader if needed
+        if (lat === undefined || !make) {
+          try {
+            const metadata = await sharp(photo.file_path, { failOn: 'none' }).metadata()
+            if (metadata && metadata.exif) {
+              const parsed: any = exifReader(metadata.exif)
+              const photoObj = parsed.Photo || parsed.exif || parsed.image || {}
+              const imageObj = parsed.Image || parsed.image || {}
+              const gpsObj = parsed.GPSInfo || parsed.gps || {}
+
+              if (lat === undefined) {
+                lat = convertDMSToDecimal(gpsObj.GPSLatitude as number[] | undefined, gpsObj.GPSLatitudeRef as string | undefined)
+                lon = convertDMSToDecimal(gpsObj.GPSLongitude as number[] | undefined, gpsObj.GPSLongitudeRef as string | undefined)
+              }
+              if (!make) make = imageObj.Make as string | undefined
+              if (!model) model = imageObj.Model as string | undefined
+              if (!dateStr) {
+                const dateTaken = photoObj.DateTimeOriginal || photoObj.DateTimeDigitized || null
+                dateStr = dateTaken instanceof Date ? dateTaken.toISOString() : null
+              }
+            }
+          } catch {}
         }
-      } catch { }
+
+        if (lat !== undefined && lon !== undefined) {
+          runSql(`
+            INSERT INTO exif_data (photo_id, make, model, gps_lat, gps_lon, date_taken)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(photo_id) DO UPDATE SET
+              make = COALESCE(excluded.make, exif_data.make),
+              model = COALESCE(excluded.model, exif_data.model),
+              gps_lat = excluded.gps_lat,
+              gps_lon = excluded.gps_lon,
+              date_taken = COALESCE(excluded.date_taken, exif_data.date_taken)
+          `, [photo.id, make || null, model || null, lat, lon, dateStr])
+        }
+      } catch {}
     }
     saveDatabase()
   } catch (err) {
@@ -665,7 +700,7 @@ export function getPhotos(filter: PhotoFilter = {}): PhotoRow[] {
   const limit = filter.limit ? `LIMIT ${filter.limit}` : ''
   const offset = filter.offset ? `OFFSET ${filter.offset}` : ''
 
-  const sql = `SELECT p.*, e.make AS camera_make, e.model AS camera_model, e.date_taken FROM photos p ${join} ${where} ORDER BY p.created_at DESC ${limit} ${offset}`
+  const sql = `SELECT p.*, e.make AS camera_make, e.model AS camera_model, e.date_taken, e.gps_lat, e.gps_lon FROM photos p ${join} ${where} ORDER BY p.created_at DESC ${limit} ${offset}`
   return queryAll<PhotoRow>(sql, params)
 }
 
@@ -846,6 +881,16 @@ export function saveDocumentScan(photoId: number, extractedText: string, isDocum
 export function resetAllDocumentScans(): void {
   runSql('UPDATE photos SET is_document = 0, document_category = NULL, extracted_text = "" WHERE is_document = 1 OR extracted_text != ""')
   saveDatabase()
+}
+
+export function cleanupNonExifLocations(): void {
+  // HARD RULE: Only photos with verified EXIF GPS coordinates can have a location_name
+  runSql(`
+    UPDATE photos 
+    SET location_name = NULL 
+    WHERE location_name IS NOT NULL 
+      AND id NOT IN (SELECT photo_id FROM exif_data WHERE gps_lat IS NOT NULL AND gps_lon IS NOT NULL)
+  `)
 }
 
 // ─── Location Scanning ───────────────────────────────────────────────────
@@ -1110,6 +1155,19 @@ export async function getUtilitiesData(
   onProgress?: (scanned: number, total: number, currentFile?: string) => void,
   forceRefresh = false
 ) {
+  if (!db && dbInitPromise) {
+    await dbInitPromise
+  }
+  if (!db) {
+    return {
+      whatsapp: [],
+      blurry: [],
+      duplicates: [],
+      similar: [],
+      duplicateGroups: []
+    }
+  }
+
   const allPhotos = queryAll<PhotoRow>('SELECT * FROM photos WHERE is_trashed = 0 ORDER BY created_at DESC')
 
   if (!forceRefresh && cachedUtilitiesData && cachedUtilitiesPhotoCount === allPhotos.length) {
@@ -1386,6 +1444,24 @@ export function mergePeople(primaryId: number, secondaryId: number): void {
   const secondaryName = queryOne<{ name: string }>('SELECT name FROM people WHERE id = ?', [secondaryId])?.name
   if (primaryName === 'Unknown Person' && secondaryName && secondaryName !== 'Unknown Person') {
     runSql('UPDATE people SET name = ? WHERE id = ?', [secondaryName, primaryId])
+  }
+
+  // Preserve cover photo if primary doesn't have one
+  const pCover = queryOne<{ cover_photo_id: number | null }>('SELECT cover_photo_id FROM people WHERE id = ?', [primaryId])
+  if (!pCover?.cover_photo_id) {
+    const sCover = queryOne<{ cover_photo_id: number | null }>('SELECT cover_photo_id FROM people WHERE id = ?', [secondaryId])
+    if (sCover?.cover_photo_id) {
+      runSql('UPDATE people SET cover_photo_id = ? WHERE id = ?', [sCover.cover_photo_id, primaryId])
+    }
+  }
+
+  // Preserve cover face base64 if primary doesn't have one
+  const pBase64 = queryOne<{ cover_face_base64: string | null }>('SELECT cover_face_base64 FROM people WHERE id = ?', [primaryId])
+  if (!pBase64?.cover_face_base64) {
+    const sBase64 = queryOne<{ cover_face_base64: string | null }>('SELECT cover_face_base64 FROM people WHERE id = ?', [secondaryId])
+    if (sBase64?.cover_face_base64) {
+      runSql('UPDATE people SET cover_face_base64 = ? WHERE id = ?', [sBase64.cover_face_base64, primaryId])
+    }
   }
 
   // Delete secondary person

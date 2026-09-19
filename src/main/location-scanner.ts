@@ -1,10 +1,12 @@
-import { BrowserWindow, net } from 'electron'
+import { BrowserWindow } from 'electron'
 import {
-  getAllPhotosForLocationClustering,
   savePhotoLocationAndCoords,
   rebuildExifData,
-  saveDatabase
+  saveDatabase,
+  getGeoPhotos,
+  getAllPhotosForLocationClustering
 } from './database'
+import { lookupCoordinatesOffline } from './services/location/landmarkRegistry'
 import { clusterAndPropagateLocations } from './services/location/sessionClusterer'
 
 export interface LocationScanProgress {
@@ -37,73 +39,18 @@ export function stopLocationScanning() {
   broadcastLocationProgress()
 }
 
-// Fallback: extract location name from folder path structure for organized folders
-export function extractLocationFromPath(filePath: string): string | null {
-  if (!filePath) return null
-  const parts = filePath.replace(/\\/g, '/').split('/')
-  parts.pop() // remove filename
-
-  const currentUserName = (process.env.USERNAME || '').toLowerCase()
-
-  const ignoreFolders = new Set([
-    'photos', 'dcim', 'camera', 'pictures', 'downloads', 'desktop',
-    'documents', 'users', 'vishwas photos', 'vishwas', 'vishw', '100apple',
-    '101apple', '102apple', '103apple', 'testfolder', 'new folder', 'temp', 'sorted',
-    '06-02-2022(f)', '17 pro max-backup'
-  ])
-
-  for (let i = parts.length - 1; i >= 0; i--) {
-    let folder = parts[i].trim()
-    if (!folder) continue
-    const lower = folder.toLowerCase()
-
-    // NEVER use username, windows profile, drive root, device or backup names
-    if (
-      lower === currentUserName ||
-      lower === 'vishw' ||
-      lower === 'vishwas' ||
-      lower === 'users' ||
-      lower === 'c:' ||
-      lower === 'd:' ||
-      lower.includes('backup') ||
-      lower.includes('pro max') ||
-      lower.includes('iphone') ||
-      lower.includes('apple')
-    ) {
-      continue
-    }
-
-    if (ignoreFolders.has(lower)) {
-      continue
-    }
-
-    // Clean folder names: remove dates, years, copy suffixes, "trip", "vacation"
-    folder = folder
-      .replace(/\s*\(\d{4}\)\s*/g, '')
-      .replace(/[-_]\s*copy(\s*-\s*copy)*/gi, '')
-      .replace(/\b(trip|tour|vacation|photos|pics|travel|visit|diaries)\b/gi, '')
-      .replace(/[-_]+/g, ' ')
-      .trim()
-
-    // Title Case format (e.g. "delhi agra" -> "Delhi Agra")
-    const formatted = folder
-      .split(' ')
-      .filter(Boolean)
-      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ')
-
-    if (formatted.length > 2 && !ignoreFolders.has(lower) && !/^\d+$/.test(folder) && !/^\d{2}-\d{2}-\d{4}/.test(folder)) {
-      return formatted
-    }
-  }
-  return null
-}
-
+/**
+ * Scans photo library for locations:
+ * 1. Reads all EXIF GPS metadata from files with high-speed exifr parser.
+ * 2. Reverse geocodes genuine GPS anchor photos using offline landmark & city registry.
+ * 3. Clusters companion photos by spatio-temporal sessions and camera sequences,
+ *    propagating verified locations and centroid coordinates so the entire trip/outing is mapped.
+ */
 export async function scanLocations() {
   if (isScanningLocations) return
   isScanningLocations = true
 
-  currentProgress = { isScanning: true, scannedCount: 0, totalCount: 1, status: 'Reading EXIF GPS metadata...' }
+  currentProgress = { isScanning: true, scannedCount: 0, totalCount: 1, status: 'Reading EXIF GPS metadata from files...' }
   broadcastLocationProgress()
 
   try {
@@ -113,73 +60,79 @@ export async function scanLocations() {
     console.warn('rebuildExifData warning:', e)
   }
 
-  const allPhotos = getAllPhotosForLocationClustering()
-  if (allPhotos.length === 0) {
-    isScanningLocations = false
-    currentProgress = { isScanning: false, scannedCount: 0, totalCount: 0, status: 'No photos to scan' }
-    broadcastLocationProgress()
-    return
-  }
-
-  currentProgress = {
-    isScanning: true,
-    scannedCount: 0,
-    totalCount: allPhotos.length,
-    status: `Analyzing landmarks & GPS coordinates for ${allPhotos.length} photos...`
-  }
-  broadcastLocationProgress()
-
   try {
-    // 2. Run Spatio-Temporal Session Clustering & Offline Landmark Geofencing
-    const clusteredResults = clusterAndPropagateLocations(allPhotos)
-
-    // Map by photo ID for quick lookup
-    const clusteredMap = new Map(clusteredResults.map(r => [r.id, r]))
-
-    let matchedCount = 0
-
-    // 3. Apply results & folder fallbacks
-    for (const photo of allPhotos) {
-      if (!isScanningLocations) break
-
-      const match = clusteredMap.get(photo.id)
-
-      if (match) {
-        // Save verified landmark / city location and coordinates
-        savePhotoLocationAndCoords(photo.id, match.locationName, match.lat, match.lon)
-        matchedCount++
-      } else {
-        // Check folder path fallback
-        const pathLoc = extractLocationFromPath(photo.file_path || photo.source_folder_path || '')
-        if (pathLoc) {
-          savePhotoLocationAndCoords(photo.id, pathLoc)
-          matchedCount++
-        } else {
-          // Leave NULL so unplaced photos do NOT pollute the Places page as "Unknown Location"
-          savePhotoLocationAndCoords(photo.id, null as any)
+    // 2. Reverse geocode photos with genuine direct EXIF GPS
+    const directGeo = getGeoPhotos()
+    for (const photo of directGeo) {
+      if (typeof photo.gps_lat === 'number' && typeof photo.gps_lon === 'number') {
+        const geo = lookupCoordinatesOffline(photo.gps_lat, photo.gps_lon)
+        if (geo) {
+          savePhotoLocationAndCoords(photo.id, geo.locationName, photo.gps_lat, photo.gps_lon)
         }
       }
+    }
 
-      currentProgress.scannedCount++
-      if (currentProgress.scannedCount % 20 === 0 || currentProgress.scannedCount === allPhotos.length) {
+    // 3. Spatio-Temporal Session & Camera Sequence Outing Propagation
+    const allLibraryPhotos = getAllPhotosForLocationClustering()
+
+    currentProgress = {
+      isScanning: true,
+      scannedCount: 0,
+      totalCount: allLibraryPhotos.length,
+      status: `Clustering ${allLibraryPhotos.length} photos by outings & locations...`
+    }
+    broadcastLocationProgress()
+
+    const clustered = clusterAndPropagateLocations(allLibraryPhotos.map(p => ({
+      id: p.id,
+      filename: p.filename,
+      created_at: p.created_at,
+      file_path: p.file_path,
+      source_folder_path: p.source_folder_path,
+      gps_lat: p.gps_lat,
+      gps_lon: p.gps_lon,
+      location_name: p.location_name,
+      extracted_text: p.extracted_text
+    })))
+
+    let mappedCount = 0
+    for (let i = 0; i < clustered.length; i++) {
+      if (!isScanningLocations) break
+      const item = clustered[i]
+      if (item.locationName && item.lat !== undefined && item.lon !== undefined) {
+        // Subtle natural dispersion (< 150m) for companion photos so they cluster organically
+        let lat = item.lat
+        let lon = item.lon
+        if (item.isInferred) {
+          const seed = ((item.id % 97) - 48) / 80000
+          lat = lat + seed
+          lon = lon + seed
+        }
+        savePhotoLocationAndCoords(item.id, item.locationName, lat, lon)
+        mappedCount++
+      }
+
+      if (i % 20 === 0 || i === clustered.length - 1) {
+        currentProgress.scannedCount = i + 1
         broadcastLocationProgress()
       }
     }
 
     saveDatabase()
 
+    const finalGeo = getGeoPhotos()
     currentProgress = {
       isScanning: false,
-      scannedCount: allPhotos.length,
-      totalCount: allPhotos.length,
-      status: `Successfully mapped ${matchedCount} photos to places!`
+      scannedCount: finalGeo.length,
+      totalCount: allLibraryPhotos.length,
+      status: `Mapped ${finalGeo.length} photos across locations!`
     }
   } catch (err: any) {
     console.error('Error during location scan:', err)
     currentProgress = {
       isScanning: false,
       scannedCount: currentProgress.scannedCount,
-      totalCount: allPhotos.length,
+      totalCount: currentProgress.totalCount,
       status: `Scan error: ${err?.message || err}`
     }
   } finally {

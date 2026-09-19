@@ -378,10 +378,21 @@ export function registerIpcHandlers(): void {
     shell.showItemInFolder(filePath)
   })
 
-  ipcMain.handle('photos:get-utilities-data', (event) => {
-    return getUtilitiesData((scanned, total, currentFile) => {
-      event.sender.send('duplicate-scan:progress', { scanned, total, currentFile })
-    })
+  ipcMain.handle('photos:get-utilities-data', async (event) => {
+    try {
+      return await getUtilitiesData((scanned, total, currentFile) => {
+        event.sender.send('duplicate-scan:progress', { scanned, total, currentFile })
+      })
+    } catch (err: any) {
+      console.warn('photos:get-utilities-data skipped (database not ready):', err?.message)
+      return {
+        whatsapp: [],
+        blurry: [],
+        duplicates: [],
+        similar: [],
+        duplicateGroups: []
+      }
+    }
   })
 
   ipcMain.handle('photos:scan-duplicates', async (event) => {

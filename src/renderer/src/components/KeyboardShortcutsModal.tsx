@@ -9,7 +9,7 @@ const shortcuts = [
   { key: 'F', description: 'Favorite / Unfavorite photo' },
   { key: 'E', description: 'Open photo editor' },
   { key: 'I', description: 'Toggle EXIF info panel' },
-  { key: 'Space', description: 'Play / Pause slideshow or story' },
+  { key: 'Space', description: 'Play / Pause video' },
   { key: '← / →', description: 'Navigate to previous / next photo' },
   { key: 'Del / Backspace', description: 'Move selected photo to Trash' },
   { key: 'Ctrl + A / Cmd + A', description: 'Select all photos in view' },

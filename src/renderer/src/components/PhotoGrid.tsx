@@ -53,10 +53,10 @@ export default function PhotoGrid({ photos, showDateHeaders = true, onContextMen
     } else if (photoState.isSelecting) {
       photoDispatch({ type: 'TOGGLE_SELECT', payload: photoId })
     } else {
-      photoDispatch({ type: 'SET_VIEWER', payload: photoId })
+      photoDispatch({ type: 'SET_VIEWER_SCOPED', payload: { photoId, photos } })
     }
     lastClickedRef.current = photoId
-  }, [photoState.isSelecting, photoDispatch])
+  }, [photoState.isSelecting, photoDispatch, photos])
 
   const handleCheckbox = useCallback((photoId: number, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -104,12 +104,14 @@ export default function PhotoGrid({ photos, showDateHeaders = true, onContextMen
               <span className="photo-grid-date-count">{group.photos.length} photos</span>
             </div>
           )}
-          <div className="photo-grid">
+          <div
+            className="photo-grid"
+            style={{ '--thumbnail-size': `${thumbnailSize}px` } as React.CSSProperties}
+          >
             {group.photos.map((photo) => (
               <PhotoTile
                 key={photo.id}
                 photo={photo}
-                size={thumbnailSize}
                 isSelected={photoState.selectedIds.has(photo.id)}
                 onClick={handleClick}
                 onCheckbox={handleCheckbox}
@@ -128,7 +130,7 @@ export default function PhotoGrid({ photos, showDateHeaders = true, onContextMen
 
 interface PhotoTileProps {
   photo: Photo
-  size: number
+  size?: number
   isSelected: boolean
   onClick: (id: number, e: React.MouseEvent) => void
   onCheckbox: (id: number, e: React.MouseEvent) => void
@@ -136,13 +138,10 @@ interface PhotoTileProps {
   onContextMenu?: (e: React.MouseEvent, id: number) => void
 }
 
-function PhotoTile({ photo, size, isSelected, onClick, onCheckbox, onFavorite, onContextMenu }: PhotoTileProps) {
+function PhotoTile({ photo, isSelected, onClick, onCheckbox, onFavorite, onContextMenu }: PhotoTileProps) {
   const [loaded, setLoaded] = useState(false)
   const thumbnailUrl = getThumbnailUrl(photo.thumbnail_path, photo.file_path)
   const originalUrl = getOriginalUrl(photo.file_path)
-
-  // Enforce uniform square grid instead of justified layout
-  const width = size
 
   const isDocument = photo.mime_type && (
     photo.mime_type.includes('pdf') || 
@@ -154,7 +153,6 @@ function PhotoTile({ photo, size, isSelected, onClick, onCheckbox, onFavorite, o
   return (
     <div
       className={`photo-tile ${isSelected ? 'selected' : ''}`}
-      style={{ width: `${width}px`, height: `${size}px` }}
       onClick={(e) => onClick(photo.id, e)}
       onContextMenu={(e) => {
         e.preventDefault()

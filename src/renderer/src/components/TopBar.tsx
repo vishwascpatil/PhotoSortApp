@@ -1,42 +1,36 @@
-import React, { useState, useCallback, useEffect } from 'react'
-import { Search, Grid3x3, LayoutGrid, Sun, Moon, Menu, Minus, Square, X, FolderTree, Download } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Grid3x3, LayoutGrid, Sun, Moon, Menu, Minus, Square, X, FolderTree, Download } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
-import { debounce } from '../utils/helpers'
 
 export default function TopBar() {
   const { state, dispatch, toggleTheme, openExportModal } = useApp()
-  const [searchInput, setSearchInput] = useState('')
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
+    let mounted = true
     async function checkMaximized() {
       if (window.photoVault?.isWindowMaximized) {
         const max = await window.photoVault.isWindowMaximized()
-        setIsMaximized(max)
+        if (mounted) setIsMaximized(max)
       }
     }
     checkMaximized()
-  }, [])
 
-  const debouncedSearch = useCallback(
-    debounce((query: string) => {
-      dispatch({ type: 'SET_SEARCH', payload: query })
-    }, 300),
-    [dispatch]
-  )
-
-  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value
-    setSearchInput(val)
-    debouncedSearch(val)
-  }
-
-  function handleSearchKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Escape') {
-      setSearchInput('')
-      dispatch({ type: 'SET_SEARCH', payload: '' })
+    const onResize = () => {
+      checkMaximized()
     }
-  }
+    window.addEventListener('resize', onResize)
+
+    const cleanup = window.photoVault?.onWindowStateChanged?.((max: boolean) => {
+      if (mounted) setIsMaximized(max)
+    })
+
+    return () => {
+      mounted = false
+      window.removeEventListener('resize', onResize)
+      cleanup?.()
+    }
+  }, [])
 
   const handleMinimize = async () => {
     if (window.photoVault?.minimizeWindow) {
@@ -66,44 +60,19 @@ export default function TopBar() {
         title="Toggle sidebar"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <Menu size={20} />
+        <Menu size={18} />
       </button>
-
-      {/* Search */}
-      <div className="topbar-search">
-        <Search size={18} className="topbar-search-icon" />
-        <input
-          className="topbar-search-input"
-          placeholder="Search your photos"
-          value={searchInput}
-          onChange={handleSearchChange}
-          onKeyDown={handleSearchKeyDown}
-        />
-      </div>
 
       {/* Actions */}
       <div className="topbar-actions">
         {/* Organize & Export Folder Button */}
         <button
-          className="btn btn-primary"
+          type="button"
+          className="topbar-organize-btn"
           onClick={() => openExportModal({ mode: 'copy' })}
           title="Organize files by Year -> Trips -> Documents -> Months and Export"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            fontWeight: 700,
-            padding: '6px 13px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)',
-            boxShadow: '0 2px 8px rgba(14, 165, 233, 0.25)',
-            border: 'none',
-            color: '#ffffff',
-            cursor: 'pointer'
-          }}
         >
-          <FolderTree size={15} />
+          <FolderTree size={14} />
           <span>Organize & Export</span>
         </button>
 
@@ -118,7 +87,7 @@ export default function TopBar() {
           }}
           title={`Grid density: ${state.gridDensity}`}
         >
-          {state.gridDensity === 'comfortable' ? <LayoutGrid size={20} /> : state.gridDensity === 'medium' ? <Grid3x3 size={20} /> : <Grid3x3 size={20} style={{ transform: 'scale(0.8)' }} />}
+          {state.gridDensity === 'comfortable' ? <LayoutGrid size={17} /> : state.gridDensity === 'medium' ? <Grid3x3 size={17} /> : <Grid3x3 size={17} style={{ transform: 'scale(0.8)' }} />}
         </button>
 
         <button
@@ -126,7 +95,7 @@ export default function TopBar() {
           onClick={toggleTheme}
           title="Toggle theme"
         >
-          {state.theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          {state.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
         </button>
 
         {/* Window Controls */}
@@ -137,7 +106,7 @@ export default function TopBar() {
             onClick={handleMinimize}
             title="Minimize"
           >
-            <Minus size={16} />
+            <Minus size={14} />
           </button>
           <button
             type="button"
@@ -145,7 +114,14 @@ export default function TopBar() {
             onClick={handleMaximize}
             title={isMaximized ? 'Restore' : 'Maximize'}
           >
-            <Square size={13} />
+            {isMaximized ? (
+              <svg width={11} height={11} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M4.5 4.5V1.5C4.5 1.22386 4.72386 1 5 1H14.5C14.7761 1 15 1.22386 15 1.5V11C15 11.2761 14.7761 11.5 14.5 11.5H11.5" />
+                <rect x="1" y="4.5" width="10.5" height="10.5" rx="0.5" />
+              </svg>
+            ) : (
+              <Square size={11} />
+            )}
           </button>
           <button
             type="button"
@@ -153,7 +129,7 @@ export default function TopBar() {
             onClick={handleClose}
             title="Close"
           >
-            <X size={18} />
+            <X size={15} />
           </button>
         </div>
       </div>

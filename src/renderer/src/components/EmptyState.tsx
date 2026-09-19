@@ -2,15 +2,16 @@ import React, { ReactNode } from 'react'
 
 interface EmptyStateProps {
   icon: ReactNode
-  title: string
-  description: string
+  title: ReactNode
+  description: ReactNode
   actionLabel?: string
   onAction?: () => void
+  className?: string
 }
 
-export default function EmptyState({ icon, title, description, actionLabel, onAction }: EmptyStateProps) {
+export default function EmptyState({ icon, title, description, actionLabel, onAction, className = '' }: EmptyStateProps) {
   return (
-    <div className="apple-empty-state-wrapper">
+    <div className={`apple-empty-state-wrapper ${className}`}>
       <div className="apple-empty-state-card">
         <div className="apple-empty-icon-glow">
           <div className="apple-empty-icon-inner">

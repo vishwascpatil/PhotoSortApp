@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
-  FileText, Search, RefreshCw, CheckSquare, Square,
+  FileText, CheckSquare, Square,
   Trash2, ShieldCheck, Loader2, Check, Sparkles,
   Car, CreditCard, Activity, GraduationCap, Briefcase,
   Home, Plane, Receipt, Building2, Scale, ShieldAlert,
@@ -55,10 +55,23 @@ interface ScanProgressState {
 
 export default function DocumentsPage() {
   const { state: photoState, dispatch: photoDispatch, loadPhotos, refreshPhotos } = usePhotos()
-  const { showToast } = useApp()
+  const { showToast, state: appState } = useApp()
+
+  // Grid density from AppContext (controlled by topbar icon)
+  const gridDensity = appState.gridDensity || 'dense'
+  const isDense = gridDensity === 'dense'
+  const isComfortable = gridDensity === 'comfortable'
+  const isMedium = gridDensity === 'medium'
+
+  const minTileWidth = isComfortable ? 240 : isMedium ? 160 : 100
+  const gridGap = isComfortable ? '14px' : isMedium ? '10px' : '6px'
+  const tileRadius = isComfortable ? '12px' : isMedium ? '8px' : '6px'
+  const checkboxSize = isComfortable ? 24 : isMedium ? 20 : 16
+  const checkIconSize = isComfortable ? 16 : isMedium ? 13 : 10
+  const badgeFontSize = isComfortable ? '10px' : isMedium ? '9px' : '8px'
+  const badgePadding = isComfortable ? '3px 8px' : isMedium ? '2px 6px' : '2px 5px'
 
   const [activeCategory, setActiveCategory] = useState<string>('All Documents')
-  const [searchQuery, setSearchQuery] = useState<string>('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [isScanning, setIsScanning] = useState(false)
   const [isCleaning, setIsCleaning] = useState(false)
@@ -113,18 +126,9 @@ export default function DocumentsPage() {
         if (cat !== activeCategory) return false
       }
 
-      // Search query filter (matches filename, extracted text, or category)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        const matchName = (p.filename || '').toLowerCase().includes(q)
-        const matchCat = (p.document_category || '').toLowerCase().includes(q)
-        const matchText = (p.extracted_text || '').toLowerCase().includes(q)
-        if (!matchName && !matchCat && !matchText) return false
-      }
-
       return true
     })
-  }, [photoState.photos, activeCategory, searchQuery])
+  }, [photoState.photos, activeCategory])
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -148,6 +152,13 @@ export default function DocumentsPage() {
 
     return counts
   }, [photoState.photos])
+
+  // Auto-reset active category if its count becomes 0
+  useEffect(() => {
+    if (activeCategory !== 'All Documents' && (categoryCounts[activeCategory] || 0) === 0) {
+      setActiveCategory('All Documents')
+    }
+  }, [categoryCounts, activeCategory])
 
   const totalBytes = useMemo(() => {
     return documentPhotos.reduce((acc, p) => acc + (p.file_size || 0), 0)
@@ -181,7 +192,10 @@ export default function DocumentsPage() {
   }
 
   const handleTileClick = (photo: Photo) => {
-    photoDispatch({ type: 'SET_VIEWER', payload: photo.id })
+    photoDispatch({
+      type: 'SET_VIEWER_SCOPED',
+      payload: { photoId: photo.id, photos: documentPhotos }
+    })
   }
 
   // Clean false positives from library
@@ -233,6 +247,7 @@ export default function DocumentsPage() {
     } catch (err: any) {
       console.error('Document scan failed:', err)
       showToast(`Scan error: ${err.message || err}`)
+    } finally {
       setIsScanning(false)
       setScanProgress(null)
     }
@@ -286,317 +301,223 @@ export default function DocumentsPage() {
           gap: '12px'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 3px 10px rgba(59, 130, 246, 0.25)'
-            }}
-          >
-            <FileText size={20} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                Documents
-              </h1>
-              {documentPhotos.length > 0 && (
-                <span
-                  style={{
-                    background: 'rgba(59, 130, 246, 0.12)',
-                    color: '#2563eb',
-                    fontWeight: 700,
-                    fontSize: '12px',
-                    padding: '2px 8px',
-                    borderRadius: '12px'
-                  }}
-                >
-                  {documentPhotos.length} documents • {formatFileSize(totalBytes)}
-                </span>
-              )}
-            </div>
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
-              165 verified document types across 11 categories • Anti-meme precision filtering
-            </p>
-          </div>
-        </div>
-
         {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Search in Documents */}
-          <div style={{ position: 'relative', width: '220px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-            <input
-              type="text"
-              placeholder="Search documents..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '6px 10px 6px 30px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'var(--bg-secondary)',
-                color: 'var(--text-primary)',
-                fontSize: '12px'
-              }}
-            />
-          </div>
-
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
           {selectedPhotos.length > 0 && (
             <button
               type="button"
-              className="btn btn-danger"
+              className="apple-secondary-btn"
               onClick={handleTrashSelected}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '12px',
-                background: 'rgba(239, 68, 68, 0.1)',
+                background: 'rgba(239, 68, 68, 0.12)',
                 color: '#ef4444',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                padding: '6px 12px',
-                borderRadius: '8px'
+                borderColor: 'rgba(239, 68, 68, 0.25)',
+                gap: '6px'
               }}
             >
-              <Trash2 size={14} /> Trash ({selectedPhotos.length})
+              <Trash2 size={14} />
+              <span>Trash ({selectedPhotos.length})</span>
             </button>
           )}
 
           {/* Clean False Positives Button */}
           <button
             type="button"
-            className="btn btn-ghost"
+            className="apple-secondary-btn"
             onClick={handleCleanFalsePositives}
             disabled={isCleaning || isScanning}
             title="Purge noise, memes, OTPs and verify real documents"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '12px',
-              padding: '6px 12px',
-              border: '1px solid var(--border)',
-              borderRadius: '8px'
-            }}
           >
             {isCleaning ? <Loader2 size={14} className="animate-spin" /> : <ShieldAlert size={14} />}
-            {isCleaning ? 'Cleaning...' : 'Clean False Positives'}
+            <span>{isCleaning ? 'Cleaning...' : 'Clean False Positives'}</span>
           </button>
 
           {/* Scan Documents Button */}
           <button
             type="button"
-            className="btn btn-primary"
+            className="apple-primary-btn"
             onClick={handleRunDocumentScan}
             disabled={isScanning || isCleaning}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '12px',
-              padding: '6px 14px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
-            }}
           >
-            {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            {isScanning ? (scanProgress ? `Scanning ${scanProgress.percent}%` : 'Scanning...') : 'Scan Documents'}
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => { refreshPhotos(); showToast('Documents refreshed!') }}
-            title="Refresh"
-            style={{ display: 'flex', alignItems: 'center', padding: '6px 10px' }}
-          >
-            <RefreshCw size={15} />
+            {isScanning ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Scanning Documents...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} />
+                <span>Scan Documents</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* ─── Live Progressive Scan Banner (0% to 100%) ─────────────────── */}
-      {scanProgress && (
+      {/* ── Live Scanner Progress Banner ──────────────────────────────── */}
+      {(isScanning || scanProgress?.isScanning) && (
         <div
           style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '14px 18px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
-            position: 'relative',
-            overflow: 'hidden',
-            animation: 'fadeIn 0.2s ease-out'
+            background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
+            borderRadius: '16px',
+            padding: '14px 20px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px'
           }}
         >
-          {/* Top Row: Status Label & Percentage */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {scanProgress.isComplete ? (
-                <CheckCircle2 size={18} color="#10b981" />
-              ) : (
-                <Loader2 size={18} className="animate-spin" color="var(--primary, #3b82f6)" />
-              )}
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                {scanProgress.status || (scanProgress.isComplete
-                  ? `Scan Complete! Analyzed all ${scanProgress.total.toLocaleString()} items (${scanProgress.docsFound} verified documents found)`
-                  : `Analyzing library media for documents...`)}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                {scanProgress.completed.toLocaleString()} / {scanProgress.total.toLocaleString()}
-              </span>
-              <span
-                style={{
-                  background: scanProgress.isComplete ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  color: scanProgress.isComplete ? '#10b981' : 'var(--primary, #3b82f6)',
-                  fontWeight: 800,
-                  fontSize: '12px',
-                  padding: '2px 8px',
-                  borderRadius: '12px'
-                }}
-              >
-                {scanProgress.percent}%
-              </span>
-            </div>
-          </div>
-
-          {/* Progress Track & Fill Bar */}
-          <div
-            style={{
-              width: '100%',
-              height: '6px',
-              borderRadius: '3px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              overflow: 'hidden',
-              marginBottom: '8px'
-            }}
-          >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: `${scanProgress.percent}%`,
-                height: '100%',
-                background: scanProgress.isComplete
-                  ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)'
-                  : 'linear-gradient(90deg, #3b82f6 0%, #6366f1 100%)',
-                borderRadius: '3px',
-                transition: 'width 0.15s ease-out'
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(99, 102, 241, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#6366f1'
               }}
-            />
+            >
+              <Loader2 size={18} className="animate-spin" />
+            </div>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Scanning photo library for documents...
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Scanned {scanProgress?.completed || 0} of {scanProgress?.total || (photoState.photos.length || 0)} photos (
+                {scanProgress && scanProgress.total > 0
+                  ? Math.round((scanProgress.completed / scanProgress.total) * 100)
+                  : 0}
+                %){scanProgress && scanProgress.docsFound > 0 ? ` • ${scanProgress.docsFound} documents found` : ''}
+              </div>
+            </div>
           </div>
 
-          {/* Bottom Subtitle with Current File & Cancel */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)' }}>
-            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
-              {scanProgress.currentFile}
-            </span>
-            {!scanProgress.isComplete && (
-              <button
-                type="button"
-                onClick={handleStopScan}
-                className="btn btn-ghost"
-                style={{ fontSize: '11px', padding: '2px 8px', color: '#ef4444', fontWeight: 600 }}
-              >
-                Stop Scan
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            className="apple-secondary-btn"
+            onClick={handleStopScan}
+            style={{ fontSize: '12px', padding: '4px 10px' }}
+          >
+            Cancel
+          </button>
         </div>
       )}
 
       {/* ─── Category Filter Pills Bar ───────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '16px',
-          flexWrap: 'wrap',
-          gap: '10px',
-          paddingBottom: '12px',
-          borderBottom: '1px solid var(--border)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          {DOC_CATEGORIES.map((cat) => {
-            const count = categoryCounts[cat] || 0
-            if (cat !== 'All Documents' && count === 0) return null
-            const isActive = activeCategory === cat
-            const icon = CATEGORY_ICONS[cat] || <FileText size={13} />
+      {(categoryCounts['All Documents'] || 0) > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            flexWrap: 'wrap',
+            gap: '10px',
+            paddingBottom: '12px',
+            borderBottom: '1px solid var(--border)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {DOC_CATEGORIES.map((cat) => {
+              const count = categoryCounts[cat] || 0
+              if (count === 0) return null
+              const isActive = activeCategory === cat
+              const icon = CATEGORY_ICONS[cat] || <FileText size={13} />
 
-            return (
-              <button
-                key={cat}
-                type="button"
-                className={`btn ${isActive ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setActiveCategory(cat)}
-                style={{
-                  fontSize: '12px',
-                  padding: '5px 12px',
-                  borderRadius: '16px',
-                  fontWeight: isActive ? 700 : 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                {icon}
-                <span>{cat}</span>
-                <span style={{
-                  fontSize: '11px',
-                  opacity: isActive ? 0.9 : 0.6,
-                  fontWeight: 600
-                }}>
-                  ({count})
-                </span>
-              </button>
-            )
-          })}
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveCategory(cat)}
+                  style={{
+                    fontSize: '12px',
+                    padding: '5px 14px',
+                    borderRadius: '99px',
+                    fontWeight: isActive ? 600 : 500,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    border: isActive ? '1px solid transparent' : '1px solid var(--border)',
+                    background: isActive ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' : 'var(--bg-secondary)',
+                    color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                    boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none'
+                  }}
+                >
+                  {icon}
+                  <span>{cat}</span>
+                  <span style={{
+                    fontSize: '11px',
+                    opacity: isActive ? 0.9 : 0.6,
+                    fontWeight: 600
+                  }}>
+                    ({count})
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {documentPhotos.length > 0 && (
+            <button
+              type="button"
+              className="apple-secondary-btn"
+              onClick={handleSelectAll}
+              style={{ fontSize: '12px', padding: '5px 12px', gap: '6px' }}
+            >
+              {selectedIds.size === documentPhotos.length ? (
+                <CheckSquare size={14} color="#6366f1" />
+              ) : (
+                <Square size={14} />
+              )}
+              <span>{selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}</span>
+            </button>
+          )}
         </div>
-
-        {documentPhotos.length > 0 && (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={handleSelectAll}
-            style={{ fontSize: '12px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            {selectedIds.size === documentPhotos.length ? (
-              <CheckSquare size={15} color="var(--primary)" />
-            ) : (
-              <Square size={15} />
-            )}
-            {selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}
-          </button>
-        )}
-      </div>
+      )}
 
       {/* ─── Media-First Documents Grid ──────────────────────────────────── */}
       {documentPhotos.length === 0 ? (
         <EmptyState
-          icon={<ShieldCheck size={48} />}
-          title="No Documents Found"
-          description={searchQuery ? 'No documents match your search query.' : 'Click "Scan Documents" to run intelligent 165-type precision document OCR on your photo library.'}
-          actionLabel={searchQuery ? 'Clear Search' : 'Scan Library for Documents'}
-          onAction={searchQuery ? () => setSearchQuery('') : handleRunDocumentScan}
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="docIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <FileText
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#docIconGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              No <span className="title-sort-gradient">Documents</span> Found
+            </>
+          }
+          description="Detected documents, receipts, IDs, and screenshots of papers will appear here automatically."
         />
       ) : (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: '12px',
+            gridTemplateColumns: `repeat(auto-fill, minmax(${minTileWidth}px, 1fr))`,
+            gap: gridGap,
             marginBottom: '40px'
           }}
         >
@@ -612,7 +533,7 @@ export default function DocumentsPage() {
                 style={{
                   background: '#0b0f19',
                   border: isSelected ? '2.5px solid #3b82f6' : '1px solid var(--border)',
-                  borderRadius: '12px',
+                  borderRadius: tileRadius,
                   overflow: 'hidden',
                   cursor: 'pointer',
                   position: 'relative',
@@ -636,11 +557,11 @@ export default function DocumentsPage() {
                   onClick={(e) => handleToggleSelect(photo.id, e)}
                   style={{
                     position: 'absolute',
-                    top: '8px',
-                    left: '8px',
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '6px',
+                    top: isDense ? '4px' : '8px',
+                    left: isDense ? '4px' : '8px',
+                    width: `${checkboxSize}px`,
+                    height: `${checkboxSize}px`,
+                    borderRadius: isDense ? '4px' : '6px',
                     background: isSelected ? '#3b82f6' : 'rgba(0, 0, 0, 0.45)',
                     border: '1.5px solid #ffffff',
                     display: 'flex',
@@ -650,21 +571,21 @@ export default function DocumentsPage() {
                     zIndex: 2
                   }}
                 >
-                  {isSelected && <Check size={16} strokeWidth={3} />}
+                  {isSelected && <Check size={checkIconSize} strokeWidth={3} />}
                 </div>
 
                 {/* Category Badge Overlaid */}
                 <div
                   style={{
                     position: 'absolute',
-                    top: '8px',
-                    right: '8px',
+                    top: isDense ? '4px' : '8px',
+                    right: isDense ? '4px' : '8px',
                     background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
                     color: '#ffffff',
                     fontWeight: 700,
-                    fontSize: '10px',
-                    padding: '3px 8px',
-                    borderRadius: '10px',
+                    fontSize: badgeFontSize,
+                    padding: badgePadding,
+                    borderRadius: isDense ? '6px' : '10px',
                     boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
                     letterSpacing: '0.02em',
                     display: 'flex',
@@ -672,7 +593,7 @@ export default function DocumentsPage() {
                     gap: '4px'
                   }}
                 >
-                  {CATEGORY_ICONS[catLabel] || <FileText size={10} />}
+                  {CATEGORY_ICONS[catLabel] || <FileText size={isDense ? 8 : 10} />}
                   <span>{catLabel}</span>
                 </div>
 
@@ -683,7 +604,7 @@ export default function DocumentsPage() {
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    padding: '16px 8px 6px',
+                    padding: isDense ? '10px 4px 4px' : isMedium ? '14px 6px 5px' : '16px 8px 6px',
                     background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)',
                     display: 'flex',
                     flexDirection: 'column',
@@ -693,7 +614,7 @@ export default function DocumentsPage() {
                 >
                   <span
                     style={{
-                      fontSize: '11px',
+                      fontSize: isDense ? '9px' : isMedium ? '10px' : '11px',
                       color: '#f1f5f9',
                       fontWeight: 600,
                       whiteSpace: 'nowrap',

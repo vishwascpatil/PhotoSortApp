@@ -83,6 +83,7 @@ export interface OrganizationOptions {
   separateWhatsapp?: boolean
   separateFavorites?: boolean
   separateVideos?: boolean
+  keepVideosWithPhotos?: boolean
   separateDuplicates?: boolean
   separateScreenshots?: boolean
   separateSocialMedia?: boolean
@@ -93,6 +94,8 @@ export interface OrganizationOptions {
   categoryEligibility?: Record<string, boolean>
   onlyNamedPeople?: boolean
   excludedPhotoIdsByCategory?: Record<string, number[]>
+  selectedPersonNames?: string[]
+  selectedPlaces?: string[]
 }
 
 export interface TripWindow {
@@ -427,7 +430,7 @@ export function calculateRelativeSubpath(
   const separateDocs = (options.separateDocuments ?? true) && isEligible('documents') && !isExcluded('documents')
   const separateWhatsapp = (options.separateWhatsapp ?? true) && isEligible('whatsapp') && !isExcluded('whatsapp')
   const separateFavs = (options.separateFavorites ?? true) && isEligible('favorites') && !isExcluded('favorites')
-  const separateVids = (options.separateVideos ?? true) && isEligible('videos') && !isExcluded('videos')
+  const separateVids = (options.separateVideos ?? true) && isEligible('videos') && !isExcluded('videos') && options.keepVideosWithPhotos !== true
   const separateDupes = (options.separateDuplicates ?? true) && isEligible('duplicates') && !isExcluded('duplicates')
   const separateScreenshots = (options.separateScreenshots ?? true) && isEligible('screenshots') && !isExcluded('screenshots')
   const separateSocial = (options.separateSocialMedia ?? true) && isEligible('socialMedia') && !isExcluded('socialMedia')
@@ -455,7 +458,7 @@ export function calculateRelativeSubpath(
   // 2. Strict Year-Month override
   if (isYearMonth) {
     const isVid = isPhotoVideo(photo)
-    return { relativePath: join(year, month), category: isVid ? 'Videos' : 'Photos' }
+    return { relativePath: join(year, month), category: isVid ? (separateVids ? 'Videos' : 'Photos & Videos') : 'Photos' }
   }
 
   // 3. Category Detection
@@ -481,9 +484,14 @@ export function calculateRelativeSubpath(
 
   // D. WhatsApp
   if (separateWhatsapp && isPhotoWhatsapp(photo)) {
-    const sub = isPhotoVideo(photo) ? 'Videos' : 'Photos'
-    const rel = isCategoryFirst ? join('WhatsApp', sub) : join(year, 'WhatsApp', sub)
-    return { relativePath: rel, category: 'WhatsApp' }
+    if (separateVids) {
+      const sub = isPhotoVideo(photo) ? 'Videos' : 'Photos'
+      const rel = isCategoryFirst ? join('WhatsApp', sub) : join(year, 'WhatsApp', sub)
+      return { relativePath: rel, category: 'WhatsApp' }
+    } else {
+      const rel = isCategoryFirst ? 'WhatsApp' : join(year, 'WhatsApp')
+      return { relativePath: rel, category: 'WhatsApp' }
+    }
   }
 
   // E. Social Media
@@ -497,9 +505,15 @@ export function calculateRelativeSubpath(
     const rawNames = peopleMap.get(photo.id)!
     // If onlyNamedPeople is active (default true), exclude "Unknown Person"
     const onlyNamed = options.onlyNamedPeople !== false
-    const validNames = onlyNamed
+    let validNames = onlyNamed
       ? rawNames.filter(n => n && n.trim() && n.toLowerCase() !== 'unknown person' && !n.toLowerCase().startsWith('unknown person'))
       : rawNames
+
+    // User Selection Filter: Only export people that the user explicitly selected
+    if (options.selectedPersonNames !== undefined) {
+      const allowed = new Set(options.selectedPersonNames.map(n => n.trim().toLowerCase()))
+      validNames = validNames.filter(n => allowed.has(n.trim().toLowerCase()))
+    }
 
     if (validNames.length > 0) {
       const personFolder = sanitizeFolderName(validNames.slice(0, 2).join(' & '))
@@ -508,24 +522,24 @@ export function calculateRelativeSubpath(
     }
   }
 
-  // G. Places / Locations / Trips
-  let effectiveLocation = photo.location_name && photo.location_name.trim().length > 0
+  // G. Places / Locations / Trips (HARD RULE: ONLY if genuine EXIF GPS is present)
+  const hasExifGps = (photo as any).gps_lat !== null && (photo as any).gps_lat !== undefined &&
+                     (photo as any).gps_lon !== null && (photo as any).gps_lon !== undefined &&
+                     typeof (photo as any).gps_lat === 'number' && typeof (photo as any).gps_lon === 'number'
+
+  const effectiveLocation = (hasExifGps && photo.location_name && photo.location_name.trim().length > 0)
     ? photo.location_name.trim()
     : null
-  let isInferredTrip = false
-
-  if (!effectiveLocation && separatePlaces && smartTripInference && datePart) {
-    const matchedTrip = findMatchingTripWindow(datePart, tripWindows)
-    if (matchedTrip) {
-      effectiveLocation = matchedTrip.locationName
-      isInferredTrip = true
-    }
-  }
 
   if (separatePlaces && effectiveLocation) {
-    const placeName = sanitizeFolderName(effectiveLocation)
-    const rel = isCategoryFirst ? join('Places', placeName) : join(year, `Trip - ${placeName}`)
-    return { relativePath: rel, category: 'Places', isInferredTrip }
+    const isPlaceSelected = options.selectedPlaces === undefined ||
+      options.selectedPlaces.some(p => p.trim().toLowerCase() === effectiveLocation.toLowerCase())
+
+    if (isPlaceSelected) {
+      const placeName = sanitizeFolderName(effectiveLocation)
+      const rel = isCategoryFirst ? join('Places', placeName) : join(year, `Trip - ${placeName}`)
+      return { relativePath: rel, category: 'Places' }
+    }
   }
 
   // H. Favorites
@@ -534,15 +548,17 @@ export function calculateRelativeSubpath(
     return { relativePath: rel, category: 'Favorites' }
   }
 
-  // I. Videos
+  // I. Videos (only if user explicitly chose to separate videos into their own folder)
   if (separateVids && isPhotoVideo(photo)) {
     const rel = isCategoryFirst ? join('Videos', year) : join(year, 'Videos')
     return { relativePath: rel, category: 'Videos' }
   }
 
-  // J. Default Camera Photos
-  const defaultRel = isCategoryFirst ? join('Photos', year, month) : join(year, month)
-  return { relativePath: defaultRel, category: 'Photos' }
+  // J. Default Camera Media (Photos & Videos stay together in same date folder)
+  const isVid = isPhotoVideo(photo)
+  const mediaFolder = separateVids ? 'Photos' : 'Photos & Videos'
+  const defaultRel = isCategoryFirst ? join(mediaFolder, year, month) : join(year, month)
+  return { relativePath: defaultRel, category: isVid ? 'Photos & Videos' : 'Photos' }
 }
 
 /**
@@ -550,19 +566,24 @@ export function calculateRelativeSubpath(
  */
 function fetchCandidatePhotos(options: OrganizationOptions): PhotoRow[] {
   const database = getDb()
-  let sql = 'SELECT * FROM photos WHERE is_trashed = 0'
+  let sql = `
+    SELECT p.*, e.gps_lat, e.gps_lon 
+    FROM photos p
+    LEFT JOIN exif_data e ON p.id = e.photo_id
+    WHERE p.is_trashed = 0
+  `
   const params: any[] = []
 
   if (options.fileIds && options.fileIds.length > 0) {
     const placeholders = options.fileIds.map(() => '?').join(',')
-    sql += ` AND id IN (${placeholders})`
+    sql += ` AND p.id IN (${placeholders})`
     params.push(...options.fileIds)
   } else if (options.folderPathFilter) {
-    sql += ' AND file_path LIKE ?'
+    sql += ' AND p.file_path LIKE ?'
     params.push(`${options.folderPathFilter}%`)
   }
 
-  sql += ' ORDER BY created_at DESC'
+  sql += ' ORDER BY p.created_at DESC'
 
   const stmt = database.prepare(sql)
   if (params.length > 0) stmt.bind(params)
@@ -638,8 +659,9 @@ export function generateOrganizationPreviewPlan(options: OrganizationOptions): O
       categoryBreakdown.whatsapp++
     } else if (category === 'Favorites') {
       categoryBreakdown.favorites++
-    } else if (category === 'Videos') {
-      categoryBreakdown.videos++
+    } else if (category === 'Videos' || category === 'Photos & Videos') {
+      if (isPhotoVideo(photo)) categoryBreakdown.videos++
+      else categoryBreakdown.generalPhotos++
     } else if (category === 'Duplicates') {
       categoryBreakdown.duplicates++
     } else if (category === 'Screenshots') {

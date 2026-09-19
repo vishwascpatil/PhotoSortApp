@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { Folder, RefreshCw, Trash2, ArrowLeft, Plus, HardDrive, CheckCircle2, FolderTree, Download } from 'lucide-react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import { Folder, RefreshCw, Trash2, ArrowLeft, Plus, CheckCircle2, FolderTree } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
 import PhotoGrid from '../components/PhotoGrid'
@@ -23,6 +23,10 @@ export default function FoldersPage() {
   const [syncMessage, setSyncMessage] = useState('')
   const [folderPhotos, setFolderPhotos] = useState<Photo[]>([])
   const [loadingFolderPhotos, setLoadingFolderPhotos] = useState(false)
+
+  const totalPhotos = useMemo(() => {
+    return folders.reduce((acc, f) => acc + (f.photo_count || 0), 0)
+  }, [folders])
 
   const loadFolders = useCallback(async () => {
     try {
@@ -177,11 +181,31 @@ export default function FoldersPage() {
             </div>
           ) : folderPhotos.length === 0 ? (
             <EmptyState
-              icon={<Folder size={48} />}
-              title="No photos in this folder"
-              description="Click Sync Disk Changes to re-scan this folder for media files."
-              actionLabel="Sync Disk Changes"
-              onAction={() => handleSyncSingleFolder(null as any, selectedFolder)}
+              icon={
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="0" height="0" style={{ position: 'absolute' }}>
+                    <defs>
+                      <linearGradient id="folderDetailEmptyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#4f46e5" />
+                        <stop offset="50%" stopColor="#6366f1" />
+                        <stop offset="100%" stopColor="#7c3aed" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <Folder
+                    size={46}
+                    strokeWidth={1.8}
+                    stroke="url(#folderDetailEmptyGrad)"
+                    style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+                  />
+                </div>
+              }
+              title={
+                <>
+                  No Photos in <span className="title-sort-gradient">This Folder</span>
+                </>
+              }
+              description="Click Sync Disk Changes above to re-scan this folder for media files."
             />
           ) : (
             <PhotoGrid photos={folderPhotos} />
@@ -194,40 +218,42 @@ export default function FoldersPage() {
   // ─── Render Folders Grid View ──────────────────────────────────────────
   return (
     <div className="folders-page-container">
-      {/* Top Header */}
-      <div className="folders-header">
-        <div>
-          <h1 className="folders-page-title">
-            <HardDrive size={24} style={{ color: '#6366f1' }} />
-            Imported Folders
-          </h1>
+      {/* Action Header */}
+      <div
+        className="page-header"
+        style={{
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {folders.length > 0 && (
+            <span className="apple-storage-pill">
+              {folders.length} {folders.length === 1 ? 'folder' : 'folders'} • {totalPhotos} {totalPhotos === 1 ? 'photo' : 'photos'}
+            </span>
+          )}
         </div>
 
-        <div className="folders-header-actions">
-          <button
-            type="button"
-            onClick={() => openExportModal({ mode: 'copy' })}
-            disabled={folders.length === 0}
-            className="apple-secondary-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            title="Organize files by Year -> Trips -> Documents -> Months and Export"
-          >
-            <FolderTree size={14} style={{ color: '#0ea5e9' }} />
-            <span>Organize & Export</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSyncAll}
-            disabled={isSyncing || folders.length === 0}
-            className="apple-secondary-btn"
-          >
-            <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-            <span>{isSyncing ? 'Syncing All...' : 'Sync All Folders'}</span>
-          </button>
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          {folders.length > 0 && (
+            <button
+              type="button"
+              onClick={handleSyncAll}
+              disabled={isSyncing}
+              className="apple-secondary-btn"
+            >
+              <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync All Folders'}</span>
+            </button>
+          )}
 
           <button type="button" onClick={handleImportNewFolder} className="apple-primary-btn">
-            <Plus size={16} />
+            <Plus size={14} />
             <span>Import Folder</span>
           </button>
         </div>
@@ -244,11 +270,31 @@ export default function FoldersPage() {
       {/* Empty State if No Folders Tracked */}
       {folders.length === 0 ? (
         <EmptyState
-          icon={<HardDrive size={48} />}
-          title="No Tracked Folders"
-          description="Import folders from your computer to enable automated disk synchronization."
-          actionLabel="Import Folder Now"
-          onAction={handleImportNewFolder}
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <linearGradient id="folderTrackGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <Folder
+                size={46}
+                strokeWidth={1.8}
+                stroke="url(#folderTrackGrad)"
+                style={{ filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              No <span className="title-sort-gradient">Imported Folders</span>
+            </>
+          }
+          description="Import folders from your computer to organize, view, and synchronize media files."
         />
       ) : (
         <div className="folders-card-grid">
@@ -273,7 +319,7 @@ export default function FoldersPage() {
                     className="apple-card-action-btn"
                     title="Organize this folder"
                   >
-                    <FolderTree size={14} style={{ color: '#0ea5e9' }} />
+                    <FolderTree size={14} style={{ color: '#6366f1' }} />
                   </button>
                   <button
                     type="button"

@@ -533,9 +533,6 @@ export default function ExplorePage({ initialTab = 'map' }: ExplorePageProps = {
                       <button className="btn btn-primary" onClick={handleStartScan}>
                         <UserCheck size={16} /> Scan for Faces
                       </button>
-                      <button className="btn btn-ghost" onClick={handleFindMergeSuggestions} style={{ fontSize: '12px' }}>
-                        Find Duplicates
-                      </button>
                       <button className="btn btn-ghost" onClick={handleResetScan} style={{ fontSize: '12px' }}>
                         Reset & Rescan All
                       </button>

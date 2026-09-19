@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Compass, Images, Film, Users, MapPin, Copy, Sparkles, Monitor, HardDrive,
+  Images, Film, Users, MapPin, Copy, Sparkles, Monitor, HardDrive,
   MessageSquare, FileText, Cpu, Zap, ArrowRight, ShieldCheck, CheckCircle2, RefreshCw, Loader2
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
-import { usePhotos } from '../contexts/PhotoContext'
 
 import EmptyState from '../components/EmptyState'
 import { Folder } from 'lucide-react'
 
 export default function OverviewPage() {
   const { state, navigateTo, openCleanUpModal } = useApp()
-  const { state: photoState } = usePhotos()
 
   const [stats, setStats] = useState({ totalPhotos: 0, totalSize: 0, favorites: 0, albums: 0 })
   const [importedFolders, setImportedFolders] = useState<any[]>([])
@@ -40,9 +38,6 @@ export default function OverviewPage() {
   const total = importStatus.total > 0 ? importStatus.total : stats.totalPhotos
   const completed = importStatus.completed > 0 ? importStatus.completed : stats.totalPhotos
   const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 100
-
-  // Scanned thumbnails for live activity stream
-  const recentPhotos = photoState.photos.slice(0, 10)
 
   if (stats.totalPhotos === 0 && importedFolders.length === 0 && !isScanning) {
     return (
@@ -183,24 +178,6 @@ export default function OverviewPage() {
           </div>
         </div>
       </section>
-
-      {/* ─── Live Scanned Media Stream ───────────────────────────────────── */}
-      {recentPhotos.length > 0 && (
-        <section className="overview-section">
-          <div className="section-title-box" style={{ marginBottom: '18px' }}>
-            <Compass size={20} className="section-icon-blue" />
-            <h2 className="section-title-text">Recently Scanned Media</h2>
-          </div>
-
-          <div className="media-stream-grid">
-            {recentPhotos.map(photo => (
-              <div key={photo.id} className="stream-thumb-card" onClick={() => navigateTo('photos')}>
-                <img src={photo.thumbnail_path || photo.file_path} alt="Thumbnail" className="stream-thumb-img" />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   )
 }
