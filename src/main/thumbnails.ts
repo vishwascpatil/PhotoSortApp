@@ -281,8 +281,8 @@ export async function generateThumbnailBatch(
     }
   }
 
-  // Batch process photos with high concurrency (32 parallel workers)
-  const PHOTO_CONCURRENCY = Math.max(32, cpus().length * 4)
+  // Batch process photos with balanced concurrency and event loop yielding
+  const PHOTO_CONCURRENCY = Math.min(16, Math.max(4, cpus().length * 2))
   for (let i = 0; i < photoFiles.length; i += PHOTO_CONCURRENCY) {
     const batch = photoFiles.slice(i, i + PHOTO_CONCURRENCY)
     await Promise.allSettled(
@@ -297,10 +297,12 @@ export async function generateThumbnailBatch(
         }
       })
     )
+    // Yield to the Node.js event loop between batches so IPC and watchdog timers remain responsive
+    await new Promise(r => setImmediate(r))
   }
 
   // Batch process videos with optimal process concurrency (prevents CPU process thrashing)
-  const VIDEO_CONCURRENCY = Math.max(16, cpus().length)
+  const VIDEO_CONCURRENCY = Math.min(8, Math.max(2, cpus().length))
   for (let i = 0; i < videoFiles.length; i += VIDEO_CONCURRENCY) {
     const batch = videoFiles.slice(i, i + VIDEO_CONCURRENCY)
     await Promise.allSettled(
@@ -315,6 +317,7 @@ export async function generateThumbnailBatch(
         }
       })
     )
+    await new Promise(r => setTimeout(r, 20))
   }
 }
 

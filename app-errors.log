@@ -1,0 +1,16 @@
+[2026-09-19T10:02:07.789Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 3106ms.
+Memory: RSS: 1251MB, HeapUsed: 72MB / 88MB
+
+[2026-09-19T10:02:19.685Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 7347ms.
+Memory: RSS: 1431MB, HeapUsed: 148MB / 165MB
+
+[2026-09-19T10:02:36.010Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 7946ms.
+Memory: RSS: 1391MB, HeapUsed: 113MB / 130MB
+
+[2026-09-19T10:02:41.601Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 2583ms.
+Memory: RSS: 1220MB, HeapUsed: 48MB / 65MB
+

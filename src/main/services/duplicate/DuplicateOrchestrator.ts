@@ -83,40 +83,43 @@ export class DuplicateOrchestrator {
     const recordMap = new Map<number, PhotoFingerprintRecord>()
     records.forEach((r) => recordMap.set(r.photoId, r))
 
+    // Flatten candidate pairs into a unique pair array
+    const pairList: [PhotoFingerprintRecord, PhotoFingerprintRecord][] = []
+    candidateMap.forEach((targetSet, id1Str) => {
+      const id1 = parseInt(id1Str, 10)
+      const r1 = recordMap.get(id1)
+      if (!r1) return
+
+      for (const id2 of targetSet) {
+        const r2 = recordMap.get(id2)
+        if (r2) {
+          pairList.push([r1, r2])
+        }
+      }
+    })
+
+    const totalPairs = pairList.length
     const detectedPairs: DuplicatePair[] = []
-    let totalPairs = 0
-    candidateMap.forEach((set) => (totalPairs += set.size))
+    const PAIR_BATCH_SIZE = 50
 
-    let evaluatedPairs = 0
-
-    const entries = Array.from(candidateMap.entries())
-    const BATCH_SIZE = 50
-
-    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-      const batchEntries = entries.slice(i, i + BATCH_SIZE)
-      await Promise.all(
-        batchEntries.map(async ([id1Str, targetSet]) => {
-          const id1 = parseInt(id1Str, 10)
-          const r1 = recordMap.get(id1)
-          if (!r1) return
-
-          for (const id2 of targetSet) {
-            const r2 = recordMap.get(id2)
-            if (!r2) continue
-
-            // Stages 2 - 6 Evaluation
-            const pairResult = await defaultDuplicateDetectionService.evaluatePair(r1, r2)
-            if (pairResult) {
-              detectedPairs.push(pairResult)
-            }
-
-            evaluatedPairs++
-            if (evaluatedPairs % 20 === 0) {
-              onProgress?.(evaluatedPairs, Math.max(evaluatedPairs, totalPairs))
-            }
-          }
-        })
+    for (let i = 0; i < totalPairs; i += PAIR_BATCH_SIZE) {
+      const chunk = pairList.slice(i, i + PAIR_BATCH_SIZE)
+      const results = await Promise.all(
+        chunk.map(([r1, r2]) => defaultDuplicateDetectionService.evaluatePair(r1, r2))
       )
+      for (const res of results) {
+        if (res) {
+          detectedPairs.push(res)
+        }
+      }
+
+      const evaluatedCount = Math.min(i + chunk.length, totalPairs)
+      if (evaluatedCount % 50 === 0 || evaluatedCount === totalPairs) {
+        onProgress?.(evaluatedCount, totalPairs)
+      }
+
+      // Yield to the Node.js event loop every 50 pairs to guarantee UI stays 60fps and watchdog never triggers
+      await new Promise((resolve) => setImmediate(resolve))
     }
 
     onProgress?.(totalPairs, totalPairs)

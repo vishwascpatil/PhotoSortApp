@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase, closeDatabase } from './database'
 import { registerIpcHandlers } from './ipc-handlers'
-import { setupLogger } from './logger'
+import { setupLogger, logErrorToFile } from './logger'
 import { ensureThumbnailDir, queueMissingVideoThumbnails, generateThumbnailBatch } from './thumbnails'
 import { syncAllTrackedFolders } from './syncer'
 
@@ -57,6 +57,45 @@ function createWindow(): void {
 
   mainWindow.on('unmaximize', () => {
     mainWindow?.webContents.send('window:state-changed', false)
+  })
+
+  // Detect when window becomes unresponsive (Chromium UI thread hang)
+  mainWindow.on('unresponsive', () => {
+    const mem = process.memoryUsage()
+    const memInfo = `RSS: ${Math.round(mem.rss / 1048576)}MB, Heap: ${Math.round(mem.heapUsed / 1048576)}MB`
+    logErrorToFile(
+      'WINDOW_HANG_UNRESPONSIVE',
+      `Application window stopped responding (Renderer UI thread hung).\nMemory: ${memInfo}`
+    )
+  })
+
+  mainWindow.on('responsive', () => {
+    logErrorToFile(
+      'WINDOW_HANG_RECOVERED',
+      'Application window recovered from unresponsive state and is responsive again.'
+    )
+  })
+
+  // Detect if renderer process crashes or terminates
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    logErrorToFile(
+      'RENDER_PROCESS_GONE',
+      `Renderer process terminated unexpectedly.\nReason: ${details.reason}, Exit Code: ${details.exitCode}`
+    )
+  })
+
+  mainWindow.webContents.on('unresponsive', () => {
+    logErrorToFile(
+      'WEB_CONTENTS_UNRESPONSIVE',
+      'WebContents became unresponsive (Chromium renderer stall).'
+    )
+  })
+
+  mainWindow.webContents.on('responsive', () => {
+    logErrorToFile(
+      'WEB_CONTENTS_RESPONSIVE',
+      'WebContents recovered from unresponsive state and is responsive again.'
+    )
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

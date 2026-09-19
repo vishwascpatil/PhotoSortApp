@@ -342,7 +342,8 @@ export async function rebuildExifData(): Promise<void> {
       SELECT p.id, p.file_path 
       FROM photos p 
       LEFT JOIN exif_data e ON p.id = e.photo_id 
-      WHERE e.gps_lat IS NULL OR e.photo_id IS NULL
+      WHERE e.photo_id IS NULL
+      LIMIT 200
     `)
 
     if (photos.length === 0) return
@@ -361,7 +362,12 @@ export async function rebuildExifData(): Promise<void> {
       return decimal
     }
 
+    let processed = 0
     for (const photo of photos) {
+      processed++
+      if (processed % 10 === 0) {
+        await new Promise(r => setImmediate(r))
+      }
       if (!photo.file_path || !existsSync(photo.file_path)) continue
       try {
         let lat: number | undefined
@@ -430,7 +436,7 @@ export async function rebuildExifData(): Promise<void> {
 
 // ─── Helper to convert sql.js results to objects ────────────────────────
 
-function queryAll<T>(sql: string, params: unknown[] = []): T[] {
+export function queryAll<T>(sql: string, params: unknown[] = []): T[] {
   const database = getDb()
   const stmt = database.prepare(sql)
   if (params.length > 0) stmt.bind(params as any)
@@ -444,12 +450,12 @@ function queryAll<T>(sql: string, params: unknown[] = []): T[] {
   return results
 }
 
-function queryOne<T>(sql: string, params: unknown[] = []): T | undefined {
+export function queryOne<T>(sql: string, params: unknown[] = []): T | undefined {
   const results = queryAll<T>(sql, params)
   return results[0]
 }
 
-function runSql(sql: string, params: unknown[] = []): void {
+export function runSql(sql: string, params: unknown[] = []): void {
   const database = getDb()
   database.run(sql, params as any)
   scheduleSave()
@@ -1191,7 +1197,13 @@ export async function getUtilitiesData(
   `)?.count || 0
 
   if (unanalyzedCount > 0) {
-    await scanPerceptualHashesBatch(onProgress, false)
+    if (forceRefresh) {
+      await scanPerceptualHashesBatch(onProgress, false)
+    } else {
+      // In non-force mode (e.g. user simply clicked Duplicates in sidebar),
+      // run background scan asynchronously so navigation responds immediately without hanging!
+      scanPerceptualHashesBatch(undefined, false).catch(() => {})
+    }
   }
 
   const fingerprints = getAllPhotoFingerprints()
@@ -1256,7 +1268,7 @@ export async function scanPerceptualHashesBatch(
   }
 
   let completed = 0
-  const BATCH_SIZE = 32
+  const BATCH_SIZE = 8
 
   for (let i = 0; i < unanalyzed.length; i += BATCH_SIZE) {
     const batch = unanalyzed.slice(i, i + BATCH_SIZE)
@@ -1288,9 +1300,12 @@ export async function scanPerceptualHashesBatch(
     if (fps.length > 0) {
       savePhotoFingerprintsBatch(fps)
     }
+
+    // Yield to the Node.js event loop between batches so IPC and navigation stay 100% responsive
+    await new Promise(r => setTimeout(r, 40))
   }
 
-  saveDatabase()
+  scheduleSave()
   return { scannedCount: completed, duplicateCount: total }
 }
 
@@ -1467,6 +1482,7 @@ export function mergePeople(primaryId: number, secondaryId: number): void {
   // Delete secondary person
   runSql('DELETE FROM people WHERE id = ?', [secondaryId])
 
+  invalidateMergeSuggestionsCache()
   saveDatabase()
 }
 
@@ -1474,6 +1490,7 @@ export function deletePerson(personId: number): void {
   runSql('DELETE FROM photo_people WHERE person_id = ?', [personId])
   runSql('DELETE FROM face_descriptors WHERE person_id = ?', [personId])
   runSql('DELETE FROM people WHERE id = ?', [personId])
+  invalidateMergeSuggestionsCache()
   saveDatabase()
 }
 
@@ -1537,6 +1554,7 @@ export function saveFaceDescriptor(photoId: number, personId: number, descriptor
   runSql('INSERT INTO face_descriptors (photo_id, person_id, descriptor) VALUES (?, ?, ?)', [
     photoId, personId, JSON.stringify(descriptor)
   ])
+  invalidateMergeSuggestionsCache()
   addPhotoToPerson(personId, photoId)
 }
 
@@ -1553,6 +1571,7 @@ export function resetFaceScanData(): void {
   runSql('DELETE FROM photo_people') // Failsafe
   runSql('DELETE FROM face_descriptors') // Failsafe
   runSql('UPDATE photos SET faces_scanned = 0')
+  invalidateMergeSuggestionsCache()
   saveDatabase()
 }
 
@@ -1589,7 +1608,19 @@ function euclideanDistance(desc1: number[], desc2: number[]): number {
   return Math.sqrt(sum)
 }
 
-export function getMergeSuggestions(): MergeSuggestion[] {
+let cachedMergeSuggestions: MergeSuggestion[] | null = null
+let cachedMergeSuggestionsTime = 0
+
+export function invalidateMergeSuggestionsCache(): void {
+  cachedMergeSuggestions = null
+  cachedMergeSuggestionsTime = 0
+}
+
+export function getMergeSuggestions(forceRefresh = false): MergeSuggestion[] {
+  if (!forceRefresh && cachedMergeSuggestions && (Date.now() - cachedMergeSuggestionsTime < 45000)) {
+    return cachedMergeSuggestions
+  }
+
   const people = getPeople()
   const faces = getAllFaceDescriptors()
 
@@ -1677,6 +1708,8 @@ export function getMergeSuggestions(): MergeSuggestion[] {
   }
 
   suggestions.sort((a, b) => b.confidence - a.confidence)
+  cachedMergeSuggestions = suggestions
+  cachedMergeSuggestionsTime = Date.now()
   return suggestions
 }
 

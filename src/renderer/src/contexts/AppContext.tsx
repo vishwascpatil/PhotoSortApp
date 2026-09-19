@@ -67,11 +67,13 @@ type AppAction =
   | { type: 'OPEN_CLEANUP_MODAL'; payload?: { importedCount?: number } }
   | { type: 'CLOSE_CLEANUP_MODAL' }
 
+const savedTheme = (typeof localStorage !== 'undefined' && (localStorage.getItem('photovault_theme') as 'dark' | 'light')) || 'light'
+
 const initialState: AppState = {
   currentView: 'loading',
   currentAlbumId: null,
   sidebarCollapsed: false,
-  theme: 'light',
+  theme: savedTheme,
   gridDensity: 'dense',
   toasts: [],
   searchQuery: '',
@@ -205,6 +207,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const newTheme = state.theme === 'dark' ? 'light' : 'dark'
     dispatch({ type: 'SET_THEME', payload: newTheme })
     document.documentElement.setAttribute('data-theme', newTheme)
+    try {
+      localStorage.setItem('photovault_theme', newTheme)
+    } catch {}
   }, [state.theme])
 
   // Initialize default theme & platform

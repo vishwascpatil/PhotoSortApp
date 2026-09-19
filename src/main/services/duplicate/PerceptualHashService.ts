@@ -41,39 +41,16 @@ export class PerceptualHashService implements IPerceptualHashService {
         } catch { }
       }
 
-      const sharpImg = sharp(input, { failOn: 'none' })
-
-      // 1. Compute 256-bit dHash (17x16 raw pixel intensity gradient)
-      const dhashData = await sharpImg
-        .clone()
-        .resize(17, 16, { fit: 'fill' })
-        .grayscale()
-        .raw()
-        .toBuffer()
+      // Parallelize image resizing via direct pipelines (faster than sequential clone forks)
+      const [dhashData, dctData, ahashData] = await Promise.all([
+        sharp(input, { failOn: 'none' }).resize(17, 16, { fit: 'fill' }).grayscale().raw().toBuffer(),
+        sharp(input, { failOn: 'none' }).resize(32, 32, { fit: 'fill' }).grayscale().raw().toBuffer(),
+        sharp(input, { failOn: 'none' }).resize(8, 8, { fit: 'fill' }).grayscale().raw().toBuffer()
+      ])
 
       const dhash = this.calculateDHashFromBuffer(dhashData, 17, 16)
-
-      // 2. Compute 64-bit aHash (8x8 average luminance)
-      const ahashData = await sharpImg
-        .clone()
-        .resize(8, 8, { fit: 'fill' })
-        .grayscale()
-        .raw()
-        .toBuffer()
-
       const ahash = this.calculateAHashFromBuffer(ahashData)
-
-      // 3. Compute 64-bit BlockHash (8x8 mean block)
       const blockHash = this.calculateBlockHashFromBuffer(ahashData)
-
-      // 4. Compute 64-bit pHash (32x32 DCT frequency domain)
-      const dctData = await sharpImg
-        .clone()
-        .resize(32, 32, { fit: 'fill' })
-        .grayscale()
-        .raw()
-        .toBuffer()
-
       const phash = this.calculateDCTpHashFromBuffer(dctData, 32, 32)
 
       return {

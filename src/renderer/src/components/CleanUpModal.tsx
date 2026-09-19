@@ -219,8 +219,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.78)',
-        backdropFilter: 'blur(16px)',
+        backgroundColor: 'var(--bg-scrim, rgba(0, 0, 0, 0.65))',
+        backdropFilter: 'blur(12px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -234,12 +234,12 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
           width: '740px',
           maxWidth: '95vw',
           maxHeight: '90vh',
-          backgroundColor: 'var(--bg-secondary, #1e293b)',
+          backgroundColor: 'var(--bg-elevated, #ffffff)',
           borderRadius: '24px',
-          border: '1px solid rgba(255, 255, 255, 0.14)',
+          border: '1px solid var(--border)',
           padding: '30px 34px',
-          boxShadow: '0 28px 64px rgba(0, 0, 0, 0.75)',
-          color: 'var(--text-primary, #ffffff)',
+          boxShadow: 'var(--shadow-xl, 0 28px 64px rgba(0, 0, 0, 0.35))',
+          color: 'var(--text-primary)',
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
@@ -260,14 +260,14 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#ffffff',
-                boxShadow: '0 4px 16px rgba(59, 130, 246, 0.4)'
+                boxShadow: '0 4px 16px rgba(59, 130, 246, 0.35)'
               }}
             >
               <Sparkles size={24} />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
                   {importedCount ? `Import Complete — Free Up Space` : `Clean Up Suggestions`}
                 </h2>
                 {importedCount ? (
@@ -275,17 +275,17 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     style={{
                       fontSize: '11px',
                       fontWeight: 700,
-                      padding: '2px 8px',
+                      padding: '3px 9px',
                       borderRadius: '10px',
-                      background: 'rgba(59, 130, 246, 0.2)',
-                      color: '#60a5fa'
+                      background: 'rgba(59, 130, 246, 0.12)',
+                      color: 'var(--accent, #2563eb)'
                     }}
                   >
                     +{importedCount} Imported
                   </span>
                 ) : null}
               </div>
-              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary, #94a3b8)' }}>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
                 Like Google Photos, PhotoSort analyzed your library to help you identify clutter and reclaim storage.
               </p>
             </div>
@@ -295,17 +295,26 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
             type="button"
             className="btn btn-ghost"
             onClick={onClose}
-            style={{ padding: '6px', borderRadius: '50%', color: 'var(--text-secondary)' }}
+            aria-label="Close modal"
+            style={{
+              padding: '6px',
+              borderRadius: '50%',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
         {/* Hero Space Savings Banner */}
         <div
           style={{
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%)',
-            border: '1px solid rgba(59, 130, 246, 0.25)',
+            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)',
+            border: '1px solid rgba(59, 130, 246, 0.22)',
             borderRadius: '18px',
             padding: '16px 20px',
             marginBottom: '22px',
@@ -317,14 +326,14 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
           }}
         >
           <div>
-            <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#60a5fa' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent, #3b82f6)' }}>
               Potential Reclaimable Storage
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', marginTop: '2px' }}>
               {isLoadingDuplicates && cleanUpStats.duplicates.count === 0 ? (
                 <>
                   {formatFileSize(cleanUpStats.totalRecoverableBytes)}
-                  <span style={{ fontSize: '13px', fontWeight: 500, color: '#93c5fd', marginLeft: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-tertiary)', marginLeft: '8px' }}>
                     (+ analyzing duplicates...)
                   </span>
                 </>
@@ -344,9 +353,9 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              background: 'rgba(34, 197, 94, 0.15)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
-              color: '#22c55e',
+              background: 'rgba(34, 197, 94, 0.12)',
+              border: '1px solid rgba(34, 197, 94, 0.28)',
+              color: '#16a34a',
               padding: '6px 12px',
               borderRadius: '12px',
               fontSize: '12px',
@@ -370,8 +379,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
           <div
             onClick={() => handleNavigate('large-files')}
             style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border)',
               borderRadius: '18px',
               padding: '18px',
               cursor: 'pointer',
@@ -383,10 +392,12 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = '#8b5cf6'
               e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.borderColor = 'var(--border)'
               e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
             }}
           >
             <div>
@@ -396,8 +407,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     width: '38px',
                     height: '38px',
                     borderRadius: '10px',
-                    background: 'rgba(139, 92, 246, 0.2)',
-                    color: '#a78bfa',
+                    background: 'rgba(139, 92, 246, 0.15)',
+                    color: '#8b5cf6',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
@@ -411,15 +422,16 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     fontWeight: 700,
                     padding: '3px 8px',
                     borderRadius: '10px',
-                    background: 'rgba(139, 92, 246, 0.15)',
-                    color: '#c4b5fd'
+                    background: 'rgba(139, 92, 246, 0.14)',
+                    color: '#8b5cf6',
+                    border: '1px solid rgba(139, 92, 246, 0.25)'
                   }}
                 >
                   {formatFileSize(cleanUpStats.large.bytes)}
                 </span>
               </div>
-              <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700 }}>Large Videos & Photos</h4>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Large Videos & Photos</h4>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                 {cleanUpStats.large.count} media files taking up significant space (&gt;25MB).
               </p>
             </div>
@@ -431,7 +443,7 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                 gap: '6px',
                 fontSize: '12px',
                 fontWeight: 700,
-                color: '#a78bfa'
+                color: '#8b5cf6'
               }}
             >
               Review Large Files <ArrowRight size={14} />
@@ -442,8 +454,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
           <div
             onClick={() => handleNavigate('junk')}
             style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border)',
               borderRadius: '18px',
               padding: '18px',
               cursor: 'pointer',
@@ -455,10 +467,12 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = '#10b981'
               e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.borderColor = 'var(--border)'
               e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
             }}
           >
             <div>
@@ -468,8 +482,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     width: '38px',
                     height: '38px',
                     borderRadius: '10px',
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    color: '#34d399',
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    color: '#10b981',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
@@ -483,15 +497,16 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     fontWeight: 700,
                     padding: '3px 8px',
                     borderRadius: '10px',
-                    background: 'rgba(16, 185, 129, 0.15)',
-                    color: '#6ee7b7'
+                    background: 'rgba(16, 185, 129, 0.14)',
+                    color: '#059669',
+                    border: '1px solid rgba(16, 185, 129, 0.25)'
                   }}
                 >
                   {formatFileSize(cleanUpStats.junk.bytes)}
                 </span>
               </div>
-              <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700 }}>WhatsApp & Social Media</h4>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>WhatsApp & Social Media</h4>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                 {cleanUpStats.junk.count} forwarded memes, stickers, and status clips.
               </p>
             </div>
@@ -503,7 +518,7 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                 gap: '6px',
                 fontSize: '12px',
                 fontWeight: 700,
-                color: '#34d399'
+                color: '#059669'
               }}
             >
               Review Social Media <ArrowRight size={14} />
@@ -514,8 +529,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
           <div
             onClick={() => handleNavigate('screenshots')}
             style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border)',
               borderRadius: '18px',
               padding: '18px',
               cursor: 'pointer',
@@ -527,10 +542,12 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = '#f59e0b'
               e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.borderColor = 'var(--border)'
               e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
             }}
           >
             <div>
@@ -540,8 +557,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     width: '38px',
                     height: '38px',
                     borderRadius: '10px',
-                    background: 'rgba(245, 158, 11, 0.2)',
-                    color: '#fbbf24',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    color: '#f59e0b',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
@@ -555,15 +572,16 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     fontWeight: 700,
                     padding: '3px 8px',
                     borderRadius: '10px',
-                    background: 'rgba(245, 158, 11, 0.15)',
-                    color: '#fde68a'
+                    background: 'rgba(245, 158, 11, 0.14)',
+                    color: '#d97706',
+                    border: '1px solid rgba(245, 158, 11, 0.25)'
                   }}
                 >
                   {formatFileSize(cleanUpStats.screenshots.bytes)}
                 </span>
               </div>
-              <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700 }}>Screenshots & Screen Grabs</h4>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Screenshots & Screen Grabs</h4>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                 {cleanUpStats.screenshots.count} captured device and desktop screenshots.
               </p>
             </div>
@@ -575,7 +593,7 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                 gap: '6px',
                 fontSize: '12px',
                 fontWeight: 700,
-                color: '#fbbf24'
+                color: '#d97706'
               }}
             >
               Review Screenshots <ArrowRight size={14} />
@@ -586,8 +604,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
           <div
             onClick={() => handleNavigate('duplicates')}
             style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border)',
               borderRadius: '18px',
               padding: '18px',
               cursor: 'pointer',
@@ -599,10 +617,12 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = '#3b82f6'
               e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.borderColor = 'var(--border)'
               e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
             }}
           >
             <div>
@@ -612,8 +632,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     width: '38px',
                     height: '38px',
                     borderRadius: '10px',
-                    background: 'rgba(59, 130, 246, 0.2)',
-                    color: '#60a5fa',
+                    background: 'rgba(59, 130, 246, 0.15)',
+                    color: '#3b82f6',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
@@ -627,8 +647,9 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     fontWeight: 700,
                     padding: '3px 8px',
                     borderRadius: '10px',
-                    background: 'rgba(59, 130, 246, 0.15)',
-                    color: '#93c5fd'
+                    background: 'rgba(59, 130, 246, 0.14)',
+                    color: '#2563eb',
+                    border: '1px solid rgba(59, 130, 246, 0.25)'
                   }}
                 >
                   {isLoadingDuplicates && cleanUpStats.duplicates.count === 0
@@ -636,8 +657,8 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                     : formatFileSize(cleanUpStats.duplicates.bytes)}
                 </span>
               </div>
-              <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700 }}>Duplicate & Similar Shots</h4>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Duplicate & Similar Shots</h4>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                 {isLoadingDuplicates && cleanUpStats.duplicates.count === 0
                   ? 'Analyzing library for duplicate and similar captures...'
                   : `${cleanUpStats.duplicates.count} redundant copies and burst captures.`}
@@ -651,7 +672,7 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                 gap: '6px',
                 fontSize: '12px',
                 fontWeight: 700,
-                color: '#60a5fa'
+                color: '#2563eb'
               }}
             >
               Review Duplicates <ArrowRight size={14} />
@@ -665,22 +686,30 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            borderTop: '1px solid var(--border)',
             paddingTop: '18px',
             flexWrap: 'wrap',
             gap: '12px'
           }}
         >
-          <div style={{ fontSize: '12px', color: 'var(--text-tertiary, #64748b)' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
             All deletion actions require your explicit confirmation in each tool.
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-secondary"
               onClick={onClose}
-              style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '10px' }}
+              style={{
+                fontSize: '13px',
+                padding: '8px 18px',
+                borderRadius: '10px',
+                background: 'var(--bg-tertiary)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+                cursor: 'pointer'
+              }}
             >
               Skip to Photos
             </button>
@@ -697,7 +726,10 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
                 boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                gap: '6px',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer'
               }}
             >
               Start Clean Up <ArrowRight size={16} />

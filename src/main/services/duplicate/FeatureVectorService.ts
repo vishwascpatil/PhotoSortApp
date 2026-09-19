@@ -18,9 +18,12 @@ export class FeatureVectorService implements IFeatureVectorService {
     if (this.histogramCache.has(targetPath)) {
       return this.histogramCache.get(targetPath)!
     }
+    if (this.histogramCache.has(imagePath)) {
+      return this.histogramCache.get(imagePath)!
+    }
     try {
       const { data } = await sharp(targetPath, { failOn: 'none' })
-        .resize(128, 128, { fit: 'fill' })
+        .resize(48, 48, { fit: 'fill' })
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true })
@@ -62,10 +65,12 @@ export class FeatureVectorService implements IFeatureVectorService {
         histogram[i] = bins[i] / totalPixels
       }
       this.histogramCache.set(targetPath, histogram)
+      this.histogramCache.set(imagePath, histogram)
       return histogram
     } catch {
       const empty = new Array(64).fill(0)
       this.histogramCache.set(targetPath, empty)
+      this.histogramCache.set(imagePath, empty)
       return empty
     }
   }

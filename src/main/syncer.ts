@@ -1,12 +1,13 @@
 import { existsSync } from 'fs'
 import { scanDirectory, processFile } from './importer'
 import {
-  getPhotos,
+  queryAll,
   insertPhotoBatch,
   deletePermanently,
   getImportedFolders,
   updateFolderSyncTime,
   updatePhotoThumbnails,
+  updatePhotoThumbnailsBatch,
   addImportedFolder,
   removeImportedFolder
 } from './database'
@@ -46,8 +47,10 @@ export async function syncFolder(
     diskFileMap.set(file.replace(/\\/g, '/'), file)
   }
 
-  // 2. Query DB photos belonging to this folder
-  const dbPhotos = getPhotos({ limit: 100000 }).filter(p => {
+  // 2. Query DB photos belonging to this folder (lightweight query for paths and IDs only)
+  const dbPhotos = queryAll<{ id: number; file_path: string; source_folder_path: string | null }>(
+    'SELECT id, file_path, source_folder_path FROM photos WHERE is_trashed = 0'
+  ).filter(p => {
     const pPath = p.file_path.replace(/\\/g, '/')
     return p.source_folder_path === normalizedFolder || pPath.startsWith(normalizedFolder + '/')
   })
@@ -58,15 +61,24 @@ export async function syncFolder(
 
   // 3. Find deleted files (in DB but not on disk)
   let removedCount = 0
+  const staleIds: number[] = []
+  let checkCount = 0
   for (const photo of dbPhotos) {
     const normalizedDbPath = photo.file_path.replace(/\\/g, '/')
     if (!diskFileMap.has(normalizedDbPath) && !existsSync(photo.file_path)) {
-      try {
-        deletePermanently([photo.id])
-        removedCount++
-      } catch (err) {
-        console.error(`Failed to remove stale record for ${photo.file_path}:`, err)
-      }
+      staleIds.push(photo.id)
+    }
+    checkCount++
+    if (checkCount % 250 === 0) {
+      await new Promise(r => setImmediate(r))
+    }
+  }
+  if (staleIds.length > 0) {
+    try {
+      deletePermanently(staleIds)
+      removedCount = staleIds.length
+    } catch (err) {
+      console.error(`Failed to remove stale records in batch:`, err)
     }
   }
 
@@ -82,17 +94,12 @@ export async function syncFolder(
   if (newFiles.length > 0) {
     onProgress?.({ stage: 'processing', message: `Importing ${newFiles.length} new files...`, completed: 0, total: newFiles.length })
 
-    const processedItems = []
-    for (let i = 0; i < newFiles.length; i++) {
-      const file = newFiles[i]
-      try {
-        const item = await processFile(file)
-        item.photo.source_folder_path = normalizedFolder
-        processedItems.push(item)
-      } catch (err) {
-        console.error(`Failed to process ${file}:`, err)
-      }
-      onProgress?.({ stage: 'processing', message: `Processing files... ${i + 1}/${newFiles.length}`, completed: i + 1, total: newFiles.length })
+    const processedItems = await processFiles(newFiles, (completed, total) => {
+      onProgress?.({ stage: 'processing', message: `Processing files... ${completed}/${total}`, completed, total })
+    })
+
+    for (const item of processedItems) {
+      item.photo.source_folder_path = normalizedFolder
     }
 
     if (processedItems.length > 0) {
@@ -102,19 +109,32 @@ export async function syncFolder(
       if (inserted.length > 0) {
         onProgress?.({ stage: 'thumbnails', message: `Generating thumbnails...`, completed: 0, total: inserted.length })
         let lastSent = 0
+        const pendingUpdates: { id: number; thumbnailPath: string; previewPath: string }[] = []
+
         await generateThumbnailBatch(
           inserted,
           (completed, total, id, thumbPath, prevPath) => {
             if (thumbPath || prevPath) {
-              updatePhotoThumbnails(id, thumbPath || prevPath, prevPath || thumbPath)
+              pendingUpdates.push({
+                id,
+                thumbnailPath: thumbPath || prevPath,
+                previewPath: prevPath || thumbPath
+              })
             }
             const now = Date.now()
-            if (now - lastSent > 30 || completed === total) {
+            if (now - lastSent > 150 || completed === total) {
               lastSent = now
+              if (pendingUpdates.length > 0) {
+                updatePhotoThumbnailsBatch(pendingUpdates.splice(0, pendingUpdates.length))
+              }
               onProgress?.({ stage: 'thumbnails', message: `Generating thumbnails... ${completed}/${total}`, completed, total })
             }
           }
         )
+
+        if (pendingUpdates.length > 0) {
+          updatePhotoThumbnailsBatch(pendingUpdates.splice(0, pendingUpdates.length))
+        }
       }
     }
   }

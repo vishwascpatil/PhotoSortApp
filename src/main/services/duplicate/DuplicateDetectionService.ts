@@ -8,6 +8,7 @@ import { defaultHashService } from './HashService'
 import { defaultPerceptualHashService } from './PerceptualHashService'
 import { defaultVideoFingerprintService } from './VideoFingerprintService'
 import { defaultFeatureVectorService } from './FeatureVectorService'
+import { existsSync } from 'fs'
 import { isVideoFile } from './mediaTypes'
 
 export class DuplicateDetectionService implements IDuplicateDetectionService {
@@ -133,8 +134,9 @@ export class DuplicateDetectionService implements IDuplicateDetectionService {
     let minDHashDist = dHashDist
     if (dHashDist > 14 && dHashDist <= 26 && pHashDist <= 8) {
       try {
-        const rotTarget = r2.thumbnailPath || r2.filePath
-        const rotVariants = await defaultPerceptualHashService.computeRotationVariants(rotTarget)
+        const rotTarget = (r2.thumbnailPath && existsSync(r2.thumbnailPath)) ? r2.thumbnailPath : r2.filePath
+        const rotVariants = (r2 as any)._rotVariants || await defaultPerceptualHashService.computeRotationVariants(rotTarget)
+        ;(r2 as any)._rotVariants = rotVariants
         if (rotVariants) {
           const distances = [
             defaultPerceptualHashService.hammingDistance(r1.dhash!, rotVariants.rot90),

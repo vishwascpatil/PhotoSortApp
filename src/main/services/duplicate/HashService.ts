@@ -29,7 +29,6 @@ export class HashService implements IHashService {
         const fileSize = stat.size
 
         if (fileSize <= headBytes * 2) {
-          fileHandle.close()
           return this.computeSha256(filePath)
         }
 

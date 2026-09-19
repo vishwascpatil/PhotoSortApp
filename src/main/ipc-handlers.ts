@@ -137,15 +137,24 @@ export function registerIpcHandlers(): void {
       })
 
       let lastSent = 0
+      const pendingUpdates: { id: number; thumbnailPath: string; previewPath: string }[] = []
+
       await generateThumbnailBatch(
         insertedItems,
         (completed, total, id, thumbnailPath, previewPath) => {
           if (thumbnailPath || previewPath) {
-            updatePhotoThumbnails(id, thumbnailPath || previewPath, previewPath || thumbnailPath)
+            pendingUpdates.push({
+              id,
+              thumbnailPath: thumbnailPath || previewPath,
+              previewPath: previewPath || thumbnailPath
+            })
           }
           const now = Date.now()
-          if (now - lastSent > 30 || completed === total) {
+          if (now - lastSent > 150 || completed === total) {
             lastSent = now
+            if (pendingUpdates.length > 0) {
+              updatePhotoThumbnailsBatch(pendingUpdates.splice(0, pendingUpdates.length))
+            }
             event.sender.send('import:status', {
               stage: 'thumbnails',
               message: `Generating thumbnails... ${completed}/${total}`,
@@ -155,6 +164,10 @@ export function registerIpcHandlers(): void {
           }
         }
       )
+
+      if (pendingUpdates.length > 0) {
+        updatePhotoThumbnailsBatch(pendingUpdates.splice(0, pendingUpdates.length))
+      }
     }
 
     event.sender.send('import:status', {
@@ -396,10 +409,6 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('photos:scan-duplicates', async (event) => {
-    const { scanPerceptualHashesBatch } = await import('./database')
-    await scanPerceptualHashesBatch((scanned, total, currentFile) => {
-      event.sender.send('duplicate-scan:progress', { scanned, total, currentFile })
-    }, true)
     return getUtilitiesData((scanned, total, currentFile) => {
       event.sender.send('duplicate-scan:progress', { scanned, total, currentFile })
     }, true)

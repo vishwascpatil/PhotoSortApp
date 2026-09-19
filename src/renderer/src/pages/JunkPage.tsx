@@ -60,14 +60,39 @@ export default function JunkPage() {
     }
   }, [loadPhotos, filterKey, photoState.photos.length])
 
-  // Classify photos using platform origin detector
+  // Classify photos using platform origin detector in non-blocking chunks
   useEffect(() => {
     if (isScanningRef.current) return
-    const map = new Map<number, SocialAppOrigin>()
-    for (const photo of photoState.photos) {
-      map.set(photo.id, detectJunk(photo))
+    let isCancelled = false
+    const photos = photoState.photos
+    if (!photos || photos.length === 0) {
+      setClassifiedMap(new Map())
+      return
     }
-    setClassifiedMap(map)
+
+    const map = new Map<number, SocialAppOrigin>()
+    let index = 0
+    const chunkSize = 150
+
+    function processNextChunk() {
+      if (isCancelled) return
+      const end = Math.min(index + chunkSize, photos.length)
+      for (; index < end; index++) {
+        map.set(photos[index].id, detectJunk(photos[index]))
+      }
+      if (index < photos.length) {
+        setTimeout(processNextChunk, 0)
+      } else {
+        setClassifiedMap(new Map(map))
+      }
+    }
+
+    // Run first chunk immediately so UI displays instantly without lag
+    processNextChunk()
+
+    return () => {
+      isCancelled = true
+    }
   }, [photoState.photos])
 
   // Progressive Rescan Handler with Live Progress to 100%

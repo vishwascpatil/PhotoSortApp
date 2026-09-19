@@ -71,6 +71,7 @@ export async function scanDirectory(dirPath: string): Promise<string[]> {
           // Skip hidden dirs and system dirs
           if (!entry.name.startsWith('.') && entry.name !== 'node_modules') {
             await walk(fullPath)
+            await new Promise((r) => setImmediate(r))
           }
         } else if (entry.isFile()) {
           const ext = extname(entry.name).toLowerCase()
@@ -190,6 +191,8 @@ export async function processFiles(
         onProgress?.(completed, total, filePath)
       })
     )
+    // Yield to the event loop so timer heartbeats and IPC can process
+    await new Promise(r => setImmediate(r))
   }
 
   return results.filter(Boolean)

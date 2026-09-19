@@ -26,7 +26,6 @@ export default function DuplicatesPage() {
   const { state: photoState, dispatch: photoDispatch, loadPhotos, refreshPhotos } = usePhotos()
   const { state: appState, dispatch: appDispatch, showToast } = useApp()
 
-  const [loading, setLoading] = useState(!cachedDuplicatesData)
   const [isScanning, setIsScanning] = useState(false)
   const [scanProgress, setScanProgress] = useState<{
     completed: number
@@ -49,12 +48,8 @@ export default function DuplicatesPage() {
 
   const gridDensity = appState.gridDensity || 'dense'
 
-  // Load utilities data from IPC smoothly (instant if cached)
-  const fetchDuplicates = useCallback(async (isSilent: boolean = false) => {
-    if (!isSilent && !cachedDuplicatesData) {
-      setLoading(true)
-    }
-
+  // Load utilities data from IPC smoothly in background without blocking UI
+  const fetchDuplicates = useCallback(async () => {
     try {
       if (window.photoVault?.getUtilitiesData) {
         const data = await window.photoVault.getUtilitiesData()
@@ -67,13 +62,11 @@ export default function DuplicatesPage() {
       }
     } catch (err) {
       console.error('Failed to load duplicate data:', err)
-    } finally {
-      setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchDuplicates(!!cachedDuplicatesData)
+    fetchDuplicates()
   }, [fetchDuplicates])
 
 
@@ -160,6 +153,12 @@ export default function DuplicatesPage() {
       setIsScanning(false)
       setScanProgress(null)
     }
+  }
+
+  const handleStopScan = () => {
+    setIsScanning(false)
+    setScanProgress(null)
+    showToast('Duplicate scan stopped')
   }
 
   // Helper to calculate hamming distance match percentage
@@ -548,6 +547,7 @@ export default function DuplicatesPage() {
                 Scanning photo library for duplicates...
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                {scanProgress?.currentFile ? `${scanProgress.currentFile} • ` : ''}
                 Scanned {scanProgress?.completed || 0} of {scanProgress?.total || (photoState.photos.length || 0)} photos (
                 {scanProgress && scanProgress.total > 0
                   ? Math.round((scanProgress.completed / scanProgress.total) * 100)
@@ -556,16 +556,20 @@ export default function DuplicatesPage() {
               </div>
             </div>
           </div>
+
+          <button
+            type="button"
+            className="apple-secondary-btn"
+            onClick={handleStopScan}
+            style={{ fontSize: '12px', padding: '4px 10px' }}
+          >
+            Cancel
+          </button>
         </div>
       )}
 
       {/* Duplicates Dynamic Grid Responsive to gridDensity */}
-      {loading && !cachedDuplicatesData ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '320px', gap: '14px' }}>
-          <Loader2 size={36} className="animate-spin" color="var(--primary, #3b82f6)" />
-          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>Analyzing duplicate media...</span>
-        </div>
-      ) : filteredGroups.length === 0 ? (
+      {filteredGroups.length === 0 ? (
         <EmptyState
           icon={
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
