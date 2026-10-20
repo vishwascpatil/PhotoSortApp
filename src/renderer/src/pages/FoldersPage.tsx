@@ -125,9 +125,6 @@ export default function FoldersPage() {
       await refreshPhotos()
       const remaining = await window.photoVault.getImportedFolders()
       setFolders(remaining)
-      if (remaining.length === 0) {
-        navigateTo('source-select')
-      }
     }
   }
 
@@ -307,6 +304,8 @@ export default function FoldersPage() {
             </>
           }
           description="Import folders from your computer to organize, view, and synchronize media files."
+          actionLabel="Import Folder"
+          onAction={handleImportNewFolder}
         />
       ) : (
         <div className="folders-card-grid">

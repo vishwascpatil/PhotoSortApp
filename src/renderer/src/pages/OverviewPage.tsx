@@ -47,7 +47,7 @@ export default function OverviewPage() {
           title="No Folder Imported"
           description="Your library is currently empty. Import a folder from your computer to view photos and organization insights."
           actionLabel="Select Folder"
-          onAction={() => navigateTo('source-select')}
+          onAction={() => navigateTo('folders')}
         />
       </div>
     )

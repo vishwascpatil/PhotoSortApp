@@ -1870,7 +1870,7 @@ export function updateFolderSyncTime(folderPath: string): void {
 }
 
 export function removeImportedFolder(folderId: number): void {
-  const { unlinkSync, existsSync } = require('fs')
+  const { unlink } = require('fs')
   const folder = queryOne<{ folder_path: string }>('SELECT folder_path FROM imported_folders WHERE id = ?', [folderId])
 
   if (folder) {
@@ -1881,11 +1881,11 @@ export function removeImportedFolder(folderId: number): void {
     `, [normPath, normPath + '/%', normPath])
 
     for (const photo of photos) {
-      if (photo.thumbnail_path && existsSync(photo.thumbnail_path)) {
-        try { unlinkSync(photo.thumbnail_path) } catch { }
+      if (photo.thumbnail_path) {
+        unlink(photo.thumbnail_path, () => {})
       }
-      if (photo.preview_path && existsSync(photo.preview_path)) {
-        try { unlinkSync(photo.preview_path) } catch { }
+      if (photo.preview_path) {
+        unlink(photo.preview_path, () => {})
       }
     }
 
