@@ -30,6 +30,7 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
     async function fetchAllPhotos() {
       if (photoState.photos && photoState.photos.length > 0 && !photoState.activeFilter?.isTrashed) {
         setAllPhotos(photoState.photos)
+        return
       }
       try {
         if (window.photoVault?.getPhotos) {
@@ -46,7 +47,7 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
     return () => {
       isMounted = false
     }
-  }, [isOpen, photoState.photos, photoState.activeFilter])
+  }, [isOpen])
 
   // Fast pre-calculation of exact duplicates from photo metadata (instant feedback)
   const fastDuplicateStats = useMemo(() => {
@@ -130,18 +131,12 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
             }
           }
 
-          // Set authoritative stats or keep fast exact duplicate stats
           if (count > 0) {
             setDuplicatesStats({ count, bytes })
-          } else if (fastDuplicateStats.count > 0) {
-            setDuplicatesStats(fastDuplicateStats)
           }
         }
       } catch (err) {
         console.error('Failed to load duplicate stats:', err)
-        if (fastDuplicateStats.count > 0) {
-          setDuplicatesStats(fastDuplicateStats)
-        }
       } finally {
         if (isMounted) setIsLoadingDuplicates(false)
       }
@@ -150,13 +145,13 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
     return () => {
       isMounted = false
     }
-  }, [isOpen, fastDuplicateStats])
+  }, [isOpen])
 
   const effectiveDuplicates = useMemo(() => {
     if (duplicatesStats.count > 0) return duplicatesStats
     if (fastDuplicateStats.count > 0) return fastDuplicateStats
     return { count: 0, bytes: 0 }
-  }, [duplicatesStats, fastDuplicateStats])
+  }, [duplicatesStats.count, duplicatesStats.bytes, fastDuplicateStats.count, fastDuplicateStats.bytes])
 
   // Calculate clean-up suggestions from photos in library
   const cleanUpStats = useMemo(() => {
@@ -205,7 +200,7 @@ export default function CleanUpModal({ isOpen, onClose, importedCount }: CleanUp
       totalRecoverableBytes,
       totalItems
     }
-  }, [allPhotos, photoState.photos, effectiveDuplicates])
+  }, [allPhotos, photoState.photos, effectiveDuplicates.count, effectiveDuplicates.bytes])
 
   if (!isOpen) return null
 

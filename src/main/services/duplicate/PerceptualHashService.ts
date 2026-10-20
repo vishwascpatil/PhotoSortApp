@@ -2,8 +2,9 @@ import sharp from 'sharp'
 import heicConvert from 'heic-convert'
 import { readFile } from 'fs/promises'
 import { existsSync, statSync } from 'fs'
-import { extname } from 'path'
+import { extname, join } from 'path'
 import { createHash } from 'crypto'
+import { app } from 'electron'
 import { IPerceptualHashService, PerceptualHashes } from './types'
 
 export class PerceptualHashService implements IPerceptualHashService {
@@ -18,11 +19,23 @@ export class PerceptualHashService implements IPerceptualHashService {
     try {
       let input: string | Buffer = imagePath
 
-      // 1. High-Performance Path: If high-res thumbnail already exists on disk, use it directly (~3ms)
+      // 1. High-Performance Path: If high-res thumbnail already exists on disk, use it directly (~2-3ms)
       if (thumbnailPath && existsSync(thumbnailPath)) {
         try {
           if (statSync(thumbnailPath).size > 0) {
             input = thumbnailPath
+          }
+        } catch { }
+      } else {
+        // Fast disk lookup: check if thumbnails.ts already created the 400x400 thumbnail
+        try {
+          const userData = app?.getPath ? app.getPath('userData') : ''
+          if (userData) {
+            const hash = createHash('md5').update(imagePath).digest('hex')
+            const candidateThumb = join(userData, 'thumbnails', `${hash}.jpg`)
+            if (existsSync(candidateThumb) && statSync(candidateThumb).size > 0) {
+              input = candidateThumb
+            }
           }
         } catch { }
       }
@@ -35,7 +48,7 @@ export class PerceptualHashService implements IPerceptualHashService {
           const outputBuffer = await heicConvert({
             buffer: inputBuffer,
             format: 'JPEG',
-            quality: 0.8
+            quality: 0.5
           })
           input = Buffer.from(outputBuffer)
         } catch { }

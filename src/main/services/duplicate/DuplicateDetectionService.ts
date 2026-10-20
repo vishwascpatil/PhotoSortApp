@@ -313,21 +313,39 @@ export class DuplicateDetectionService implements IDuplicateDetectionService {
     }
 
     // Stage 6: Multi-Keyframe Video Fingerprint Vector Check
-    let v1 = {
+    let v1: import('./types').VideoFingerprint = {
       duration: r1.videoDuration || 0,
       keyframes: r1.videoKeyframes || [],
       dhash: r1.dhash,
       phash: r1.phash
     }
-    let v2 = {
+    let v2: import('./types').VideoFingerprint = {
       duration: r2.videoDuration || 0,
       keyframes: r2.videoKeyframes || [],
       dhash: r2.dhash,
       phash: r2.phash
     }
 
-    if (!v1.dhash && !v1.duration) v1 = await defaultVideoFingerprintService.computeVideoFingerprint(r1.filePath)
-    if (!v2.dhash && !v2.duration) v2 = await defaultVideoFingerprintService.computeVideoFingerprint(r2.filePath)
+    if (!v1.dhash && !v1.duration) {
+      if ((r1 as any)._cachedVfp) {
+        v1 = (r1 as any)._cachedVfp
+      } else if (r1.thumbnailPath && existsSync(r1.thumbnailPath)) {
+        v1 = await defaultVideoFingerprintService.computeVideoFingerprint(r1.filePath, r1.thumbnailPath)
+        ;(r1 as any)._cachedVfp = v1
+      } else {
+        return null
+      }
+    }
+    if (!v2.dhash && !v2.duration) {
+      if ((r2 as any)._cachedVfp) {
+        v2 = (r2 as any)._cachedVfp
+      } else if (r2.thumbnailPath && existsSync(r2.thumbnailPath)) {
+        v2 = await defaultVideoFingerprintService.computeVideoFingerprint(r2.filePath, r2.thumbnailPath)
+        ;(r2 as any)._cachedVfp = v2
+      } else {
+        return null
+      }
+    }
 
     const vResult = defaultVideoFingerprintService.compareVideoFingerprints(v1, v2)
     if (vResult.isDuplicate) {

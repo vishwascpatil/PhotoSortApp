@@ -1,7 +1,10 @@
 import { spawn } from 'child_process'
 import ffmpegPath from 'ffmpeg-static'
 import sharp from 'sharp'
-import { existsSync } from 'fs'
+import { existsSync, statSync } from 'fs'
+import { join } from 'path'
+import { createHash } from 'crypto'
+import { app } from 'electron'
 import { IVideoFingerprintService, VideoFingerprint } from './types'
 import { defaultPerceptualHashService } from './PerceptualHashService'
 
@@ -15,6 +18,19 @@ export class VideoFingerprintService implements IVideoFingerprintService {
     let dhash: string | undefined
     let phash: string | undefined
     const keyframes: string[] = []
+
+    if (!thumbnailPath || !existsSync(thumbnailPath)) {
+      try {
+        const userData = app?.getPath ? app.getPath('userData') : ''
+        if (userData) {
+          const hash = createHash('md5').update(videoPath).digest('hex')
+          const candidateThumb = join(userData, 'thumbnails', `${hash}.jpg`)
+          if (existsSync(candidateThumb) && statSync(candidateThumb).size > 0) {
+            thumbnailPath = candidateThumb
+          }
+        }
+      } catch {}
+    }
 
     if (thumbnailPath && existsSync(thumbnailPath)) {
       try {
@@ -110,33 +126,70 @@ export class VideoFingerprintService implements IVideoFingerprintService {
     return { isDuplicate: false, confidence: 0, reasons: ['Keyframe visual mismatch'] }
   }
 
-  private getVideoDuration(videoPath: string): Promise<number> {
-    return new Promise((resolve) => {
-      const binPath = (ffmpegPath || 'ffmpeg').replace('app.asar', 'app.asar.unpacked')
-      const probeProc = spawn(binPath, ['-i', videoPath], { windowsHide: true })
-      let stderrData = ''
+  private durationCache = new Map<string, number>()
+  private activeProbeCount = 0
+  private probeQueue: (() => void)[] = []
 
-      probeProc.stderr.on('data', (chunk) => {
-        stderrData += chunk.toString()
-      })
-
-      const timeout = setTimeout(() => {
-        try { probeProc.kill() } catch {}
-      }, 3500)
-
-      probeProc.on('close', () => {
-        clearTimeout(timeout)
-        const match = stderrData.match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/)
-        if (match) {
-          const hours = parseFloat(match[1])
-          const mins = parseFloat(match[2])
-          const secs = parseFloat(match[3])
-          resolve(hours * 3600 + mins * 60 + secs)
-        } else {
-          resolve(0)
-        }
+  private async acquireProbeSlot(): Promise<void> {
+    if (this.activeProbeCount < 2) {
+      this.activeProbeCount++
+      return
+    }
+    return new Promise<void>((resolve) => {
+      this.probeQueue.push(() => {
+        this.activeProbeCount++
+        resolve()
       })
     })
+  }
+
+  private releaseProbeSlot(): void {
+    this.activeProbeCount--
+    if (this.probeQueue.length > 0 && this.activeProbeCount < 2) {
+      const next = this.probeQueue.shift()
+      if (next) next()
+    }
+  }
+
+  private async getVideoDuration(videoPath: string): Promise<number> {
+    if (this.durationCache.has(videoPath)) {
+      return this.durationCache.get(videoPath)!
+    }
+
+    await this.acquireProbeSlot()
+    try {
+      const duration = await new Promise<number>((resolve) => {
+        const binPath = (ffmpegPath || 'ffmpeg').replace('app.asar', 'app.asar.unpacked')
+        const probeProc = spawn(binPath, ['-i', videoPath], { windowsHide: true })
+        let stderrData = ''
+
+        probeProc.stderr.on('data', (chunk) => {
+          stderrData += chunk.toString()
+        })
+
+        const timeout = setTimeout(() => {
+          try { probeProc.kill() } catch {}
+        }, 3000)
+
+        probeProc.on('close', () => {
+          clearTimeout(timeout)
+          const match = stderrData.match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/)
+          if (match) {
+            const hours = parseFloat(match[1])
+            const mins = parseFloat(match[2])
+            const secs = parseFloat(match[3])
+            resolve(hours * 3600 + mins * 60 + secs)
+          } else {
+            resolve(0)
+          }
+        })
+      })
+
+      this.durationCache.set(videoPath, duration)
+      return duration
+    } finally {
+      this.releaseProbeSlot()
+    }
   }
 
   private extractFrameHashAtTimestamp(videoPath: string, timestampSeconds: number): Promise<string> {

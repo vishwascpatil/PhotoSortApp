@@ -1,9 +1,8 @@
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
 import { app } from 'electron'
 import { join, basename } from 'path'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-
-import { writeFile } from 'fs/promises'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, renameSync } from 'fs'
+import { writeFile, rename } from 'fs/promises'
 
 let db: SqlJsDatabase | null = null
 let dbPath = ''
@@ -20,7 +19,7 @@ function scheduleSave(): void {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     saveDatabase()
-  }, 1000)
+  }, 1500)
 }
 
 export function saveDatabase(): void {
@@ -33,7 +32,21 @@ export function saveDatabase(): void {
   try {
     const data = db.export()
     const buffer = Buffer.from(data)
-    writeFile(dbPath, buffer)
+    const tmpPath = `${dbPath}.tmp`
+    const bakPath = `${dbPath}.bak`
+
+    writeFile(tmpPath, buffer)
+      .then(async () => {
+        try {
+          if (existsSync(dbPath)) {
+            try { copyFileSync(dbPath, bakPath) } catch {}
+          }
+          await rename(tmpPath, dbPath)
+        } catch {
+          // Fallback if atomic rename is blocked by Windows locks
+          await writeFile(dbPath, buffer)
+        }
+      })
       .catch((err) => console.error('Failed to save database:', err))
       .finally(() => {
         isSaving = false
@@ -53,6 +66,10 @@ export function saveDatabaseSync(): void {
   try {
     const data = db.export()
     const buffer = Buffer.from(data)
+    const bakPath = `${dbPath}.bak`
+    try {
+      if (existsSync(dbPath)) copyFileSync(dbPath, bakPath)
+    } catch {}
     writeFileSync(dbPath, buffer)
   } catch (err) {
     console.error('Failed to save database synchronously:', err)
@@ -72,18 +89,56 @@ export async function initDatabase(): Promise<void> {
     dbPath = join(dbDir, 'photovault.db')
 
     const SQL = await initSqlJs()
+    const bakPath = join(dbDir, 'photovault.db.bak')
 
+    let loaded = false
     if (existsSync(dbPath)) {
-      const fileBuffer = readFileSync(dbPath)
-      db = new SQL.Database(fileBuffer)
-    } else {
+      try {
+        const fileBuffer = readFileSync(dbPath)
+        if (fileBuffer.length > 0) {
+          const candidateDb = new SQL.Database(fileBuffer)
+          candidateDb.run('PRAGMA quick_check')
+          db = candidateDb
+          loaded = true
+        }
+      } catch (err) {
+        console.error('Corrupted or malformed photovault.db detected:', err)
+        // Attempt recovery from backup
+        if (existsSync(bakPath)) {
+          try {
+            console.warn('Attempting to restore database from backup:', bakPath)
+            const bakBuffer = readFileSync(bakPath)
+            if (bakBuffer.length > 0) {
+              const backupDb = new SQL.Database(bakBuffer)
+              backupDb.run('PRAGMA quick_check')
+              db = backupDb
+              loaded = true
+              console.log('Successfully recovered database from photovault.db.bak')
+            }
+          } catch (bakErr) {
+            console.error('Backup database was also invalid:', bakErr)
+          }
+        }
+        if (!loaded) {
+          const corruptPath = join(dbDir, `photovault.db.corrupt-${Date.now()}`)
+          try { renameSync(dbPath, corruptPath) } catch {}
+          console.warn(`Quarantined malformed database to ${corruptPath}. Initializing fresh database.`)
+        }
+      }
+    }
+
+    if (!loaded || !db) {
       db = new SQL.Database()
     }
 
-    // Performance settings
-    db.run('PRAGMA journal_mode = WAL')
-    db.run('PRAGMA synchronous = NORMAL')
-    db.run('PRAGMA foreign_keys = ON')
+    // Performance settings (safe)
+    try {
+      db.run('PRAGMA journal_mode = WAL')
+      db.run('PRAGMA synchronous = NORMAL')
+      db.run('PRAGMA foreign_keys = ON')
+    } catch (pragmaErr) {
+      console.warn('SQLite PRAGMA tuning notice:', pragmaErr)
+    }
 
     createTables()
     cleanupOrphanedPhotos()
@@ -1085,7 +1140,7 @@ export function savePhotoFingerprintsBatch(fps: PhotoFingerprintRecord[]): void 
       const jsonHistogram = fp.colorHistogram ? JSON.stringify(fp.colorHistogram) : null
       const jsonKeyframes = fp.videoKeyframes ? JSON.stringify(fp.videoKeyframes) : null
 
-      runSql(
+      database.run(
         `INSERT INTO photo_fingerprints (
           photo_id, sha256, partial_sha256, phash, dhash, ahash, block_hash, color_histogram, video_duration, video_keyframes, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -1116,10 +1171,11 @@ export function savePhotoFingerprintsBatch(fps: PhotoFingerprintRecord[]): void 
 
       const legacyHash = fp.dhash || (fp.videoDuration ? `VID_DUR_${Math.round(fp.videoDuration)}_${fp.videoKeyframes?.[2] || ''}` : '')
       if (legacyHash) {
-        runSql('UPDATE photos SET perceptual_hash = ? WHERE id = ?', [legacyHash, fp.photoId])
+        database.run('UPDATE photos SET perceptual_hash = ? WHERE id = ?', [legacyHash, fp.photoId])
       }
     }
     database.run('COMMIT')
+    scheduleSave()
   } catch (err) {
     try { database.run('ROLLBACK') } catch {}
     console.error('Failed to batch save photo fingerprints:', err)
@@ -1177,10 +1233,12 @@ let cachedUtilitiesData: {
   duplicateGroups: any[]
 } | null = null
 let cachedUtilitiesPhotoCount = -1
+let inFlightUtilitiesPromise: Promise<any> | null = null
 
 export function invalidateUtilitiesCache(): void {
   cachedUtilitiesData = null
   cachedUtilitiesPhotoCount = -1
+  inFlightUtilitiesPromise = null
 }
 
 export async function getUtilitiesData(
@@ -1206,133 +1264,161 @@ export async function getUtilitiesData(
     return cachedUtilitiesData
   }
 
-  const whatsappPhotos = allPhotos.filter(p =>
-    p.filename.toUpperCase().includes('WA') ||
-    p.filename.toLowerCase().includes('whatsapp')
-  )
-
-  const blurryPhotos = allPhotos.filter(p => p.blur_score !== undefined && p.blur_score >= 0 && p.blur_score < 100)
-  blurryPhotos.sort((a, b) => (a.blur_score || 0) - (b.blur_score || 0))
-
-  // Ensure any newly imported photos without fingerprints are quickly fingerprinted using fast thumbnail hashing
-  const unanalyzedCount = queryOne<{ count: number }>(`
-    SELECT COUNT(*) as count 
-    FROM photos p 
-    LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id 
-    WHERE p.is_trashed = 0 AND (fp.photo_id IS NULL OR fp.dhash IS NULL OR fp.dhash = '')
-  `)?.count || 0
-
-  if (unanalyzedCount > 0) {
-    if (forceRefresh) {
-      await scanPerceptualHashesBatch(onProgress, false)
-    } else {
-      // In non-force mode (e.g. user simply clicked Duplicates in sidebar),
-      // run background scan asynchronously so navigation responds immediately without hanging!
-      scanPerceptualHashesBatch(undefined, false).catch(() => {})
-    }
+  if (!forceRefresh && inFlightUtilitiesPromise) {
+    return inFlightUtilitiesPromise
   }
 
-  const fingerprints = getAllPhotoFingerprints()
-  const duplicateGroups = await defaultDuplicateOrchestrator.runPipeline(fingerprints, (evaluated, totalPairs) => {
-    onProgress?.(evaluated, totalPairs, `Comparing duplicate candidates (${evaluated} / ${totalPairs})`)
-  })
+  const computeTask = async () => {
+    try {
+      const whatsappPhotos = allPhotos.filter(p =>
+        p.filename.toUpperCase().includes('WA') ||
+        p.filename.toLowerCase().includes('whatsapp')
+      )
 
-  // Format groups into PhotoRow[][] array for backward compatibility & renderer UI
-  const photoMap = new Map<number, PhotoRow>()
-  allPhotos.forEach(p => photoMap.set(p.id, p))
+      const blurryPhotos = allPhotos.filter(p => p.blur_score !== undefined && p.blur_score >= 0 && p.blur_score < 100)
+      blurryPhotos.sort((a, b) => (a.blur_score || 0) - (b.blur_score || 0))
 
-  const exactGroupRows: PhotoRow[][] = []
-  const similarGroupRows: PhotoRow[][] = []
+      // Ensure any newly imported photos without fingerprints are quickly fingerprinted using fast thumbnail hashing
+      const unanalyzedCount = queryOne<{ count: number }>(`
+        SELECT COUNT(*) as count 
+        FROM photos p 
+        LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id 
+        WHERE p.is_trashed = 0 AND (fp.photo_id IS NULL OR fp.dhash IS NULL OR fp.dhash = '')
+      `)?.count || 0
 
-  duplicateGroups.forEach((g) => {
-    const rows = g.items.map((item) => photoMap.get(item.photoId)).filter((p): p is PhotoRow => p !== undefined)
-    if (rows.length > 1) {
-      if (g.isExact || g.confidence >= 99) {
-        exactGroupRows.push(rows)
-      } else {
-        similarGroupRows.push(rows)
+      if (unanalyzedCount > 0) {
+        if (forceRefresh) {
+          await scanPerceptualHashesBatch(onProgress, false)
+        } else {
+          // In non-force mode (e.g. user simply clicked Duplicates in sidebar or CleanUp modal opened),
+          // run background scan asynchronously so navigation responds immediately without hanging!
+          scanPerceptualHashesBatch(undefined, false).catch(() => {})
+        }
       }
-    }
-  })
 
-  const result = {
-    whatsapp: whatsappPhotos,
-    blurry: blurryPhotos,
-    duplicates: exactGroupRows,
-    similar: similarGroupRows,
-    duplicateGroups // Rich production-grade DuplicateGroupResult[] metadata array
+      const fingerprints = getAllPhotoFingerprints()
+      const duplicateGroups = await defaultDuplicateOrchestrator.runPipeline(fingerprints, (evaluated, totalPairs) => {
+        onProgress?.(evaluated, totalPairs, `Comparing duplicate candidates (${evaluated} / ${totalPairs})`)
+      })
+
+      // Format groups into PhotoRow[][] array for backward compatibility & renderer UI
+      const photoMap = new Map<number, PhotoRow>()
+      allPhotos.forEach(p => photoMap.set(p.id, p))
+
+      const exactGroupRows: PhotoRow[][] = []
+      const similarGroupRows: PhotoRow[][] = []
+
+      duplicateGroups.forEach((g) => {
+        const rows = g.items.map((item) => photoMap.get(item.photoId)).filter((p): p is PhotoRow => p !== undefined)
+        if (rows.length > 1) {
+          if (g.isExact || g.confidence >= 99) {
+            exactGroupRows.push(rows)
+          } else {
+            similarGroupRows.push(rows)
+          }
+        }
+      })
+
+      const result = {
+        whatsapp: whatsappPhotos,
+        blurry: blurryPhotos,
+        duplicates: exactGroupRows,
+        similar: similarGroupRows,
+        duplicateGroups // Rich production-grade DuplicateGroupResult[] metadata array
+      }
+
+      cachedUtilitiesData = result
+      cachedUtilitiesPhotoCount = allPhotos.length
+      return result
+    } finally {
+      inFlightUtilitiesPromise = null
+    }
   }
 
-  cachedUtilitiesData = result
-  cachedUtilitiesPhotoCount = allPhotos.length
-  return result
+  if (!forceRefresh) {
+    inFlightUtilitiesPromise = computeTask()
+    return inFlightUtilitiesPromise
+  }
+
+  return computeTask()
 }
+
+let isPerceptualScanActive = false
 
 export async function scanPerceptualHashesBatch(
   onProgress?: (scanned: number, total: number, currentFile?: string) => void,
   forceReScan: boolean = false
 ): Promise<{ scannedCount: number; duplicateCount: number }> {
-  const query = forceReScan
-    ? "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at, p.thumbnail_path FROM photos p WHERE p.is_trashed = 0"
-    : "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at, p.thumbnail_path FROM photos p LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id WHERE p.is_trashed = 0 AND (fp.photo_id IS NULL OR fp.dhash IS NULL OR fp.dhash = '')"
-
-  const unanalyzed = queryAll<{
-    id: number
-    file_path: string
-    file_size: number
-    mime_type: string
-    width: number
-    height: number
-    created_at: string
-    thumbnail_path: string | null
-  }>(query)
-
-  const total = unanalyzed.length
-  if (total === 0) {
-    onProgress?.(0, 0)
+  if (isPerceptualScanActive) {
     return { scannedCount: 0, duplicateCount: 0 }
   }
+  isPerceptualScanActive = true
 
-  let completed = 0
-  const BATCH_SIZE = 4
+  try {
+    const query = forceReScan
+      ? "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at, p.thumbnail_path FROM photos p WHERE p.is_trashed = 0"
+      : "SELECT p.id, p.file_path, p.file_size, p.mime_type, p.width, p.height, p.created_at, p.thumbnail_path FROM photos p LEFT JOIN photo_fingerprints fp ON p.id = fp.photo_id WHERE p.is_trashed = 0 AND (fp.photo_id IS NULL OR fp.dhash IS NULL OR fp.dhash = '')"
 
-  for (let i = 0; i < unanalyzed.length; i += BATCH_SIZE) {
-    const batch = unanalyzed.slice(i, i + BATCH_SIZE)
-    const fps: PhotoFingerprintRecord[] = []
+    const unanalyzed = queryAll<{
+      id: number
+      file_path: string
+      file_size: number
+      mime_type: string
+      width: number
+      height: number
+      created_at: string
+      thumbnail_path: string | null
+    }>(query)
 
-    await Promise.allSettled(
-      batch.map(async (photo) => {
-        try {
-          const fp = await defaultDuplicateOrchestrator.computeFingerprint(
-            photo.id,
-            photo.file_path,
-            photo.file_size || 0,
-            photo.mime_type || 'image/jpeg',
-            photo.width || 0,
-            photo.height || 0,
-            photo.created_at || '',
-            photo.thumbnail_path
-          )
-          fps.push(fp)
-        } catch (err) {
-          console.error(`Failed to fingerprint photo ${photo.id}:`, err)
-        }
-        completed++
-        const currentFile = photo.file_path ? basename(photo.file_path) : ''
-        onProgress?.(completed, total, currentFile)
-      })
-    )
-
-    if (fps.length > 0) {
-      savePhotoFingerprintsBatch(fps)
+    const total = unanalyzed.length
+    if (total === 0) {
+      onProgress?.(0, 0)
+      return { scannedCount: 0, duplicateCount: 0 }
     }
 
-    // Yield to the Node.js event loop between batches so IPC and navigation stay 100% responsive
-    await new Promise(r => setTimeout(r, 60))
-  }
+    let completed = 0
+    const BATCH_SIZE = 2
 
-  scheduleSave()
-  return { scannedCount: completed, duplicateCount: total }
+    for (let i = 0; i < unanalyzed.length; i += BATCH_SIZE) {
+      const batch = unanalyzed.slice(i, i + BATCH_SIZE)
+      const fps: PhotoFingerprintRecord[] = []
+
+      await Promise.allSettled(
+        batch.map(async (photo) => {
+          try {
+            const fp = await defaultDuplicateOrchestrator.computeFingerprint(
+              photo.id,
+              photo.file_path,
+              photo.file_size || 0,
+              photo.mime_type || 'image/jpeg',
+              photo.width || 0,
+              photo.height || 0,
+              photo.created_at || '',
+              photo.thumbnail_path
+            )
+            fps.push(fp)
+          } catch (err) {
+            console.error(`Failed to fingerprint photo ${photo.id}:`, err)
+          }
+          completed++
+          const currentFile = photo.file_path ? basename(photo.file_path) : ''
+          onProgress?.(completed, total, currentFile)
+        })
+      )
+
+      if (fps.length > 0) {
+        savePhotoFingerprintsBatch(fps)
+      }
+
+      // Yield to the Node.js event loop between batches so IPC and navigation stay 100% responsive
+      await new Promise(r => setTimeout(r, 100))
+    }
+
+    scheduleSave()
+    return { scannedCount: completed, duplicateCount: total }
+  } finally {
+    isPerceptualScanActive = false
+  }
 }
 
 // ─── Albums CRUD ─────────────────────────────────────────────────────────

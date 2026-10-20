@@ -23,15 +23,6 @@ export default function PhotosPage() {
     }
   }, [loadPhotos, filterKey, state.photos.length])
 
-  // Listen for import done to refresh
-  useEffect(() => {
-    const cleanup = window.photoVault.onImportStatus((status) => {
-      if (status.stage === 'done') {
-        refreshPhotos()
-      }
-    })
-    return cleanup
-  }, [refreshPhotos])
 
   // Listen for menu imports
   useEffect(() => {

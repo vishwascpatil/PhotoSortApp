@@ -100,7 +100,7 @@ export class DuplicateOrchestrator {
 
     const totalPairs = pairList.length
     const detectedPairs: DuplicatePair[] = []
-    const PAIR_BATCH_SIZE = 50
+    const PAIR_BATCH_SIZE = 25
 
     for (let i = 0; i < totalPairs; i += PAIR_BATCH_SIZE) {
       const chunk = pairList.slice(i, i + PAIR_BATCH_SIZE)
@@ -114,12 +114,12 @@ export class DuplicateOrchestrator {
       }
 
       const evaluatedCount = Math.min(i + chunk.length, totalPairs)
-      if (evaluatedCount % 50 === 0 || evaluatedCount === totalPairs) {
+      if (evaluatedCount % 25 === 0 || evaluatedCount === totalPairs) {
         onProgress?.(evaluatedCount, totalPairs)
       }
 
-      // Yield to the Node.js event loop every 50 pairs to guarantee UI stays 60fps and watchdog never triggers
-      await new Promise((resolve) => setImmediate(resolve))
+      // Yield to the Node.js event loop between batches so UI stays smooth and watchdog never triggers
+      await new Promise((resolve) => setTimeout(resolve, 8))
     }
 
     onProgress?.(totalPairs, totalPairs)
