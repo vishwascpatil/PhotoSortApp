@@ -54,40 +54,18 @@ export default function JunkPage() {
     }
   }, [loadPhotos, filterKey, photoState.photos.length])
 
-  // Classify photos using platform origin detector in non-blocking chunks
+  // On-demand scan state
+  const [hasScanned, setHasScanned] = useState(false)
+
+  // Reset scan state when a new folder is imported
   useEffect(() => {
-    if (isScanningRef.current) return
-    let isCancelled = false
-    const photos = photoState.photos
-    if (!photos || photos.length === 0) {
+    const handleImported = () => {
+      setHasScanned(false)
       setClassifiedMap(new Map())
-      return
     }
-
-    const map = new Map<number, SocialAppOrigin>()
-    let index = 0
-    const chunkSize = 150
-
-    function processNextChunk() {
-      if (isCancelled) return
-      const end = Math.min(index + chunkSize, photos.length)
-      for (; index < end; index++) {
-        map.set(photos[index].id, detectJunk(photos[index]))
-      }
-      if (index < photos.length) {
-        setTimeout(processNextChunk, 0)
-      } else {
-        setClassifiedMap(new Map(map))
-      }
-    }
-
-    // Run first chunk immediately so UI displays instantly without lag
-    processNextChunk()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [photoState.photos])
+    window.addEventListener('photosort:library-imported', handleImported)
+    return () => window.removeEventListener('photosort:library-imported', handleImported)
+  }, [])
 
   // Progressive Rescan Handler with Live Progress to 100%
   const handleStartRescan = async () => {
@@ -170,6 +148,7 @@ export default function JunkPage() {
         isComplete: true,
         foundCount
       })
+      setHasScanned(true)
 
       showToast(`Complete scan finished! Analyzed ${total.toLocaleString()} items, found ${foundCount} social media & app files.`)
 
@@ -388,7 +367,7 @@ export default function JunkPage() {
             {/* Scan Social Media Button */}
             <button
               type="button"
-              className={appMediaCandidates.length > 0 ? 'apple-secondary-btn' : 'apple-primary-btn'}
+              className={hasScanned ? 'apple-secondary-btn' : 'apple-primary-btn'}
               onClick={handleStartRescan}
               disabled={isScanning}
               title="Scan Social Media & Apps"
@@ -401,7 +380,7 @@ export default function JunkPage() {
               ) : (
                 <>
                   <Sparkles size={14} />
-                  <span>Scan Social Media</span>
+                  <span>{hasScanned ? 'Rescan' : 'Scan Social Media'}</span>
                 </>
               )}
             </button>
@@ -455,7 +434,7 @@ export default function JunkPage() {
         )}
 
         {/* ─── Filter Bar ──────────────────────────────────────────────────── */}
-        {appMediaCandidates.length > 0 && (
+        {hasScanned && appMediaCandidates.length > 0 && (
           <div
             style={{
               display: 'flex',
@@ -535,7 +514,27 @@ export default function JunkPage() {
       </div>
 
       {/* ─── Main Virtualized Grid Identical to All Photos ─────────────────── */}
-      {appMediaCandidates.length === 0 ? (
+      {!hasScanned && !isScanning ? (
+        <EmptyState
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Share2
+                size={48}
+                strokeWidth={1.8}
+                style={{ color: '#6366f1', filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              Scan for <span className="title-sort-gradient">Social Media Media</span>
+            </>
+          }
+          description="Analyze photo filenames, EXIF headers, and directory paths to detect photos and videos from WhatsApp, Instagram, Telegram, Messenger, and other apps."
+          actionLabel="Scan Social Media"
+          onAction={handleStartRescan}
+        />
+      ) : appMediaCandidates.length === 0 && !isScanning ? (
         <EmptyState
           icon={
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

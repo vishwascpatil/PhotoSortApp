@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
-  HardDrive, Film, ImageIcon, Folder, Trash2, X, CheckCircle2
+  HardDrive, Film, ImageIcon, Folder, Trash2, X, CheckCircle2,
+  Sparkles, Loader2, RefreshCw
 } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
@@ -25,6 +26,27 @@ const THRESHOLD_OPTIONS = [
 export default function LargeFilesPage() {
   const { state: photoState, dispatch: photoDispatch, loadPhotos, refreshPhotos } = usePhotos()
   const { showToast } = useApp()
+
+  // On-demand scan state
+  const [hasScanned, setHasScanned] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
+
+  // Reset scan state when a new folder is imported
+  useEffect(() => {
+    const handleImported = () => {
+      setHasScanned(false)
+    }
+    window.addEventListener('photosort:library-imported', handleImported)
+    return () => window.removeEventListener('photosort:library-imported', handleImported)
+  }, [])
+
+  const handleStartScan = async () => {
+    setIsScanning(true)
+    await new Promise(r => setTimeout(r, 350))
+    setHasScanned(true)
+    setIsScanning(false)
+    showToast('Large files scan completed!')
+  }
 
   // Controls
   const [minBytes, setMinBytes] = useState<number>(50 * 1024 * 1024)
@@ -302,38 +324,59 @@ export default function LargeFilesPage() {
             )}
           </div>
 
-          {/* Action Controls */}
-          {selectedPhotos.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
-              <button
-                type="button"
-                className="apple-secondary-btn"
-                onClick={handleTrashSelected}
-                style={{
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  color: '#ef4444',
-                  borderColor: 'rgba(239, 68, 68, 0.25)',
-                  gap: '6px'
-                }}
-              >
-                <Trash2 size={14} />
-                <span>Trash ({selectedPhotos.length})</span>
-              </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            <button
+              type="button"
+              className={hasScanned ? "apple-secondary-btn" : "apple-primary-btn"}
+              onClick={handleStartScan}
+              disabled={isScanning}
+            >
+              {isScanning ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Scanning Large Files...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  <span>{hasScanned ? 'Rescan' : 'Scan Large Files'}</span>
+                </>
+              )}
+            </button>
 
-              <button
-                type="button"
-                className="apple-primary-btn"
-                onClick={() => setShowMoveModal(true)}
-              >
-                <Folder size={14} />
-                <span>Relocate ({formatFileSize(selectedBytes)})</span>
-              </button>
-            </div>
-          )}
+            {/* Action Controls */}
+            {selectedPhotos.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="apple-secondary-btn"
+                  onClick={handleTrashSelected}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    color: '#ef4444',
+                    borderColor: 'rgba(239, 68, 68, 0.25)',
+                    gap: '6px'
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>Trash ({selectedPhotos.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="apple-primary-btn"
+                  onClick={() => setShowMoveModal(true)}
+                >
+                  <Folder size={14} />
+                  <span>Relocate ({formatFileSize(selectedBytes)})</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Threshold & Media Filter Bar */}
-        {largeFiles.length > 0 && (
+        {hasScanned && (largeFiles.length > 0 || minBytes !== 50 * 1024 * 1024) && (
           <div
             style={{
               display: 'flex',
@@ -403,7 +446,32 @@ export default function LargeFilesPage() {
       </div>
 
       {/* Main Virtualized Grid Identical to All Photos */}
-      {largeFiles.length === 0 ? (
+      {!hasScanned && !isScanning ? (
+        <EmptyState
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <HardDrive
+                size={48}
+                strokeWidth={1.8}
+                style={{ color: '#6366f1', filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              Scan for <span className="title-sort-gradient">Large Files</span>
+            </>
+          }
+          description="Identify high-resolution raw images and heavy 4K/60fps video files taking up the most storage space."
+          actionLabel="Scan Large Files"
+          onAction={handleStartScan}
+        />
+      ) : isScanning ? (
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
+          <Loader2 size={36} className="animate-spin" style={{ margin: '0 auto 16px', color: '#6366f1' }} />
+          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Analyzing library for large files...</div>
+        </div>
+      ) : largeFiles.length === 0 ? (
         <EmptyState
           icon={
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

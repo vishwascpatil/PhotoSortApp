@@ -74,8 +74,18 @@ export default function DocumentsPage() {
   const [activeCategory, setActiveCategory] = useState<string>('All Documents')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [isScanning, setIsScanning] = useState(false)
+  const [hasScanned, setHasScanned] = useState(false)
   const [isCleaning, setIsCleaning] = useState(false)
   const [scanProgress, setScanProgress] = useState<ScanProgressState | null>(null)
+
+  // Reset scan state when a new folder is imported
+  useEffect(() => {
+    const handleImported = () => {
+      setHasScanned(false)
+    }
+    window.addEventListener('photosort:library-imported', handleImported)
+    return () => window.removeEventListener('photosort:library-imported', handleImported)
+  }, [])
 
   // Ensure library photos are loaded
   const filterKey = JSON.stringify(photoState.activeFilter)
@@ -243,6 +253,7 @@ export default function DocumentsPage() {
             : `Scan finished! No new documents detected.`
         )
         refreshPhotos()
+        setHasScanned(true)
       }
     } catch (err: any) {
       console.error('Document scan failed:', err)
@@ -335,7 +346,7 @@ export default function DocumentsPage() {
           {/* Scan Documents Button */}
           <button
             type="button"
-            className="apple-primary-btn"
+            className={hasScanned ? 'apple-secondary-btn' : 'apple-primary-btn'}
             onClick={handleRunDocumentScan}
             disabled={isScanning || isCleaning}
           >
@@ -347,7 +358,7 @@ export default function DocumentsPage() {
             ) : (
               <>
                 <Sparkles size={14} />
-                <span>Scan Documents</span>
+                <span>{hasScanned ? 'Rescan Documents' : 'Scan Documents'}</span>
               </>
             )}
           </button>
@@ -410,7 +421,7 @@ export default function DocumentsPage() {
       )}
 
       {/* ─── Category Filter Pills Bar ───────────────────────────────────── */}
-      {(categoryCounts['All Documents'] || 0) > 0 && (
+      {hasScanned && (categoryCounts['All Documents'] || 0) > 0 && (
         <div
           style={{
             display: 'flex',
@@ -484,7 +495,27 @@ export default function DocumentsPage() {
       )}
 
       {/* ─── Media-First Documents Grid ──────────────────────────────────── */}
-      {documentPhotos.length === 0 ? (
+      {!hasScanned && !isScanning ? (
+        <EmptyState
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FileText
+                size={48}
+                strokeWidth={1.8}
+                style={{ color: '#6366f1', filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              Scan for <span className="title-sort-gradient">Documents & Receipts</span>
+            </>
+          }
+          description="Scan your photo library for documents, ID cards, bills, receipts, certificates, and legal papers."
+          actionLabel="Scan Documents"
+          onAction={handleRunDocumentScan}
+        />
+      ) : documentPhotos.length === 0 ? (
         <EmptyState
           icon={
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -510,7 +541,7 @@ export default function DocumentsPage() {
               No <span className="title-sort-gradient">Documents</span> Found
             </>
           }
-          description="Detected documents, receipts, IDs, and screenshots of papers will appear here automatically."
+          description="No document or receipt photos were detected in your library."
         />
       ) : (
         <div

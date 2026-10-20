@@ -246,12 +246,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       if (isDone) {
-        // Scanning finished – go to main photos view
+        // Scanning finished – go to main photos view without running background feature scans
         dispatch({ type: 'SET_VIEW', payload: 'photos' })
-        // If photos were imported, automatically open the Google Photos-style Free Up Space suggestions!
-        if (status.total && status.total > 0) {
-          dispatch({ type: 'OPEN_CLEANUP_MODAL', payload: { importedCount: status.total } })
-        }
+        // Dispatch event so feature navigation nodes know a new library import was completed
+        try {
+          window.dispatchEvent(new CustomEvent('photosort:library-imported', { detail: { count: status.total } }))
+        } catch {}
       }
     })
     return cleanup

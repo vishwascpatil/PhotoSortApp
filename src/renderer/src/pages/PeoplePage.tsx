@@ -54,6 +54,16 @@ export default function PeoplePage() {
 
   // Scan progress
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
+  const [hasScanned, setHasScanned] = useState(false)
+
+  // Reset scan state when a new folder is imported
+  useEffect(() => {
+    const handleImported = () => {
+      setHasScanned(false)
+    }
+    window.addEventListener('photosort:library-imported', handleImported)
+    return () => window.removeEventListener('photosort:library-imported', handleImported)
+  }, [])
 
   // Modals & Renaming
   const [namingModalOpen, setNamingModalOpen] = useState(false)
@@ -155,6 +165,7 @@ export default function PeoplePage() {
       setScanProgress(progress)
       if (progress && !progress.isScanning && progress.scannedCount > 0) {
         showToast('Face scanning complete!')
+        setHasScanned(true)
         loadPeople()
       }
     })
@@ -1167,7 +1178,7 @@ export default function PeoplePage() {
               {/* Scan Faces Button */}
               <button
                 type="button"
-                className="apple-primary-btn"
+                className={hasScanned ? "apple-secondary-btn" : "apple-primary-btn"}
                 onClick={handleStartScan}
                 disabled={scanProgress?.isScanning}
               >
@@ -1179,7 +1190,7 @@ export default function PeoplePage() {
                 ) : (
                   <>
                     <Sparkles size={15} />
-                    <span>Scan Faces</span>
+                    <span>{hasScanned ? 'Rescan Faces' : 'Scan for Faces'}</span>
                   </>
                 )}
               </button>
@@ -1386,11 +1397,23 @@ export default function PeoplePage() {
                   </div>
                 }
                 title={
-                  <>
-                    No <span className="title-sort-gradient">People</span> Identified Yet
-                  </>
+                  !hasScanned ? (
+                    <>
+                      Scan for <span className="title-sort-gradient">People & Faces</span>
+                    </>
+                  ) : (
+                    <>
+                      No <span className="title-sort-gradient">People</span> Identified Yet
+                    </>
+                  )
                 }
-                description="PhotoSort uses on-device, private face detection to automatically group photos of family and friends."
+                description={
+                  !hasScanned
+                    ? "PhotoSort uses on-device, private face detection to cluster individuals and pets across your photos."
+                    : "PhotoSort uses on-device, private face detection to automatically group photos of family and friends."
+                }
+                actionLabel={!hasScanned ? "Scan for Faces" : "Rescan Faces"}
+                onAction={handleStartScan}
               />
             </div>
           ) : (

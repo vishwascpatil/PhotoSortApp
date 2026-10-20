@@ -179,8 +179,6 @@ export function registerIpcHandlers(): void {
     })
 
     resumeVideoQueue()
-    // Auto-fingerprint newly imported photos in background for instant duplicate detection
-    scanPerceptualHashesBatch(undefined, false).catch(() => {})
     return { success: true, count: insertedItems.length }
   })
 
@@ -277,8 +275,6 @@ export function registerIpcHandlers(): void {
     })
 
     resumeVideoQueue()
-    // Auto-fingerprint newly imported photos in background for instant duplicate detection
-    scanPerceptualHashesBatch(undefined, false).catch(() => {})
     return { success: true, count: insertedItems.length }
   })
 

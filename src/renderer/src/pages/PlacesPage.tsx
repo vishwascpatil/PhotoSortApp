@@ -21,6 +21,16 @@ export default function PlacesPage() {
   const [geoPhotos, setGeoPhotos] = useState<GeoPhoto[]>([])
   const [locationProgress, setLocationProgress] = useState<any>(null)
   const [isScanning, setIsScanning] = useState(false)
+  const [hasScanned, setHasScanned] = useState(false)
+
+  // Reset scan state when a new folder is imported
+  useEffect(() => {
+    const handleImported = () => {
+      setHasScanned(false)
+    }
+    window.addEventListener('photosort:library-imported', handleImported)
+    return () => window.removeEventListener('photosort:library-imported', handleImported)
+  }, [])
 
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
@@ -81,6 +91,7 @@ export default function PlacesPage() {
         await window.photoVault.startLocationScan()
         loadGeoData()
         refreshPhotos()
+        setHasScanned(true)
       }
     } catch (err: any) {
       showToast(`Scan error: ${err?.message || err}`)
@@ -403,11 +414,23 @@ export default function PlacesPage() {
               </div>
             }
             title={
-              <>
-                No <span className="title-sort-gradient">Places</span> Found
-              </>
+              !hasScanned ? (
+                <>
+                  Scan for <span className="title-sort-gradient">Places & Landmarks</span>
+                </>
+              ) : (
+                <>
+                  No <span className="title-sort-gradient">Places</span> Found
+                </>
+              )
             }
-            description="Photos with GPS metadata will automatically appear on your interactive world map."
+            description={
+              !hasScanned
+                ? "Extract GPS coordinates and cluster trips into interactive places and landmarks on the world map."
+                : "Photos with GPS metadata will automatically appear on your interactive world map."
+            }
+            actionLabel={!hasScanned ? "Scan Places" : "Rescan Places"}
+            onAction={handleStartLocationScan}
           />
         </div>
       ) : (

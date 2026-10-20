@@ -48,7 +48,9 @@ export default function DuplicatesPage() {
 
   const gridDensity = appState.gridDensity || 'dense'
 
-  // Load utilities data from IPC smoothly in background without blocking UI
+  const [hasScanned, setHasScanned] = useState<boolean>(Boolean(cachedDuplicatesData))
+
+  // Load utilities data from IPC on-demand
   const fetchDuplicates = useCallback(async () => {
     try {
       if (window.photoVault?.getUtilitiesData) {
@@ -59,15 +61,23 @@ export default function DuplicatesPage() {
         }
         cachedDuplicatesData = result
         setUtilitiesData(result)
+        setHasScanned(true)
       }
     } catch (err) {
       console.error('Failed to load duplicate data:', err)
     }
   }, [])
 
+  // Reset scan state when a new folder is imported so user can trigger fresh scan
   useEffect(() => {
-    fetchDuplicates()
-  }, [fetchDuplicates])
+    const handleImported = () => {
+      cachedDuplicatesData = null
+      setHasScanned(false)
+      setUtilitiesData({ duplicates: [], similar: [] })
+    }
+    window.addEventListener('photosort:library-imported', handleImported)
+    return () => window.removeEventListener('photosort:library-imported', handleImported)
+  }, [])
 
 
   // Subscribe to live duplicate scan progress
@@ -136,6 +146,7 @@ export default function DuplicatesPage() {
         }
         cachedDuplicatesData = result
         setUtilitiesData(result)
+        setHasScanned(true)
 
         showToast(
           totalFound > 0
@@ -569,7 +580,27 @@ export default function DuplicatesPage() {
       )}
 
       {/* Duplicates Dynamic Grid Responsive to gridDensity */}
-      {filteredGroups.length === 0 ? (
+      {!hasScanned && !isScanning ? (
+        <EmptyState
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Copy
+                size={48}
+                strokeWidth={1.8}
+                style={{ color: '#6366f1', filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              Scan for <span className="title-sort-gradient">Duplicates</span>
+            </>
+          }
+          description="Analyze your photos and videos to find exact identical copies, burst shots, and redundant files to free up disk space."
+          actionLabel="Scan for Duplicates"
+          onAction={handleStartScan}
+        />
+      ) : filteredGroups.length === 0 ? (
         <EmptyState
           icon={
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

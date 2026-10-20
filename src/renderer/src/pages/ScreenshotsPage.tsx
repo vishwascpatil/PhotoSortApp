@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
   Monitor, Smartphone, Film, Laptop, Trash2, CheckSquare,
-  Square, RefreshCw, Sparkles, CheckCircle2
+  Square, RefreshCw, Sparkles, CheckCircle2, Loader2
 } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
@@ -76,9 +76,29 @@ export default function ScreenshotsPage() {
     [detectedScreenshots]
   )
 
-  const handleRefresh = () => {
+  const [hasScanned, setHasScanned] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
+
+  // Reset scan state when a new folder is imported
+  useEffect(() => {
+    const handleImported = () => {
+      setHasScanned(false)
+    }
+    window.addEventListener('photosort:library-imported', handleImported)
+    return () => window.removeEventListener('photosort:library-imported', handleImported)
+  }, [])
+
+  const handleStartScan = async () => {
+    setIsScanning(true)
+    await new Promise(r => setTimeout(r, 350))
+    setHasScanned(true)
+    setIsScanning(false)
+    showToast('Screenshots scan completed!')
+  }
+
+  const handleRefresh = async () => {
     refreshPhotos()
-    showToast('Refreshed screenshots!')
+    await handleStartScan()
   }
 
   const handleSelectAllScreenshots = () => {
@@ -198,14 +218,24 @@ export default function ScreenshotsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
           <button
             type="button"
-            className="apple-secondary-btn"
-            onClick={handleRefresh}
+            className={hasScanned ? "apple-secondary-btn" : "apple-primary-btn"}
+            onClick={hasScanned ? handleRefresh : handleStartScan}
+            disabled={isScanning}
           >
-            <RefreshCw size={14} />
-            <span>Refresh</span>
+            {isScanning ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Scanning Screenshots...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} />
+                <span>{hasScanned ? 'Rescan' : 'Scan Screenshots'}</span>
+              </>
+            )}
           </button>
 
-          {filteredScreenshots.length > 0 && (
+          {hasScanned && filteredScreenshots.length > 0 && (
             <button
               type="button"
               className="apple-secondary-btn"
@@ -226,7 +256,7 @@ export default function ScreenshotsPage() {
       </div>
 
       {/* Filter Tabs / Badges */}
-      {totalCount > 0 && (
+      {hasScanned && totalCount > 0 && (
         <div
           style={{
             display: 'flex',
@@ -275,7 +305,32 @@ export default function ScreenshotsPage() {
       </div>
 
       {/* Main Content */}
-      {totalCount === 0 ? (
+      {!hasScanned && !isScanning ? (
+        <EmptyState
+          icon={
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Monitor
+                size={48}
+                strokeWidth={1.8}
+                style={{ color: '#6366f1', filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35))' }}
+              />
+            </div>
+          }
+          title={
+            <>
+              Scan for <span className="title-sort-gradient">Screenshots</span>
+            </>
+          }
+          description="Detect mobile captures, desktop snips, and screen recordings across your photo library."
+          actionLabel="Scan Screenshots"
+          onAction={handleStartScan}
+        />
+      ) : isScanning ? (
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
+          <Loader2 size={36} className="animate-spin" style={{ margin: '0 auto 16px', color: '#6366f1' }} />
+          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Analyzing photo library for screenshots...</div>
+        </div>
+      ) : totalCount === 0 ? (
         <EmptyState
           icon={
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
