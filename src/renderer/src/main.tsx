@@ -44,10 +44,19 @@ function setupHangWatcher() {
   const INTERVAL = 1000
   const HANG_THRESHOLD = 2500
 
+  window.addEventListener('focus', () => {
+    lastTick = Date.now()
+  })
+
   setInterval(() => {
     const now = Date.now()
+    if (document.hidden || document.visibilityState === 'hidden') {
+      lastTick = now
+      return
+    }
     const freezeDuration = now - lastTick - INTERVAL
-    if (freezeDuration > HANG_THRESHOLD) {
+    // If freezeDuration > 30000ms, it is a system suspend/sleep event, not an active UI thread freeze
+    if (freezeDuration > HANG_THRESHOLD && freezeDuration < 30000) {
       const memory = (performance as any)?.memory
         ? `Heap: ${Math.round((performance as any).memory.usedJSHeapSize / 1048576)}MB / ${Math.round((performance as any).memory.totalJSHeapSize / 1048576)}MB`
         : 'N/A'

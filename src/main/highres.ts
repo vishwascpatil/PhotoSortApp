@@ -5,33 +5,14 @@ import { createHash } from 'crypto'
 import sharp from 'sharp'
 import { heicPool } from './heic-pool'
 
+import { isVideoFile as isVideoFileRegistry } from './mediaRegistry'
+
 const BROWSER_NATIVE_EXTS = new Set([
-  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif', '.svg'
+  '.jpg', '.jpeg', '.jfif', '.png', '.webp', '.gif', '.bmp', '.avif', '.svg'
 ])
-
-const VIDEO_EXTS = new Set([
-  '.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.m4v', '.3gp', '.flv'
-])
-
-let highResDir = ''
-
-export function ensureHighResDir(): void {
-  highResDir = join(app.getPath('userData'), 'highres_previews')
-  if (!existsSync(highResDir)) {
-    try {
-      mkdirSync(highResDir, { recursive: true })
-    } catch {}
-  }
-}
-
-function getHashName(filePath: string): string {
-  return createHash('md5').update(filePath).digest('hex')
-}
 
 export function isVideoFile(filePath: string): boolean {
-  if (!filePath) return false
-  const ext = extname(filePath).toLowerCase()
-  return VIDEO_EXTS.has(ext)
+  return isVideoFileRegistry(filePath)
 }
 
 export function isBrowserNativeImage(filePath: string): boolean {
@@ -53,6 +34,21 @@ export function isHeicFile(filePath: string): boolean {
   } catch {
     return false
   }
+}
+
+let highResDir = ''
+
+export function ensureHighResDir(): void {
+  highResDir = join(app.getPath('userData'), 'highres_previews')
+  if (!existsSync(highResDir)) {
+    try {
+      mkdirSync(highResDir, { recursive: true })
+    } catch {}
+  }
+}
+
+function getHashName(filePath: string): string {
+  return createHash('md5').update(filePath).digest('hex')
 }
 
 /**
@@ -120,7 +116,25 @@ export async function getOrGenerateHighResPreview(filePath: string): Promise<str
       return targetPath
     }
   } catch (err) {
-    console.error(`[HighRes] Failed to convert high-res preview for ${filePath}:`, err)
+    // If sharp failed on RAW (e.g. CR3, NEF, ARW), extract embedded full-size JPEG preview
+    try {
+      const exifr = require('exifr')
+      const thumbBuf = await exifr.thumbnail(filePath)
+      if (thumbBuf && thumbBuf.length > 0) {
+        await sharp(Buffer.from(thumbBuf))
+          .rotate()
+          .resize({ width: 3840, height: 3840, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 90, mozjpeg: false })
+          .toFile(targetPath)
+        if (existsSync(targetPath)) {
+          return targetPath
+        }
+      }
+    } catch {}
+
+    // Fallback to existing 400px thumbnail so lightbox never renders blank
+    const thumbPath = join(app.getPath('userData'), 'thumbnails', `${hash}.jpg`)
+    if (existsSync(thumbPath)) return thumbPath
   }
 
   return ''

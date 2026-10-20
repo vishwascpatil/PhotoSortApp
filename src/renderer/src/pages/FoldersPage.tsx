@@ -252,6 +252,18 @@ export default function FoldersPage() {
             </button>
           )}
 
+          {folders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => openExportModal({ mode: 'copy' })}
+              className="apple-secondary-btn"
+              title="Organize files by Year -> Trips -> Documents -> Months and Export"
+            >
+              <FolderTree size={14} style={{ color: '#6366f1' }} />
+              <span>Organize & Export</span>
+            </button>
+          )}
+
           <button type="button" onClick={handleImportNewFolder} className="apple-primary-btn">
             <Plus size={14} />
             <span>Import Folder</span>

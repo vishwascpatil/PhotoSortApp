@@ -28,6 +28,7 @@ import { getOrGenerateHighResPreview, prefetchHighResPreviews } from './highres'
 import { classifyScreenshot, classifyScreenshotBatch } from './services/screenshot/screenshotDetector'
 import { classifyJunkMedia, classifyJunkMediaBatch } from './services/junk/junkDetector'
 import { detectDocument, classifyExtractedText } from './services/document/documentDetector'
+import { ALL_SUPPORTED_EXTENSIONS, ALL_IMAGE_EXTENSIONS, ALL_VIDEO_EXTENSIONS } from './mediaRegistry'
 import {
   selectDestinationDirectory,
   moveLargeFiles,
@@ -191,7 +192,19 @@ export function registerIpcHandlers(): void {
       properties: ['openFile', 'multiSelections'],
       title: 'Import Photos',
       filters: [
-        { name: 'Images & Videos', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'avif', 'heic', 'heif', 'dng', 'cr2', 'nef', 'arw', 'raw', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'm4v', '3gp'] }
+        {
+          name: 'All Supported Media',
+          extensions: Array.from(ALL_SUPPORTED_EXTENSIONS).map((e) => e.replace('.', ''))
+        },
+        {
+          name: 'Photos & RAW Images',
+          extensions: Array.from(ALL_IMAGE_EXTENSIONS).map((e) => e.replace('.', ''))
+        },
+        {
+          name: 'Videos & Cinema RAW',
+          extensions: Array.from(ALL_VIDEO_EXTENSIONS).map((e) => e.replace('.', ''))
+        },
+        { name: 'All Files', extensions: ['*'] }
       ]
     })
 

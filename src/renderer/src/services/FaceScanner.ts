@@ -211,6 +211,8 @@ export async function scanPhotosForFaces(): Promise<void> {
         await window.photoVault.markPhotoScanned(photo.id)
         scannedCount++
         updateProgress({ scannedCount, totalCount, isScanning: true })
+        // Yield to the browser event loop so UI stays 60fps and doesn't freeze
+        await new Promise((r) => setTimeout(r, 30))
       }
     }
   } catch (err) {

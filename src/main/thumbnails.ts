@@ -6,6 +6,8 @@ import { readFile } from 'fs/promises'
 import sharp from 'sharp'
 import heicConvert from 'heic-convert'
 import { isVideoFile } from './services/duplicate/mediaTypes'
+import { isRawPhotoFile, isCinemaRawFile } from './mediaRegistry'
+import exifr from 'exifr'
 import { heicPool } from './heic-pool'
 import { wicHeicExtractor } from './wic-heic'
 import { createHash } from 'crypto'
@@ -195,7 +197,68 @@ function extractHeicFrameFast(heicPath: string, thumbnailPath: string): Promise<
   })
 }
 
-// High-Performance Single-Pass Sharp Thumbnail Generator (< 6ms per photo)
+/**
+ * Fast embedded JPEG preview extractor for camera RAW files (.cr2, .cr3, .nef, .arw, etc.)
+ */
+export async function extractRawEmbeddedThumbnail(filePath: string, targetPath: string): Promise<boolean> {
+  try {
+    const thumbBuf = await exifr.thumbnail(filePath)
+    if (thumbBuf && thumbBuf.length > 0) {
+      await sharp(Buffer.from(thumbBuf))
+        .rotate()
+        .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+          fit: 'cover',
+          position: 'centre',
+          fastShrinkOnLoad: true
+        })
+        .jpeg({ quality: THUMBNAIL_QUALITY, mozjpeg: false })
+        .toFile(targetPath)
+      return existsSync(targetPath) && statSync(targetPath).size > 0
+    }
+  } catch {}
+  return false
+}
+
+/**
+ * Universal fallback badge generator for cinema RAW or proprietary media formats
+ */
+export async function generateFormatBadgeThumbnail(filePath: string, targetPath: string): Promise<boolean> {
+  try {
+    const ext = (extname(filePath).replace('.', '') || 'RAW').toUpperCase()
+    const isVid = isVideoFile(filePath)
+    const category = isVid ? 'CINEMA VIDEO' : 'CAMERA RAW'
+    const color = isVid ? '#ec4899' : '#8b5cf6'
+    const icon = isVid
+      ? '<polygon points="180,140 230,165 180,190" fill="' + color + '"/>'
+      : '<rect x="160" y="145" width="80" height="50" rx="6" fill="' + color + '"/><circle cx="200" cy="170" r="16" fill="#18181b"/>'
+
+    const svg = `
+    <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#18181b" />
+          <stop offset="100%" stop-color="#09090b" />
+        </linearGradient>
+      </defs>
+      <rect width="400" height="400" fill="url(#bgGrad)" rx="16"/>
+      <rect x="24" y="24" width="352" height="352" rx="12" fill="none" stroke="#27272a" stroke-width="2" />
+      <circle cx="200" cy="165" r="50" fill="${color}" opacity="0.18" />
+      ${icon}
+      <text x="200" y="255" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="30" font-weight="900" fill="#f4f4f5" text-anchor="middle" letter-spacing="2">${ext}</text>
+      <rect x="125" y="278" width="150" height="24" rx="12" fill="#27272a" />
+      <text x="200" y="294" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" fill="#a1a1aa" text-anchor="middle" letter-spacing="1.5">${category}</text>
+    </svg>
+    `
+    await sharp(Buffer.from(svg))
+      .jpeg({ quality: 80, mozjpeg: false })
+      .toFile(targetPath)
+    return existsSync(targetPath) && statSync(targetPath).size > 0
+  } catch {
+    return false
+  }
+}
+
+// High-Performance Multi-Engine Thumbnail Generator
 export async function generateThumbnail(
   filePath: string
 ): Promise<{ thumbnailPath: string; previewPath: string; width: number; height: number }> {
@@ -203,22 +266,30 @@ export async function generateThumbnail(
   const thumbnailPath = join(getUserDataPath(), 'thumbnails', `${hash}.jpg`)
   const previewPath = thumbnailPath
 
-  const ext = extname(filePath).toLowerCase()
-  const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.m4v', '.3gp'].includes(ext)
+  const isVideo = isVideoFile(filePath)
   const isHeic = isHeicFileHeader(filePath)
+  const isRaw = isRawPhotoFile(filePath)
 
   const thumbExists = existsSync(thumbnailPath)
   if (thumbExists && statSync(thumbnailPath).size > 0) {
     return { thumbnailPath, previewPath, width: 0, height: 0 }
   }
 
-  // Handle Video files directly with fast keyframe extraction
+  // 1. Handle Video files directly with fast keyframe extraction
   if (isVideo) {
-    await extractVideoFrameFast(filePath, thumbnailPath, previewPath)
-    return { thumbnailPath, previewPath, width: 1280, height: 720 }
+    try {
+      await extractVideoFrameFast(filePath, thumbnailPath, previewPath)
+      if (existsSync(thumbnailPath) && statSync(thumbnailPath).size > 0) {
+        return { thumbnailPath, previewPath, width: 1280, height: 720 }
+      }
+    } catch {}
+    const badgeCreated = await generateFormatBadgeThumbnail(filePath, thumbnailPath)
+    if (badgeCreated) {
+      return { thumbnailPath, previewPath, width: 400, height: 400 }
+    }
   }
 
-  // Handle HEIC / HEIF Apple images using ultra-fast native WIC extractor with Worker Pool & heicConvert fallback
+  // 2. Handle HEIC / HEIF Apple images using ultra-fast native WIC extractor with Worker Pool & heicConvert fallback
   if (isHeic) {
     const wicRes = await wicHeicExtractor.extract(filePath, thumbnailPath)
     if (wicRes.success && existsSync(thumbnailPath) && statSync(thumbnailPath).size > 0) {
@@ -236,7 +307,15 @@ export async function generateThumbnail(
     } catch {}
   }
 
-  // Ultra-Fast Shrink-on-Load Sharp Pipeline for standard images
+  // 3. Handle RAW Camera Photos with embedded preview extraction
+  if (isRaw) {
+    const rawThumb = await extractRawEmbeddedThumbnail(filePath, thumbnailPath)
+    if (rawThumb) {
+      return { thumbnailPath, previewPath, width: 0, height: 0 }
+    }
+  }
+
+  // 4. Ultra-Fast Shrink-on-Load Sharp Pipeline for standard images
   try {
     await sharp(filePath, { failOn: 'none' })
       .rotate()
@@ -251,13 +330,25 @@ export async function generateThumbnail(
 
     return { thumbnailPath, previewPath, width: 0, height: 0 }
   } catch (err: any) {
-    // If sharp failed (e.g. disguised HEIC or unsupported codec), try heicConvert fallback
+    // If sharp failed (e.g. disguised RAW, JXR or unsupported codec), try embedded RAW preview
+    const rawThumb = await extractRawEmbeddedThumbnail(filePath, thumbnailPath)
+    if (rawThumb) {
+      return { thumbnailPath, previewPath, width: 0, height: 0 }
+    }
+
+    // Try heicConvert fallback
     try {
       const buf = await readFile(filePath)
       const converted = await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.65 })
       writeFileSync(thumbnailPath, converted)
       return { thumbnailPath, previewPath, width: 0, height: 0 }
     } catch {}
+
+    // Final fallback: generate a sleek badge card so thumbnail NEVER fails
+    const badgeCreated = await generateFormatBadgeThumbnail(filePath, thumbnailPath)
+    if (badgeCreated) {
+      return { thumbnailPath, previewPath, width: 400, height: 400 }
+    }
     throw err
   }
 }
@@ -499,16 +590,39 @@ export function computeVideoFingerprint(videoPath: string): Promise<string> {
  */
 export async function computePerceptualHash(imagePath: string): Promise<string> {
   try {
-    const ext = extname(imagePath).toLowerCase()
-    if (['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp'].includes(ext)) {
+    if (isVideoFile(imagePath)) {
       return await computeVideoFingerprint(imagePath)
     }
 
-    const { data } = await sharp(imagePath, { failOn: 'none' })
-      .resize(17, 16, { fit: 'fill' })
-      .grayscale()
-      .raw()
-      .toBuffer({ resolveWithObject: true })
+    let inputSource: string | Buffer = imagePath
+    const hash = getHashName(imagePath)
+    const thumbPath = join(getUserDataPath(), 'thumbnails', `${hash}.jpg`)
+    if (existsSync(thumbPath) && statSync(thumbPath).size > 0) {
+      inputSource = thumbPath
+    }
+
+    let data: Buffer
+    try {
+      const res = await sharp(inputSource, { failOn: 'none' })
+        .resize(17, 16, { fit: 'fill' })
+        .grayscale()
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      data = res.data
+    } catch {
+      // If direct reading fails, try embedded thumbnail
+      const thumbBuf = await exifr.thumbnail(imagePath).catch(() => null)
+      if (thumbBuf) {
+        const res = await sharp(Buffer.from(thumbBuf))
+          .resize(17, 16, { fit: 'fill' })
+          .grayscale()
+          .raw()
+          .toBuffer({ resolveWithObject: true })
+        data = res.data
+      } else {
+        return '0'.repeat(64)
+      }
+    }
 
     if (!data || data.length < 272) return '0'.repeat(64)
 

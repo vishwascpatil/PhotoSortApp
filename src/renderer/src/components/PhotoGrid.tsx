@@ -9,6 +9,7 @@ interface PhotoGridProps {
   photos: Photo[]
   showDateHeaders?: boolean
   onContextMenu?: (e: React.MouseEvent, photoId: number) => void
+  scrollToYear?: number | null
 }
 
 type RowItem =
@@ -25,7 +26,7 @@ type RowItem =
       date: string
     }
 
-export default function PhotoGrid({ photos, showDateHeaders = true, onContextMenu }: PhotoGridProps) {
+export default function PhotoGrid({ photos, showDateHeaders = true, onContextMenu, scrollToYear }: PhotoGridProps) {
   const { state: photoState, dispatch: photoDispatch } = usePhotos()
   const { state: appState, showToast } = useApp()
   const lastClickedRef = useRef<number | null>(null)
@@ -168,6 +169,18 @@ export default function PhotoGrid({ photos, showDateHeaders = true, onContextMen
   useEffect(() => {
     virtualizer.measure()
   }, [photoRowHeight, columns, thumbnailSize, virtualizer])
+
+  // Scroll to target year when requested by DateScrubber
+  useEffect(() => {
+    if (!scrollToYear) return
+    const yearStr = String(scrollToYear)
+    const targetIdx = rowItems.findIndex(
+      (item) => item.date && item.date.startsWith(yearStr)
+    )
+    if (targetIdx !== -1) {
+      virtualizer.scrollToIndex(targetIdx, { align: 'start', behavior: 'smooth' })
+    }
+  }, [scrollToYear, rowItems, virtualizer])
 
   const handleClick = useCallback((photoId: number, e: React.MouseEvent) => {
     if (e.shiftKey && lastClickedRef.current !== null) {

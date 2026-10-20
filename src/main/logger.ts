@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { app } from 'electron'
+import { app, powerMonitor } from 'electron'
 
 let logFilePath = path.join(process.cwd(), 'app-errors.log')
 let mainWatchdogTimer: NodeJS.Timeout | null = null
@@ -51,13 +51,31 @@ export function logErrorToFile(type: string, message: string) {
 function startMainProcessWatchdog() {
   if (mainWatchdogTimer) return
   let lastTick = Date.now()
+  let isSuspended = false
   const CHECK_INTERVAL = 1000
   const HANG_THRESHOLD = 2500
 
+  try {
+    if (powerMonitor) {
+      powerMonitor.on('suspend', () => {
+        isSuspended = true
+      })
+      powerMonitor.on('resume', () => {
+        isSuspended = false
+        lastTick = Date.now()
+      })
+    }
+  } catch {}
+
   mainWatchdogTimer = setInterval(() => {
     const now = Date.now()
+    if (isSuspended) {
+      lastTick = now
+      return
+    }
     const lag = now - lastTick - CHECK_INTERVAL
-    if (lag > HANG_THRESHOLD) {
+    // If lag > 30000ms, it is a system sleep/hibernate/suspend event, not a process hang
+    if (lag > HANG_THRESHOLD && lag < 30000) {
       const mem = process.memoryUsage()
       const memInfo = `RSS: ${Math.round(mem.rss / 1048576)}MB, HeapUsed: ${Math.round(mem.heapUsed / 1048576)}MB / ${Math.round(mem.heapTotal / 1048576)}MB`
       logErrorToFile(

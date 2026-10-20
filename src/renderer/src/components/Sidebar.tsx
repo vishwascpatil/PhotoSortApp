@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import {
   Compass, ImageIcon, Star, Film, FolderKanban, Users, MapPin, FileText,
-  Copy, Sparkles, Monitor, HardDrive, MessageSquare, Folder, Images, Loader2, Trash2, Flame, Share2
+  Copy, Sparkles, Monitor, HardDrive, MessageSquare, Folder, Images, Loader2, Trash2, Flame, Share2, FolderTree
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { formatFileSize } from '../utils/helpers'
@@ -16,7 +16,7 @@ interface NavGroup {
 }
 
 export default function Sidebar() {
-  const { state, navigateTo } = useApp()
+  const { state, navigateTo, openExportModal } = useApp()
   const [stats, setStats] = useState({ totalPhotos: 0, totalSize: 0, favorites: 0, albums: 0 })
 
   useEffect(() => {
@@ -142,6 +142,21 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Quick Action: Organize & Export */}
+      <div className="sidebar-action-container">
+        <button
+          type="button"
+          className="sidebar-organize-btn"
+          onClick={() => openExportModal({ mode: 'copy' })}
+          title="Organize files by Year -> Trips -> Documents -> Months and Export"
+        >
+          <FolderTree size={16} className="sidebar-organize-icon" />
+          {!state.sidebarCollapsed && (
+            <span className="sidebar-organize-text">Organize & Export</span>
+          )}
+        </button>
+      </div>
 
       {/* Footer Stats */}
       {!state.sidebarCollapsed && (

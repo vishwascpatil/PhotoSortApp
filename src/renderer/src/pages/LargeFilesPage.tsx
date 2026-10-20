@@ -1,12 +1,17 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
-  HardDrive, Film, ImageIcon, Folder, CheckSquare,
-  Square, Trash2, Loader2, X, Check, CheckCircle2, Play
+  HardDrive, Film, ImageIcon, Folder, Trash2, X, CheckCircle2
 } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
+import PhotoGrid from '../components/PhotoGrid'
+import SelectionBar from '../components/SelectionBar'
+import ContextMenu from '../components/ContextMenu'
 import EmptyState from '../components/EmptyState'
-import { formatFileSize, formatDate, getThumbnailUrl, isVideoFile } from '../utils/helpers'
+import CollageModal from '../components/CollageModal'
+import PhotoCompareModal from '../components/PhotoCompareModal'
+import DateScrubber from '../components/DateScrubber'
+import { formatFileSize, isVideoFile } from '../utils/helpers'
 
 const THRESHOLD_OPTIONS = [
   { label: '> 25 MB', bytes: 25 * 1024 * 1024 },
@@ -19,18 +24,17 @@ const THRESHOLD_OPTIONS = [
 
 export default function LargeFilesPage() {
   const { state: photoState, dispatch: photoDispatch, loadPhotos, refreshPhotos } = usePhotos()
-  const { state: appState, showToast } = useApp()
-
-  const gridDensity = appState.gridDensity || 'dense'
-  const isComfortable = gridDensity === 'comfortable'
-  const isMedium = gridDensity === 'medium'
-  const minTileWidth = isComfortable ? 240 : isMedium ? 160 : 100
-  const gridGap = isComfortable ? '14px' : isMedium ? '10px' : '6px'
+  const { showToast } = useApp()
 
   // Controls
   const [minBytes, setMinBytes] = useState<number>(50 * 1024 * 1024)
   const [mediaType, setMediaType] = useState<'all' | 'video' | 'image'>('all')
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+
+  // Modals & Navigation
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; photoId: number } | null>(null)
+  const [collageModal, setCollageModal] = useState(false)
+  const [compareModal, setCompareModal] = useState(false)
+  const [targetYear, setTargetYear] = useState<number | null>(null)
 
   // Relocation Modal & Progress
   const [showMoveModal, setShowMoveModal] = useState(false)
@@ -90,48 +94,54 @@ export default function LargeFilesPage() {
     })
   }, [photoState.photos, minBytes, mediaType])
 
-  // Sorted candidates (always largest first)
-  const sortedFiles = useMemo(() => {
-    return [...largeFiles].sort((a, b) => (b.file_size || 0) - (a.file_size || 0))
-  }, [largeFiles])
-
   // Aggregate stats
   const totalBytes = useMemo(() => {
-    return sortedFiles.reduce((acc, p) => acc + (p.file_size || 0), 0)
-  }, [sortedFiles])
+    return largeFiles.reduce((acc, p) => acc + (p.file_size || 0), 0)
+  }, [largeFiles])
 
   const selectedPhotos = useMemo(() => {
-    return sortedFiles.filter(p => selectedIds.has(p.id))
-  }, [sortedFiles, selectedIds])
+    return largeFiles.filter(p => photoState.selectedIds.has(p.id))
+  }, [largeFiles, photoState.selectedIds])
 
   const selectedBytes = useMemo(() => {
     return selectedPhotos.reduce((acc, p) => acc + (p.file_size || 0), 0)
   }, [selectedPhotos])
 
-  // Selection handlers
-  const handleToggleSelect = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
+  const uniqueYears = useMemo(() => {
+    return Array.from(
+      new Set(largeFiles.map(p => new Date(p.created_at).getFullYear()))
+    ).filter(y => !isNaN(y))
+  }, [largeFiles])
+
+  // Context Menu Handlers
+  function handleContextMenu(e: React.MouseEvent, photoId: number) {
+    setContextMenu({ x: e.clientX, y: e.clientY, photoId })
+  }
+
+  async function handleContextFavorite(id: number) {
+    await window.photoVault.toggleFavorite(id)
+    refreshPhotos()
+  }
+
+  async function handleContextTrash(id: number) {
+    await window.photoVault.trash([id])
+    photoDispatch({ type: 'REMOVE_PHOTOS', payload: [id] })
+    showToast('Moved to trash', async () => {
+      await window.photoVault.restore([id])
+      refreshPhotos()
     })
   }
 
-  const handleSelectAll = () => {
-    if (selectedIds.size === sortedFiles.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(sortedFiles.map(p => p.id)))
-    }
-  }
-
-  const handleTileClick = (photo: Photo) => {
+  function handleContextInfo(id: number) {
     photoDispatch({
       type: 'SET_VIEWER_SCOPED',
-      payload: { photoId: photo.id, photos: sortedFiles }
+      payload: { photoId: id, photos: largeFiles }
     })
+  }
+
+  function handleContextOpenInExplorer(id: number) {
+    const photo = largeFiles.find(p => p.id === id)
+    if (photo) window.photoVault.openInExplorer(photo.file_path)
   }
 
   // Choose destination directory
@@ -184,7 +194,7 @@ export default function LargeFilesPage() {
         })
 
         photoDispatch({ type: 'REMOVE_PHOTOS', payload: ids })
-        setSelectedIds(new Set())
+        photoDispatch({ type: 'DESELECT_ALL' })
         refreshPhotos()
         showToast(`Relocated ${res.movedCount} large files (${formatFileSize(res.totalBytesMoved)})`)
       }
@@ -207,7 +217,7 @@ export default function LargeFilesPage() {
       if (window.photoVault?.trash) {
         await window.photoVault.trash(ids)
         photoDispatch({ type: 'REMOVE_PHOTOS', payload: ids })
-        setSelectedIds(new Set())
+        photoDispatch({ type: 'DESELECT_ALL' })
         showToast(`Moved ${count} large files to Trash`)
         refreshPhotos()
       }
@@ -244,30 +254,57 @@ export default function LargeFilesPage() {
   }
 
   return (
-    <div className="photos-page" style={{ padding: '20px 28px' }}>
-      {/* ─── Action Header ─────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '16px',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {sortedFiles.length > 0 && (
-            <span className="apple-storage-pill">
-              {sortedFiles.length} files • {formatFileSize(totalBytes)}
-            </span>
-          )}
-        </div>
+    <div className="photos-page-container">
+      <SelectionBar
+        onCollage={() => setCollageModal(true)}
+        onCompare={() => setCompareModal(true)}
+        customActions={
+          <button
+            type="button"
+            className="dock-action-btn"
+            onClick={() => setShowMoveModal(true)}
+            title="Relocate selected large files"
+            style={{ gap: '6px' }}
+          >
+            <Folder size={15} />
+            <span>Relocate ({formatFileSize(selectedBytes)})</span>
+          </button>
+        }
+        onTrash={handleTrashSelected}
+      />
 
-        {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+      {/* Date Scrubber Bar for 100GB fast scroll */}
+      <DateScrubber
+        years={uniqueYears}
+        onSelectYear={(year) => {
+          setTargetYear(year)
+          showToast(`Jumped to year ${year}`)
+        }}
+      />
+
+      {/* Action Header & Filter Controls */}
+      <div style={{ padding: '0 20px', marginBottom: '16px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {largeFiles.length > 0 && (
+              <span className="apple-storage-pill">
+                {largeFiles.length} files • {formatFileSize(totalBytes)}
+              </span>
+            )}
+          </div>
+
+          {/* Action Controls */}
           {selectedPhotos.length > 0 && (
-            <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
               <button
                 type="button"
                 className="apple-secondary-btn"
@@ -291,56 +328,53 @@ export default function LargeFilesPage() {
                 <Folder size={14} />
                 <span>Relocate ({formatFileSize(selectedBytes)})</span>
               </button>
-            </>
+            </div>
           )}
-
         </div>
-      </div>
 
-      {/* ─── Compact Visual Controls Bar ─────────────────────────────────── */}
-      {sortedFiles.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '16px',
-            flexWrap: 'wrap',
-            gap: '10px',
-            paddingBottom: '12px',
-            borderBottom: '1px solid var(--border)'
-          }}
-        >
-          {/* Threshold Pills */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            {THRESHOLD_OPTIONS.map((opt) => {
-              const isActive = minBytes === opt.bytes
-              return (
-                <button
-                  key={opt.label}
-                  type="button"
-                  onClick={() => setMinBytes(opt.bytes)}
-                  style={{
-                    fontSize: '12px',
-                    padding: '5px 12px',
-                    borderRadius: '99px',
-                    fontWeight: isActive ? 600 : 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    border: isActive ? '1px solid transparent' : '1px solid var(--border)',
-                    background: isActive ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' : 'var(--bg-secondary)',
-                    color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                    boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none'
-                  }}
-                >
-                  {opt.label}
-                </button>
-              )
-            })}
-          </div>
+        {/* Threshold & Media Filter Bar */}
+        {largeFiles.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '16px',
+              flexWrap: 'wrap',
+              gap: '10px',
+              paddingBottom: '12px',
+              borderBottom: '1px solid var(--border)'
+            }}
+          >
+            {/* Threshold Pills */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              {THRESHOLD_OPTIONS.map((opt) => {
+                const isActive = minBytes === opt.bytes
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setMinBytes(opt.bytes)}
+                    style={{
+                      fontSize: '12px',
+                      padding: '5px 12px',
+                      borderRadius: '99px',
+                      fontWeight: isActive ? 600 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      border: isActive ? '1px solid transparent' : '1px solid var(--border)',
+                      background: isActive ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' : 'var(--bg-secondary)',
+                      color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                      boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none'
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
 
-          {/* Media Filters & Select All */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Media Type Filter */}
             <div className="apple-segmented-bar">
               <button
                 type="button"
@@ -364,28 +398,12 @@ export default function LargeFilesPage() {
                 <ImageIcon size={12} /> Photos
               </button>
             </div>
-
-            {sortedFiles.length > 0 && (
-              <button
-                type="button"
-                className="apple-secondary-btn"
-                onClick={handleSelectAll}
-                style={{ fontSize: '12px', padding: '5px 12px', gap: '6px' }}
-              >
-                {selectedIds.size === sortedFiles.length ? (
-                  <CheckSquare size={14} color="#6366f1" />
-                ) : (
-                  <Square size={14} />
-                )}
-                <span>{selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}</span>
-              </button>
-            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ─── Media-First Grid ─────────────────────────────────────────────── */}
-      {sortedFiles.length === 0 ? (
+      {/* Main Virtualized Grid Identical to All Photos */}
+      {largeFiles.length === 0 ? (
         <EmptyState
           icon={
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -414,118 +432,50 @@ export default function LargeFilesPage() {
           description={`No media files exceed ${formatFileSize(minBytes)}.`}
         />
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(auto-fill, minmax(${minTileWidth}px, 1fr))`,
-            gap: gridGap,
-            marginBottom: '40px'
-          }}
-        >
-          {sortedFiles.map((photo) => {
-            const isSelected = selectedIds.has(photo.id)
-            const isVid = isVideoFile(photo.file_path)
-            const sizeFormatted = formatFileSize(photo.file_size || 0)
-            const isGigabyte = (photo.file_size || 0) >= 1024 * 1024 * 1024
-
-            return (
-              <div
-                key={photo.id}
-                onClick={() => handleTileClick(photo)}
-                title={photo.filename}
-                style={{
-                  background: '#0b0f19',
-                  border: isSelected ? '2.5px solid #f59e0b' : '1px solid var(--border)',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  aspectRatio: '1 / 1',
-                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  boxShadow: isSelected ? '0 4px 18px rgba(245, 158, 11, 0.3)' : 'none'
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-              >
-                {/* Media Image Thumbnail */}
-                <img
-                  src={getThumbnailUrl(photo.thumbnail_path, photo.file_path)}
-                  alt={photo.filename}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  loading="lazy"
-                />
-
-                {/* Select Checkbox Button */}
-                <div
-                  onClick={(e) => handleToggleSelect(photo.id, e)}
-                  style={{
-                    position: 'absolute',
-                    top: '8px',
-                    left: '8px',
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '6px',
-                    background: isSelected ? '#f59e0b' : 'rgba(0, 0, 0, 0.45)',
-                    border: '1.5px solid #ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    zIndex: 2
-                  }}
-                >
-                  {isSelected && <Check size={16} strokeWidth={3} />}
-                </div>
-
-                {/* Video Badge */}
-                {isVid && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '8px',
-                      left: '8px',
-                      background: 'rgba(0, 0, 0, 0.75)',
-                      color: '#ffffff',
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '3px'
-                    }}
-                  >
-                    <Play size={9} fill="#fff" /> VIDEO
-                  </div>
-                )}
-
-                {/* Highlighted Glowing Size Badge */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '8px',
-                    right: '8px',
-                    background: isGigabyte
-                      ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                      : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                    color: '#ffffff',
-                    fontWeight: 800,
-                    fontSize: '11px',
-                    padding: '3px 8px',
-                    borderRadius: '12px',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                    letterSpacing: '0.02em'
-                  }}
-                >
-                  {sizeFormatted}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        <PhotoGrid
+          photos={largeFiles}
+          showDateHeaders={true}
+          onContextMenu={handleContextMenu}
+          scrollToYear={targetYear}
+        />
       )}
 
-      {/* ─── Relocation Modal ─────────────────────────────────────────────── */}
+      {/* Collage Modal */}
+      {collageModal && (
+        <CollageModal
+          photos={selectedPhotos}
+          onClose={() => setCollageModal(false)}
+          onSaved={() => {
+            photoDispatch({ type: 'DESELECT_ALL' })
+            refreshPhotos()
+          }}
+        />
+      )}
+
+      {/* Side-by-Side Compare Modal */}
+      {compareModal && selectedPhotos.length >= 2 && (
+        <PhotoCompareModal
+          photo1={selectedPhotos[0]}
+          photo2={selectedPhotos[1]}
+          onClose={() => setCompareModal(false)}
+        />
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          photoId={contextMenu.photoId}
+          onClose={() => setContextMenu(null)}
+          onFavorite={handleContextFavorite}
+          onTrash={handleContextTrash}
+          onInfo={handleContextInfo}
+          onOpenInExplorer={handleContextOpenInExplorer}
+        />
+      )}
+
+      {/* Relocation Modal */}
       {showMoveModal && (
         <div
           style={{
@@ -731,7 +681,6 @@ export default function LargeFilesPage() {
           </div>
         </div>
       )}
-
     </div>
   )
 }

@@ -4,6 +4,7 @@ import exifr from 'exifr'
 import { imageSize } from 'image-size'
 import ffmpeg from 'fluent-ffmpeg'
 import ffprobeInstaller from '@ffprobe-installer/ffprobe'
+import { ALL_IMAGE_EXTENSIONS, ALL_VIDEO_EXTENSIONS } from '../../mediaRegistry'
 
 // Configure ffprobe path if available
 if (ffprobeInstaller && ffprobeInstaller.path) {
@@ -67,8 +68,8 @@ export const KNOWN_SCREENSHOT_RESOLUTIONS: readonly [number, number][] = [
   [5120, 2880]
 ] as const
 
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.heic', '.webp', '.bmp'])
-const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.avi', '.webm'])
+const IMAGE_EXTENSIONS = ALL_IMAGE_EXTENSIONS
+const VIDEO_EXTENSIONS = ALL_VIDEO_EXTENSIONS
 
 /**
  * Helper to check if a filename unambiguously matches a specific OS screenshot pattern

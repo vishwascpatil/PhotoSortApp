@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react'
-import { Trash2, AlertTriangle, RotateCcw, X, ShieldAlert } from 'lucide-react'
+import { Trash2, AlertTriangle, RotateCcw, X, ShieldAlert, Info, FolderOpen } from 'lucide-react'
 import { usePhotos } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
 import { formatFileSize } from '../utils/helpers'
 import PhotoGrid from '../components/PhotoGrid'
+import SelectionBar from '../components/SelectionBar'
+import ContextMenu, { ContextMenuAction } from '../components/ContextMenu'
+import DateScrubber from '../components/DateScrubber'
 import EmptyState from '../components/EmptyState'
 
 export default function TrashPage() {
@@ -11,6 +14,8 @@ export default function TrashPage() {
   const { showToast } = useApp()
   const [showEmptyConfirm, setShowEmptyConfirm] = useState(false)
   const [showDeleteSelectedConfirm, setShowDeleteSelectedConfirm] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; photoId: number } | null>(null)
+  const [targetYear, setTargetYear] = useState<number | null>(null)
 
   useEffect(() => {
     loadPhotos({ isTrashed: true })
@@ -18,6 +23,12 @@ export default function TrashPage() {
 
   const totalTrashBytes = useMemo(() => {
     return state.photos.reduce((sum, p) => sum + (p.file_size || 0), 0)
+  }, [state.photos])
+
+  const uniqueYears = useMemo(() => {
+    return Array.from(
+      new Set(state.photos.map(p => new Date(p.created_at).getFullYear()))
+    ).filter(y => !isNaN(y))
   }, [state.photos])
 
   async function confirmAndEmptyTrash() {
@@ -44,6 +55,7 @@ export default function TrashPage() {
     if (ids.length === 0) return
     await window.photoVault.restore(ids)
     dispatch({ type: 'REMOVE_PHOTOS', payload: ids })
+    dispatch({ type: 'DESELECT_ALL' })
     showToast(`${ids.length} photos restored to library`)
   }
 
@@ -56,112 +68,172 @@ export default function TrashPage() {
     }, 0)
     await window.photoVault.deletePermanently(ids)
     dispatch({ type: 'REMOVE_PHOTOS', payload: ids })
+    dispatch({ type: 'DESELECT_ALL' })
     setShowDeleteSelectedConfirm(false)
     setShowEmptyConfirm(false)
     showToast(`${ids.length} items permanently deleted (${formatFileSize(bytesDeleted)} freed)`)
   }
 
+  function handleContextMenu(e: React.MouseEvent, photoId: number) {
+    setContextMenu({ x: e.clientX, y: e.clientY, photoId })
+  }
+
+  const trashCustomActions: ContextMenuAction[] = [
+    {
+      label: 'Restore to library',
+      icon: <RotateCcw size={18} />,
+      onClick: async (id) => {
+        await window.photoVault.restore([id])
+        dispatch({ type: 'REMOVE_PHOTOS', payload: [id] })
+        showToast('Restored photo to library')
+      }
+    },
+    {
+      label: 'Details',
+      icon: <Info size={18} />,
+      onClick: (id) => {
+        dispatch({
+          type: 'SET_VIEWER_SCOPED',
+          payload: { photoId: id, photos: state.photos }
+        })
+      }
+    },
+    {
+      label: 'Open in explorer',
+      icon: <FolderOpen size={18} />,
+      onClick: (id) => {
+        const photo = state.photos.find(p => p.id === id)
+        if (photo) window.photoVault.openInExplorer(photo.file_path)
+      }
+    },
+    {
+      label: 'Delete permanently',
+      icon: <Trash2 size={18} />,
+      danger: true,
+      onClick: (id) => {
+        dispatch({ type: 'SELECT_PHOTO', payload: id })
+        setShowEmptyConfirm(false)
+        setShowDeleteSelectedConfirm(true)
+      }
+    }
+  ]
+
   return (
-    <div className="photos-page" style={{ padding: '24px 32px' }}>
-      {/* Action Header */}
-      <div
-        className="page-header"
-        style={{
-          marginBottom: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px'
+    <div className="photos-page-container">
+      {/* Floating Selection Bar Dock */}
+      <SelectionBar
+        customActions={
+          <>
+            <button
+              type="button"
+              className="dock-action-btn"
+              onClick={handleRestoreSelected}
+              title="Restore selected to library"
+            >
+              <RotateCcw size={15} />
+              <span>Restore</span>
+            </button>
+            <button
+              type="button"
+              className="dock-action-btn dock-action-trash"
+              onClick={() => {
+                setShowEmptyConfirm(false)
+                setShowDeleteSelectedConfirm(true)
+              }}
+              title="Delete permanently from disk"
+            >
+              <Trash2 size={15} />
+              <span>Delete Permanently</span>
+            </button>
+          </>
+        }
+        hideDelete={true}
+      />
+
+      {/* Date Scrubber Bar for 100GB fast scroll */}
+      <DateScrubber
+        years={uniqueYears}
+        onSelectYear={(year) => {
+          setTargetYear(year)
+          showToast(`Jumped to year ${year}`)
         }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      />
+
+      {/* Action Header & Notice Container */}
+      <div style={{ padding: '0 20px', marginBottom: '16px' }}>
+        <div
+          className="page-header"
+          style={{
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {state.photos.length > 0 && (
+              <span className="apple-storage-pill">
+                {state.photos.length} items • {formatFileSize(totalTrashBytes)}
+              </span>
+            )}
+          </div>
+
+          {/* Action Buttons */}
           {state.photos.length > 0 && (
-            <span className="apple-storage-pill">
-              {state.photos.length} items • {formatFileSize(totalTrashBytes)}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+              <button
+                type="button"
+                className="apple-secondary-btn"
+                onClick={handleRestoreAll}
+              >
+                <RotateCcw size={14} />
+                <span>Restore All</span>
+              </button>
+              <button
+                type="button"
+                className="apple-secondary-btn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowDeleteSelectedConfirm(false)
+                  setShowEmptyConfirm(true)
+                }}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#ef4444',
+                  borderColor: 'rgba(239, 68, 68, 0.25)',
+                  gap: '6px'
+                }}
+              >
+                <Trash2 size={14} />
+                <span>Empty Trash</span>
+              </button>
+            </div>
           )}
         </div>
 
-        {/* Action Buttons */}
+        {/* Warning Notice Banner */}
         {state.photos.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
-            <button
-              type="button"
-              className="apple-secondary-btn"
-              onClick={handleRestoreAll}
-            >
-              <RotateCcw size={14} />
-              <span>Restore All</span>
-            </button>
-            <button
-              type="button"
-              className="apple-secondary-btn"
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowDeleteSelectedConfirm(false)
-                setShowEmptyConfirm(true)
-              }}
-              style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                color: '#ef4444',
-                borderColor: 'rgba(239, 68, 68, 0.25)',
-                gap: '6px'
-              }}
-            >
-              <Trash2 size={14} />
-              <span>Empty Trash</span>
-            </button>
+          <div
+            style={{
+              background: 'rgba(245, 158, 11, 0.1)',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              borderRadius: '14px',
+              padding: '10px 16px',
+              marginBottom: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              fontSize: '13px',
+              color: 'var(--text-secondary)'
+            }}
+          >
+            <AlertTriangle size={16} color="#f59e0b" style={{ flexShrink: 0 }} />
+            <span>Permanently deleting items frees up disk storage on your computer. Deleted items cannot be restored.</span>
           </div>
         )}
       </div>
-
-      {/* Warning Notice Banner */}
-      {state.photos.length > 0 && (
-        <div
-          style={{
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.25)',
-            borderRadius: '14px',
-            padding: '10px 16px',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: '13px',
-            color: 'var(--text-secondary)'
-          }}
-        >
-          <AlertTriangle size={16} color="#f59e0b" style={{ flexShrink: 0 }} />
-          <span>Permanently deleting items frees up disk storage on your computer. Deleted items cannot be restored.</span>
-        </div>
-      )}
-
-      {/* Floating Selection Bar */}
-      {state.selectedIds.size > 0 && (
-        <div className="selection-bar">
-          <div className="selection-bar-count">
-            <button className="selection-bar-btn" onClick={() => dispatch({ type: 'DESELECT_ALL' })}>
-              <X size={14} />
-            </button>
-            {state.selectedIds.size} selected
-          </div>
-          <button className="selection-bar-btn" onClick={handleRestoreSelected} title="Restore selected to library">
-            <RotateCcw size={18} />
-          </button>
-          <button
-            className="selection-bar-btn"
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowEmptyConfirm(false)
-              setShowDeleteSelectedConfirm(true)
-            }}
-            title="Delete permanently from disk"
-          >
-            <Trash2 size={18} />
-          </button>
-        </div>
-      )}
 
       {/* Photos Grid or Empty State */}
       {!state.isLoading && state.photos.length === 0 ? (
@@ -193,7 +265,23 @@ export default function TrashPage() {
           description="Photos and videos you delete will appear here. Items in trash are saved before permanent deletion."
         />
       ) : (
-        <PhotoGrid photos={state.photos} showDateHeaders={false} />
+        <PhotoGrid
+          photos={state.photos}
+          showDateHeaders={true}
+          onContextMenu={handleContextMenu}
+          scrollToYear={targetYear}
+        />
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          photoId={contextMenu.photoId}
+          onClose={() => setContextMenu(null)}
+          customActions={trashCustomActions}
+        />
       )}
 
       {/* Confirmation Modal for Empty Trash */}

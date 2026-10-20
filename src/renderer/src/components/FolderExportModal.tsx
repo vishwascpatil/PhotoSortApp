@@ -5,7 +5,7 @@ import {
   RefreshCw, X, ChevronRight, ChevronDown, Check, Loader2,
   ArrowLeft, ExternalLink, Heart, Users, Copy, Share2,
   MessageSquare, Scan, Search, AlertTriangle, Info, HardDrive,
-  FileCheck, ShieldAlert, Eye, Tag, Edit2, UserCheck, AlertCircle
+  FileCheck, ShieldAlert, Eye, Tag, Edit2, UserCheck, AlertCircle, Settings
 } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
@@ -29,8 +29,9 @@ export default function FolderExportModal({
   const { state: photoState, refreshPhotos } = usePhotos()
   const { showToast } = useApp()
 
-  // Steps: 1 = Choose Folders & Options, 2 = Preview Folders, 3 = Exporting Progress, 4 = All Done!
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
+  // Steps: 1 = Destination & Mode, 2 = Choose Folders, 3 = Preview Folders, 4 = Exporting Progress, 5 = All Done!
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1)
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
 
   // Options
   const [mode, setMode] = useState<'copy' | 'move'>(initialMode)
@@ -852,7 +853,7 @@ export default function FolderExportModal({
           const firstKeys = new Set<string>(plan.yearGroups.slice(0, 3).map((g: any) => g.year))
           setExpandedFolders(firstKeys)
         }
-        setStep(2)
+        setStep(3)
         // Automatically run validation so comparison data is ready with 0 extra waiting
         handleValidatePlan(payload)
       }
@@ -901,7 +902,7 @@ export default function FolderExportModal({
 
   // ── Execute Organization / Export ────────────────────────────────────────
   const handleStartOrganizing = async () => {
-    setStep(3)
+    setStep(4)
     setIsExecuting(true)
     setProgress({
       completed: 0,
@@ -943,7 +944,7 @@ export default function FolderExportModal({
           selectedPlaces: Array.from(selectedPlaces)
         })
         setResult(res)
-        setStep(4)
+        setStep(5)
         if (mode === 'move') {
           refreshPhotos()
         }
@@ -968,6 +969,20 @@ export default function FolderExportModal({
     if (target && window.photoVault?.showInFolder) {
       await window.photoVault.showInFolder(target)
     }
+  }
+
+  const applyMagicPreset = () => {
+    setSeparatePeople(true)
+    setSeparatePlaces(true)
+    setSeparateDocuments(true)
+    setSeparateWhatsapp(true)
+    setSeparateVideos(true)
+    setKeepVideosWithPhotos(false)
+    setSeparateDuplicates(true)
+    setSeparateScreenshots(true)
+    setSeparateFavorites(true)
+    setSeparateSocialMedia(false)
+    showToast('🪄 Applied Magic Preset: People, Places, Docs, WhatsApp, Videos & Dupes turned on!')
   }
 
   if (!isOpen) return null
@@ -1191,11 +1206,39 @@ export default function FolderExportModal({
               <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, letterSpacing: '-0.01em' }}>
                 Organize & Export
               </h2>
-              <p style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.65)', margin: '2px 0 0 0' }}>
-                Sort your photos and videos into clean, easy-to-find folders.
+              <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', margin: '2px 0 0 0' }}>
+                {step === 1 ? 'Step 1: Choose Where to Save' : step === 2 ? 'Step 2: Pick Your Magic Folders' : step === 3 ? 'Step 3: Preview & Confirm' : step === 4 ? 'Organizing your photos...' : 'All done! 🎉'}
               </p>
             </div>
           </div>
+
+          {/* ── Wizard Stepper (Steps 1, 2, 3) ── */}
+          {!isExecuting && step <= 3 && (
+            <div className="export-wizard-stepper">
+              <div
+                className={`export-wizard-step ${step === 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}`}
+                onClick={() => !isExecuting && step > 1 && setStep(1)}
+              >
+                <span className="export-step-circle">{step > 1 ? '✓' : '1'}</span>
+                <span>Destination</span>
+              </div>
+              <span className="export-step-arrow">›</span>
+              <div
+                className={`export-wizard-step ${step === 2 ? 'active' : ''} ${step > 2 ? 'completed' : ''}`}
+                onClick={() => !isExecuting && step > 2 && setStep(2)}
+              >
+                <span className="export-step-circle">{step > 2 ? '✓' : '2'}</span>
+                <span>Folders</span>
+              </div>
+              <span className="export-step-arrow">›</span>
+              <div
+                className={`export-wizard-step ${step === 3 ? 'active' : ''} ${step > 3 ? 'completed' : ''}`}
+              >
+                <span className="export-step-circle">{step > 3 ? '✓' : '3'}</span>
+                <span>Preview</span>
+              </div>
+            </div>
+          )}
 
           {!isExecuting && (
             <button
@@ -1325,428 +1368,11 @@ export default function FolderExportModal({
                       <Folder size={16} /> Choose Folder...
                     </button>
                   </div>
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                    💡 Tip: Choose an external drive, USB stick, or a folder on your Desktop.
+                  </div>
                 </div>
               )}
-
-              {/* 3. 9 Segregation Categories (Apple Cards with Inline Scans) */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <div>
-                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                      3. Which Folders to Create?
-                    </label>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                      Check the categories you would like segregated into their own folders:
-                    </p>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    {(categoryCounts.unscannedPlaces > 0 || categoryCounts.unscannedDocs > 0 || categoryCounts.unscannedPeople > 0) && (
-                      <button
-                        type="button"
-                        onClick={handleScanAllCategories}
-                        disabled={isScanningAll || isScanningPlaces || isScanningDocs || isScanningPeople || isScanningDuplicates}
-                        style={{
-                          background: isScanningAll ? 'rgba(14, 165, 233, 0.28)' : 'rgba(14, 165, 233, 0.18)',
-                          border: '1px solid rgba(14, 165, 233, 0.4)',
-                          color: '#38bdf8',
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                          cursor: isScanningAll ? 'default' : 'pointer',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '5px'
-                        }}
-                      >
-                        {isScanningAll ? (
-                          <>
-                            <Loader2 size={11} className="animate-spin" />
-                            <span>Scanning All ({scanAllPercent}%)</span>
-                          </>
-                        ) : (
-                          <>
-                            <Scan size={11} />
-                            <span>Scan All</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSeparatePlaces(true)
-                        setSeparateDocuments(true)
-                        setSeparateWhatsapp(true)
-                        setSeparateFavorites(true)
-                        setSeparateVideos(true)
-                        setKeepVideosWithPhotos(false)
-                        setSeparateDuplicates(true)
-                        setSeparateScreenshots(true)
-                        setSeparateSocialMedia(true)
-                        setSeparatePeople(true)
-                      }}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        padding: '4px 10px',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        fontWeight: 600
-                      }}
-                    >
-                      Select All
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSeparatePlaces(false)
-                        setSeparateDocuments(false)
-                        setSeparateWhatsapp(false)
-                        setSeparateFavorites(false)
-                        setSeparateVideos(false)
-                        setKeepVideosWithPhotos(true)
-                        setSeparateDuplicates(false)
-                        setSeparateScreenshots(false)
-                        setSeparateSocialMedia(false)
-                        setSeparatePeople(false)
-                      }}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        padding: '4px 10px',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        fontWeight: 600
-                      }}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-
-                {/* 9 Category Cards Grid */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                    gap: '10px'
-                  }}
-                >
-                  {categoryCards.map(card => {
-                    return (
-                      <div
-                        key={card.id}
-                        onClick={card.toggle}
-                        style={{
-                          padding: '12px 14px',
-                          borderRadius: '14px',
-                          border: card.checked
-                            ? '1.5px solid rgba(14, 165, 233, 0.6)'
-                            : '1px solid rgba(255, 255, 255, 0.08)',
-                          background: card.checked
-                            ? 'rgba(14, 165, 233, 0.08)'
-                            : 'rgba(255, 255, 255, 0.025)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          minHeight: '84px'
-                        }}
-                      >
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div
-                                style={{
-                                  width: '20px',
-                                  height: '20px',
-                                  borderRadius: '6px',
-                                  border: card.checked ? 'none' : '1.5px solid rgba(255, 255, 255, 0.3)',
-                                  background: card.checked ? '#0ea5e9' : 'transparent',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  color: '#ffffff'
-                                }}
-                              >
-                                {card.checked && <Check size={14} strokeWidth={3} />}
-                              </div>
-                              <span style={{ fontSize: '13.5px', fontWeight: 700 }}>
-                                {card.title}
-                              </span>
-                            </div>
-                            {card.icon}
-                          </div>
-
-                          <p style={{ margin: 0, fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: '1.3' }}>
-                            {card.desc}
-                          </p>
-
-                          {card.id === 'videos' && (
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                background: 'rgba(0, 0, 0, 0.45)',
-                                borderRadius: '8px',
-                                padding: '2px',
-                                marginTop: '8px',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
-                                gap: '2px'
-                              }}
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setKeepVideosWithPhotos(true)
-                                  setSeparateVideos(false)
-                                }}
-                                style={{
-                                  flex: 1,
-                                  padding: '4px 6px',
-                                  borderRadius: '6px',
-                                  fontSize: '10.5px',
-                                  fontWeight: keepVideosWithPhotos ? 700 : 500,
-                                  background: keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.35)' : 'transparent',
-                                  border: keepVideosWithPhotos ? '1px solid #8b5cf6' : '1px solid transparent',
-                                  color: keepVideosWithPhotos ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s ease',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '4px'
-                                }}
-                                title="Keep videos and photos together in the same date/trip folders"
-                              >
-                                📸 Stay Together
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setKeepVideosWithPhotos(false)
-                                  setSeparateVideos(true)
-                                }}
-                                style={{
-                                  flex: 1,
-                                  padding: '4px 6px',
-                                  borderRadius: '6px',
-                                  fontSize: '10.5px',
-                                  fontWeight: !keepVideosWithPhotos ? 700 : 500,
-                                  background: !keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.35)' : 'transparent',
-                                  border: !keepVideosWithPhotos ? '1px solid #8b5cf6' : '1px solid transparent',
-                                  color: !keepVideosWithPhotos ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s ease',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '4px'
-                                }}
-                                title="Organize videos into a dedicated Videos folder"
-                              >
-                                🎞️ Separate Folder
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Status, Eligibility & Action Row */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '6px',
-                            marginTop: '10px',
-                            paddingTop: '8px',
-                            borderTop: '1px solid rgba(255, 255, 255, 0.06)'
-                          }}
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>
-                              {card.countLabel}
-                            </span>
-
-                            {card.isEligible ? (
-                              <span
-                                style={{
-                                  fontSize: '10.5px',
-                                  fontWeight: 700,
-                                  color: '#34d399',
-                                  background: 'rgba(52, 211, 153, 0.12)',
-                                  border: '1px solid rgba(52, 211, 153, 0.25)',
-                                  padding: '2px 7px',
-                                  borderRadius: '6px',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '3.5px'
-                                }}
-                                title="This category is verified and eligible to create dedicated folders."
-                              >
-                                <CheckCircle2 size={11} strokeWidth={2.5} /> Eligible
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: '10.5px',
-                                  fontWeight: 600,
-                                  color: '#fbbf24',
-                                  background: 'rgba(245, 158, 11, 0.12)',
-                                  border: '1px solid rgba(245, 158, 11, 0.25)',
-                                  padding: '2px 7px',
-                                  borderRadius: '6px',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '3.5px'
-                                }}
-                                title="Click 'Review & Confirm' to inspect items before exporting into separate folders."
-                              >
-                                <AlertCircle size={11} /> Review Needed
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                            {card.needsScan && card.onScan && (
-                              <button
-                                type="button"
-                                onClick={card.onScan}
-                                disabled={card.isScanning}
-                                style={{
-                                  background: card.isScanning ? 'rgba(14, 165, 233, 0.28)' : 'rgba(14, 165, 233, 0.18)',
-                                  border: '1px solid rgba(14, 165, 233, 0.35)',
-                                  color: '#38bdf8',
-                                  padding: '3px 8px',
-                                  borderRadius: '6px',
-                                  fontSize: '10.5px',
-                                  fontWeight: 700,
-                                  cursor: card.isScanning ? 'default' : 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}
-                              >
-                                {card.isScanning ? (
-                                  <>
-                                    <Loader2 size={10} className="animate-spin" />
-                                    <span>Scanning {card.scanPercent !== undefined ? `${card.scanPercent}%` : ''}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Scan size={10} /> {card.scanLabel}
-                                  </>
-                                )}
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (card.id === 'people') loadPeopleProfiles()
-                                setReviewingCategory(card.id)
-                              }}
-                              style={{
-                                background: card.isEligible ? 'rgba(255, 255, 255, 0.06)' : 'rgba(14, 165, 233, 0.2)',
-                                border: card.isEligible ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(14, 165, 233, 0.45)',
-                                color: card.isEligible ? 'rgba(255, 255, 255, 0.85)' : '#38bdf8',
-                                padding: '3px 9px',
-                                borderRadius: '6px',
-                                fontSize: '10.5px',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                transition: 'all 0.15s ease'
-                              }}
-                              title="Review items in this category and confirm eligibility for folder export"
-                            >
-                              <Eye size={11} /> {card.isEligible ? 'Review' : 'Review & Confirm'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Visual Percentage Progress Bar on the Card when scanning */}
-                        {card.isScanning && (
-                          <div
-                            style={{
-                              width: '100%',
-                              height: '3px',
-                              backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                              borderRadius: '3px',
-                              overflow: 'hidden',
-                              marginTop: '6px'
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: `${Math.max(card.scanPercent || 0, 4)}%`,
-                                height: '100%',
-                                background: 'linear-gradient(90deg, #0ea5e9, #38bdf8)',
-                                borderRadius: '3px',
-                                transition: 'width 0.2s ease-out'
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* 4. Folder Style / Layout Preset */}
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  4. Folder Style
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div
-                    onClick={() => setFolderLayout('category-first')}
-                    style={{
-                      padding: '12px 14px',
-                      borderRadius: '12px',
-                      border: folderLayout === 'category-first' ? '2px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.1)',
-                      background: folderLayout === 'category-first' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <strong style={{ fontSize: '13px', display: 'block', marginBottom: '2px' }}>
-                      Folders by Category First (Recommended)
-                    </strong>
-                    <span style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.55)' }}>
-                      Creates separate folders like Places, Documents, WhatsApp, Videos, Photos...
-                    </span>
-                  </div>
-
-                  <div
-                    onClick={() => setFolderLayout('year-first')}
-                    style={{
-                      padding: '12px 14px',
-                      borderRadius: '12px',
-                      border: folderLayout === 'year-first' ? '2px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.1)',
-                      background: folderLayout === 'year-first' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <strong style={{ fontSize: '13px', display: 'block', marginBottom: '2px' }}>
-                      Folders by Year First
-                    </strong>
-                    <span style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.55)' }}>
-                      Groups by year first, then creates category folders inside each year.
-                    </span>
-                  </div>
-                </div>
-              </div>
 
               {/* Zero-Loss Safety Guarantee Notice */}
               <div
@@ -1754,25 +1380,558 @@ export default function FolderExportModal({
                   background: 'rgba(34, 197, 94, 0.08)',
                   border: '1px solid rgba(34, 197, 94, 0.25)',
                   borderRadius: '14px',
-                  padding: '12px 16px',
+                  padding: '14px 18px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px'
+                  gap: '14px',
+                  marginTop: '10px'
                 }}
               >
-                <ShieldCheck size={22} color="#22c55e" style={{ flexShrink: 0 }} />
-                <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                <ShieldCheck size={24} color="#22c55e" style={{ flexShrink: 0 }} />
+                <div style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.75)' }}>
                   <strong style={{ color: '#22c55e', display: 'block', marginBottom: '2px' }}>
-                    100% Zero-Loss Safe
+                    100% Zero-Loss Safe Guarantee
                   </strong>
-                  Duplicate filenames are automatically preserved by adding numbers like <code>Photo (1).jpg</code>. Every file is verified byte-by-byte.
+                  Duplicate filenames are automatically preserved with numbered copies like <code>Photo (1).jpg</code>. Your original photos are verified byte-by-byte and never lost.
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── STEP 2: Interactive Folder Preview ─────────────────────────── */}
-          {step === 2 && previewPlan && (
+          {/* ── STEP 2: Pick Your Magic Folders ───────────────────────────── */}
+          {step === 2 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              {/* Header with Title and Action Bar */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', display: 'block', marginBottom: '3px' }}>
+                    2. Choose Your Magic Folders
+                  </label>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                    Pick which special folders to create. Everything else will be organized automatically into clean year & month folders!
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={applyMagicPreset}
+                    className="export-magic-btn"
+                    title="One-click setup: Activates the best folders for your collection"
+                  >
+                    <Sparkles size={13} />
+                    <span>🪄 Magic Preset</span>
+                  </button>
+
+                  {(categoryCounts.unscannedPlaces > 0 || categoryCounts.unscannedDocs > 0 || categoryCounts.unscannedPeople > 0) && (
+                    <button
+                      type="button"
+                      onClick={handleScanAllCategories}
+                      disabled={isScanningAll || isScanningPlaces || isScanningDocs || isScanningPeople || isScanningDuplicates}
+                      style={{
+                        background: isScanningAll ? 'rgba(14, 165, 233, 0.28)' : 'rgba(14, 165, 233, 0.18)',
+                        border: '1px solid rgba(14, 165, 233, 0.4)',
+                        color: '#38bdf8',
+                        padding: '6px 11px',
+                        borderRadius: '9px',
+                        fontSize: '11px',
+                        cursor: isScanningAll ? 'default' : 'pointer',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      {isScanningAll ? (
+                        <>
+                          <Loader2 size={11} className="animate-spin" />
+                          <span>Scanning All ({scanAllPercent}%)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Scan size={11} />
+                          <span>⚡ Auto-Scan All</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSeparatePlaces(true)
+                      setSeparateDocuments(true)
+                      setSeparateWhatsapp(true)
+                      setSeparateFavorites(true)
+                      setSeparateVideos(true)
+                      setKeepVideosWithPhotos(false)
+                      setSeparateDuplicates(true)
+                      setSeparateScreenshots(true)
+                      setSeparateSocialMedia(true)
+                      setSeparatePeople(true)
+                    }}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      color: 'rgba(255, 255, 255, 0.85)',
+                      padding: '6px 12px',
+                      borderRadius: '9px',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      fontWeight: 600
+                    }}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSeparatePlaces(false)
+                      setSeparateDocuments(false)
+                      setSeparateWhatsapp(false)
+                      setSeparateFavorites(false)
+                      setSeparateVideos(false)
+                      setKeepVideosWithPhotos(true)
+                      setSeparateDuplicates(false)
+                      setSeparateScreenshots(false)
+                      setSeparateSocialMedia(false)
+                      setSeparatePeople(false)
+                    }}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      color: 'rgba(255, 255, 255, 0.85)',
+                      padding: '6px 12px',
+                      borderRadius: '9px',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      fontWeight: 600
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/* 9 Category Cards Grid */}
+              <div className="export-tiles-grid">
+                {categoryCards.map(card => {
+                  return (
+                    <div
+                      key={card.id}
+                      className={`export-tile ${card.checked ? 'selected' : ''}`}
+                      onClick={card.toggle}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="export-tile-checkbox">
+                              {card.checked && <Check size={13} strokeWidth={3} />}
+                            </div>
+                            <strong style={{ fontSize: '13.5px', fontWeight: 700 }}>
+                              {card.title}
+                            </strong>
+                          </div>
+                          <div className="export-tile-icon-box" style={{ background: 'rgba(255, 255, 255, 0.05)' }}>
+                            {card.icon}
+                          </div>
+                        </div>
+
+                        <p style={{ margin: 0, fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: '1.35' }}>
+                          {card.desc}
+                        </p>
+
+                        {card.id === 'videos' && (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              background: 'rgba(0, 0, 0, 0.45)',
+                              borderRadius: '8px',
+                              padding: '2px',
+                              marginTop: '8px',
+                              border: '1px solid rgba(255, 255, 255, 0.08)',
+                              gap: '2px'
+                            }}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setKeepVideosWithPhotos(true)
+                                setSeparateVideos(false)
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '4px 6px',
+                                borderRadius: '6px',
+                                fontSize: '10.5px',
+                                fontWeight: keepVideosWithPhotos ? 700 : 500,
+                                background: keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.35)' : 'transparent',
+                                border: keepVideosWithPhotos ? '1px solid #8b5cf6' : '1px solid transparent',
+                                color: keepVideosWithPhotos ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '4px'
+                              }}
+                              title="Keep videos and photos together in the same date/trip folders"
+                            >
+                              📸 Stay Together
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setKeepVideosWithPhotos(false)
+                                setSeparateVideos(true)
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '4px 6px',
+                                borderRadius: '6px',
+                                fontSize: '10.5px',
+                                fontWeight: !keepVideosWithPhotos ? 700 : 500,
+                                background: !keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.35)' : 'transparent',
+                                border: !keepVideosWithPhotos ? '1px solid #8b5cf6' : '1px solid transparent',
+                                color: !keepVideosWithPhotos ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '4px'
+                              }}
+                              title="Organize videos into a dedicated Videos folder"
+                            >
+                              🎞️ Separate Folder
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status, Eligibility & Action Row */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          marginTop: '10px',
+                          paddingTop: '8px',
+                          borderTop: '1px solid rgba(255, 255, 255, 0.06)'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>
+                            {card.countLabel}
+                          </span>
+
+                          {card.isEligible ? (
+                            <span
+                              style={{
+                                fontSize: '10.5px',
+                                fontWeight: 700,
+                                color: '#34d399',
+                                background: 'rgba(52, 211, 153, 0.12)',
+                                border: '1px solid rgba(52, 211, 153, 0.25)',
+                                padding: '2px 7px',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3.5px'
+                              }}
+                              title="This category is verified and ready for folder export."
+                            >
+                              <CheckCircle2 size={11} strokeWidth={2.5} /> Ready
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                fontSize: '10.5px',
+                                fontWeight: 600,
+                                color: '#fbbf24',
+                                background: 'rgba(245, 158, 11, 0.12)',
+                                border: '1px solid rgba(245, 158, 11, 0.25)',
+                                padding: '2px 7px',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3.5px'
+                              }}
+                              title="Click 'Review' to inspect items before exporting into separate folders."
+                            >
+                              <AlertCircle size={11} /> Review Needed
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                          {card.needsScan && card.onScan && (
+                            <button
+                              type="button"
+                              onClick={card.onScan}
+                              disabled={card.isScanning}
+                              style={{
+                                background: card.isScanning ? 'rgba(14, 165, 233, 0.28)' : 'rgba(14, 165, 233, 0.18)',
+                                border: '1px solid rgba(14, 165, 233, 0.35)',
+                                color: '#38bdf8',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                fontSize: '10.5px',
+                                fontWeight: 700,
+                                cursor: card.isScanning ? 'default' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              {card.isScanning ? (
+                                <>
+                                  <Loader2 size={10} className="animate-spin" />
+                                  <span>Scanning {card.scanPercent !== undefined ? `${card.scanPercent}%` : ''}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Scan size={10} /> {card.scanLabel}
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (card.id === 'people') loadPeopleProfiles()
+                              setReviewingCategory(card.id)
+                            }}
+                            style={{
+                              background: card.isEligible ? 'rgba(255, 255, 255, 0.06)' : 'rgba(14, 165, 233, 0.2)',
+                              border: card.isEligible ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(14, 165, 233, 0.45)',
+                              color: card.isEligible ? 'rgba(255, 255, 255, 0.85)' : '#38bdf8',
+                              padding: '3px 9px',
+                              borderRadius: '6px',
+                              fontSize: '10.5px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.15s ease'
+                            }}
+                            title="Inspect items in this category"
+                          >
+                            <Eye size={11} /> {card.isEligible ? 'Review' : 'Review & Confirm'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Visual Progress Bar when scanning */}
+                      {card.isScanning && (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '3px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                            borderRadius: '3px',
+                            overflow: 'hidden',
+                            marginTop: '6px'
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.max(card.scanPercent || 0, 4)}%`,
+                              height: '100%',
+                              background: 'linear-gradient(90deg, #0ea5e9, #38bdf8)',
+                              borderRadius: '3px',
+                              transition: 'width 0.2s ease-out'
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Collapsible Advanced Settings & Deep Review Hub */}
+              <div
+                style={{
+                  marginTop: '8px',
+                  borderRadius: '16px',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  overflow: 'hidden'
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 18px',
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    color: 'rgba(255, 255, 255, 0.75)',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Settings size={15} color="#0ea5e9" />
+                    <span>Advanced Options (Folder Structure & Review Tools)</span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                    {showAdvancedSettings ? 'Hide ▲' : 'Show ▼'}
+                  </span>
+                </button>
+
+                {showAdvancedSettings && (
+                  <div style={{ padding: '4px 18px 18px 18px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Folder Structure Preset */}
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Folder Structure
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div
+                          onClick={() => setFolderLayout('category-first')}
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: '12px',
+                            border: folderLayout === 'category-first' ? '2px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.1)',
+                            background: folderLayout === 'category-first' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <strong style={{ fontSize: '12.5px', display: 'block', marginBottom: '2px' }}>
+                            Folders by Category First (Recommended)
+                          </strong>
+                          <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.55)' }}>
+                            Creates clean root folders: Places, Documents, WhatsApp, Videos, Photos...
+                          </span>
+                        </div>
+
+                        <div
+                          onClick={() => setFolderLayout('year-first')}
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: '12px',
+                            border: folderLayout === 'year-first' ? '2px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.1)',
+                            background: folderLayout === 'year-first' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <strong style={{ fontSize: '12.5px', display: 'block', marginBottom: '2px' }}>
+                            Folders by Year First
+                          </strong>
+                          <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.55)' }}>
+                            Groups by year first, then creates category folders inside each year.
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Direct Review Hub */}
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Deep Review Hub
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            loadPeopleProfiles()
+                            setReviewingCategory('people')
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(236, 72, 153, 0.12)',
+                            border: '1px solid rgba(236, 72, 153, 0.3)',
+                            color: '#f472b6',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <Users size={13} /> Review People & Names
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReviewingCategory('places')}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(14, 165, 233, 0.12)',
+                            border: '1px solid rgba(14, 165, 233, 0.3)',
+                            color: '#38bdf8',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <MapPin size={13} /> Review Places & Cities
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReviewingCategory('documents')}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(59, 130, 246, 0.12)',
+                            border: '1px solid rgba(59, 130, 246, 0.3)',
+                            color: '#60a5fa',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <FileText size={13} /> Review Documents & Bills
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReviewingCategory('duplicates')}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(99, 102, 241, 0.12)',
+                            border: '1px solid rgba(99, 102, 241, 0.3)',
+                            color: '#818cf8',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <Copy size={13} /> Review Duplicates & Similar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 3: Interactive Folder Preview ─────────────────────────── */}
+          {step === 3 && previewPlan && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               {/* Summary Statistics */}
               <div
@@ -2416,8 +2575,8 @@ export default function FolderExportModal({
             </div>
           )}
 
-          {/* ── STEP 3: Live Progress ─────────────────────────────────────── */}
-          {step === 3 && progress && (
+          {/* ── STEP 4: Live Progress ─────────────────────────────────────── */}
+          {step === 4 && progress && (
             <div style={{ textAlign: 'center', padding: '36px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
               <div
                 style={{
@@ -2492,8 +2651,8 @@ export default function FolderExportModal({
             </div>
           )}
 
-          {/* ── STEP 4: All Done! ─────────────────────────────────────────── */}
-          {step === 4 && result && (
+          {/* ── STEP 5: All Done! ─────────────────────────────────────────── */}
+          {step === 5 && result && (
             <div style={{ textAlign: 'center', padding: '30px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
               <div
                 style={{
@@ -2629,7 +2788,7 @@ export default function FolderExportModal({
         </div>
 
         {/* ── Apple-Style Modal Footer ─────────────────────────────────── */}
-        {!isExecuting && step !== 3 && step !== 4 && (
+        {!isExecuting && step <= 3 && (
           <div
             style={{
               padding: '16px 28px',
@@ -2640,7 +2799,7 @@ export default function FolderExportModal({
               background: 'rgba(0, 0, 0, 0.2)'
             }}
           >
-            {step === 1 ? (
+            {step === 1 && (
               <>
                 <button
                   type="button"
@@ -2658,8 +2817,8 @@ export default function FolderExportModal({
                 </button>
                 <button
                   type="button"
-                  onClick={handleGeneratePreview}
-                  disabled={isLoadingPreview || (!destinationDir && mode === 'copy')}
+                  onClick={() => setStep(2)}
+                  disabled={!destinationDir && mode === 'copy'}
                   style={{
                     padding: '10px 22px',
                     borderRadius: '12px',
@@ -2677,18 +2836,12 @@ export default function FolderExportModal({
                     boxShadow: (!destinationDir && mode === 'copy') ? 'none' : '0 4px 14px rgba(14, 165, 233, 0.35)'
                   }}
                 >
-                  {isLoadingPreview ? (
-                    <>
-                      <Loader2 size={15} className="animate-spin" /> Preparing Preview...
-                    </>
-                  ) : (
-                    <>
-                      Preview Folders <ArrowRight size={15} />
-                    </>
-                  )}
+                  Next: Choose Folders <ArrowRight size={15} />
                 </button>
               </>
-            ) : (
+            )}
+
+            {step === 2 && (
               <>
                 <button
                   type="button"
@@ -2705,7 +2858,58 @@ export default function FolderExportModal({
                     cursor: 'pointer'
                   }}
                 >
-                  <ArrowLeft size={15} /> Back to Options
+                  <ArrowLeft size={15} /> Back: Where to Save
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGeneratePreview}
+                  disabled={isLoadingPreview}
+                  style={{
+                    padding: '10px 24px',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(14, 165, 233, 0.35)'
+                  }}
+                >
+                  {isLoadingPreview ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" /> Preparing Preview...
+                    </>
+                  ) : (
+                    <>
+                      Preview Folders <ArrowRight size={15} />
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+
+            {step === 3 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <ArrowLeft size={15} /> Back: Choose Folders
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <button

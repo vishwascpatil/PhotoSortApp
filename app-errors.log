@@ -1,16 +1,68 @@
-[2026-09-19T10:02:07.789Z] [MAIN_PROCESS_HANG]
-Main process event loop was blocked/frozen for 3106ms.
-Memory: RSS: 1251MB, HeapUsed: 72MB / 88MB
+[2026-09-20T08:03:15.149Z] [UI_THREAD_HANG]
+Renderer UI thread froze/hung for 12052ms.
+DOM Nodes: 589
+Memory: Heap: 84MB / 87MB
 
-[2026-09-19T10:02:19.685Z] [MAIN_PROCESS_HANG]
-Main process event loop was blocked/frozen for 7347ms.
-Memory: RSS: 1431MB, HeapUsed: 148MB / 165MB
+[2026-09-21T05:20:49.719Z] [RENDER_PROCESS_GONE]
+Renderer process terminated unexpectedly.
+Reason: killed, Exit Code: -1073741510
 
-[2026-09-19T10:02:36.010Z] [MAIN_PROCESS_HANG]
-Main process event loop was blocked/frozen for 7946ms.
-Memory: RSS: 1391MB, HeapUsed: 113MB / 130MB
+[2026-10-20T04:32:09.392Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 15080ms.
+Memory: RSS: 830MB, HeapUsed: 25MB / 45MB
 
-[2026-09-19T10:02:41.601Z] [MAIN_PROCESS_HANG]
-Main process event loop was blocked/frozen for 2583ms.
-Memory: RSS: 1220MB, HeapUsed: 48MB / 65MB
+[2026-10-20T04:32:13.508Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 3119ms.
+Memory: RSS: 946MB, HeapUsed: 63MB / 80MB
+
+[2026-10-20T04:32:17.250Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 2742ms.
+Memory: RSS: 950MB, HeapUsed: 63MB / 80MB
+
+[2026-10-20T04:32:20.865Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 2615ms.
+Memory: RSS: 958MB, HeapUsed: 63MB / 80MB
+
+[2026-10-20T04:32:24.594Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 2729ms.
+Memory: RSS: 984MB, HeapUsed: 79MB / 96MB
+
+[2026-10-20T04:32:28.911Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 3317ms.
+Memory: RSS: 951MB, HeapUsed: 77MB / 94MB
+
+[2026-10-20T04:32:32.514Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 2603ms.
+Memory: RSS: 953MB, HeapUsed: 63MB / 80MB
+
+[2026-10-20T04:32:39.564Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 2812ms.
+Memory: RSS: 992MB, HeapUsed: 77MB / 94MB
+
+[2026-10-20T04:32:43.567Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 3003ms.
+Memory: RSS: 967MB, HeapUsed: 77MB / 94MB
+
+[2026-10-20T04:32:50.420Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 5852ms.
+Memory: RSS: 982MB, HeapUsed: 85MB / 108MB
+
+[2026-10-20T04:33:14.971Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 3713ms.
+Memory: RSS: 1048MB, HeapUsed: 82MB / 99MB
+
+[2026-10-20T04:33:20.291Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 4320ms.
+Memory: RSS: 903MB, HeapUsed: 37MB / 58MB
+
+[2026-10-20T04:33:26.574Z] [MAIN_PROCESS_HANG]
+Main process event loop was blocked/frozen for 4276ms.
+Memory: RSS: 935MB, HeapUsed: 54MB / 68MB
+
+[2026-10-20T04:33:38.392Z] [UNHANDLED_REJECTION]
+Error: database disk image is malformed
+    at e.handleError (C:\Users\vishw\Desktop\photo-sort\node_modules\sql.js\dist\sql-wasm.js:90:192)
+    at e.run (C:\Users\vishw\Desktop\photo-sort\node_modules\sql.js\dist\sql-wasm.js:87:256)
+    at C:\Users\vishw\Desktop\photo-sort\out\main\index.js:1709:8
+    at async C:\Users\vishw\Desktop\photo-sort\out\main\index.js:14385:3
 

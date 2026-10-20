@@ -1,19 +1,27 @@
 import React, { useEffect, useRef } from 'react'
-import { Heart, FolderPlus, Trash2, Info, FolderOpen, ExternalLink } from 'lucide-react'
+import { Heart, Trash2, Info, FolderOpen } from 'lucide-react'
+
+export interface ContextMenuAction {
+  label: string
+  icon: React.ReactNode
+  onClick: (photoId: number) => void
+  danger?: boolean
+}
 
 interface ContextMenuProps {
   x: number
   y: number
   photoId: number
   onClose: () => void
-  onFavorite: (id: number) => void
-  onTrash: (id: number) => void
-  onInfo: (id: number) => void
-  onOpenInExplorer: (id: number) => void
+  onFavorite?: (id: number) => void
+  onTrash?: (id: number) => void
+  onInfo?: (id: number) => void
+  onOpenInExplorer?: (id: number) => void
+  customActions?: ContextMenuAction[]
 }
 
 export default function ContextMenu({
-  x, y, photoId, onClose, onFavorite, onTrash, onInfo, onOpenInExplorer
+  x, y, photoId, onClose, onFavorite, onTrash, onInfo, onOpenInExplorer, customActions
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -40,23 +48,52 @@ export default function ContextMenu({
 
   return (
     <div className="context-menu" ref={menuRef} style={{ left: adjustedX, top: adjustedY }}>
-      <button className="context-menu-item" onClick={() => { onFavorite(photoId); onClose() }}>
-        <Heart size={18} className="icon" />
-        Favorite
-      </button>
-      <button className="context-menu-item" onClick={() => { onInfo(photoId); onClose() }}>
-        <Info size={18} className="icon" />
-        Details
-      </button>
-      <button className="context-menu-item" onClick={() => { onOpenInExplorer(photoId); onClose() }}>
-        <FolderOpen size={18} className="icon" />
-        Open in explorer
-      </button>
-      <div className="context-menu-divider" />
-      <button className="context-menu-item danger" onClick={() => { onTrash(photoId); onClose() }}>
-        <Trash2 size={18} className="icon" />
-        Move to trash
-      </button>
+      {customActions ? (
+        customActions.map((action, idx) => (
+          <React.Fragment key={idx}>
+            {action.danger && <div className="context-menu-divider" />}
+            <button
+              className={`context-menu-item ${action.danger ? 'danger' : ''}`}
+              onClick={() => { action.onClick(photoId); onClose() }}
+            >
+              <span className="icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                {action.icon}
+              </span>
+              {action.label}
+            </button>
+          </React.Fragment>
+        ))
+      ) : (
+        <>
+          {onFavorite && (
+            <button className="context-menu-item" onClick={() => { onFavorite(photoId); onClose() }}>
+              <Heart size={18} className="icon" />
+              Favorite
+            </button>
+          )}
+          {onInfo && (
+            <button className="context-menu-item" onClick={() => { onInfo(photoId); onClose() }}>
+              <Info size={18} className="icon" />
+              Details
+            </button>
+          )}
+          {onOpenInExplorer && (
+            <button className="context-menu-item" onClick={() => { onOpenInExplorer(photoId); onClose() }}>
+              <FolderOpen size={18} className="icon" />
+              Open in explorer
+            </button>
+          )}
+          {onTrash && (
+            <>
+              <div className="context-menu-divider" />
+              <button className="context-menu-item danger" onClick={() => { onTrash(photoId); onClose() }}>
+                <Trash2 size={18} className="icon" />
+                Move to trash
+              </button>
+            </>
+          )}
+        </>
+      )}
     </div>
   )
 }

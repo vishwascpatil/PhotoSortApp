@@ -5,12 +5,9 @@ import {
 } from 'fs'
 import { app, dialog, BrowserWindow } from 'electron'
 import { getDb, saveDatabase, PhotoRow } from '../../database'
+import { ALL_SUPPORTED_EXTENSIONS, isVideoFile } from '../../mediaRegistry'
 
-export const MEDIA_EXTENSIONS = new Set([
-  '.jpg', '.jpeg', '.png', '.heic', '.heif', '.dng', '.raw', '.cr2', '.cr3',
-  '.nef', '.arw', '.rw2', '.orf', '.webp', '.tiff', '.tif', '.bmp', '.gif',
-  '.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv', '.3gp', '.wmv', '.flv'
-])
+export const MEDIA_EXTENSIONS = ALL_SUPPORTED_EXTENSIONS
 
 export interface NonMediaFileInfo {
   filename: string
@@ -204,7 +201,7 @@ function isPhotoVideo(photo: PhotoRow): boolean {
     return true
   }
   const ext = extname(photo.filename || photo.file_path || '').toLowerCase()
-  return ['.mp4', '.mov', '.mkv', '.avi', '.wmv', '.webm', '.m4v', '.3gp', '.flv'].includes(ext)
+  return isVideoFile(ext)
 }
 
 function isPhotoDocument(photo: PhotoRow): boolean {

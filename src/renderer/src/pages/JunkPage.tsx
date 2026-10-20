@@ -1,37 +1,31 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
-  Share2, Film, ImageIcon, CheckSquare,
-  Square, Trash2, RefreshCw, CheckCircle2,
-  Play, Check, ShieldCheck, BookmarkCheck, Loader2,
-  Sparkles
+  Share2, Film, ImageIcon, Trash2, RefreshCw, CheckCircle2,
+  BookmarkCheck, Loader2, Sparkles
 } from 'lucide-react'
 import { usePhotos, Photo } from '../contexts/PhotoContext'
 import { useApp } from '../contexts/AppContext'
+import PhotoGrid from '../components/PhotoGrid'
+import SelectionBar from '../components/SelectionBar'
+import ContextMenu from '../components/ContextMenu'
 import EmptyState from '../components/EmptyState'
-import { formatFileSize, getThumbnailUrl, isVideoFile } from '../utils/helpers'
-import { detectJunk, SocialAppCategory, SocialAppOrigin, APP_THEMES } from '../utils/junkDetector'
+import CollageModal from '../components/CollageModal'
+import PhotoCompareModal from '../components/PhotoCompareModal'
+import DateScrubber from '../components/DateScrubber'
+import { formatFileSize, isVideoFile } from '../utils/helpers'
+import { detectJunk, SocialAppCategory, SocialAppOrigin } from '../utils/junkDetector'
 
 export default function JunkPage() {
   const { state: photoState, dispatch: photoDispatch, loadPhotos, refreshPhotos } = usePhotos()
-  const { state: appState, showToast } = useApp()
-
-  // Use global grid density from AppContext (controlled by topbar icon)
-  const gridDensity = appState.gridDensity || 'dense'
-  const isDense = gridDensity === 'dense'
-  const isComfortable = gridDensity === 'comfortable'
-  const isMedium = gridDensity === 'medium'
-
-  const minTileWidth = isComfortable ? 240 : isMedium ? 160 : 100
-  const gridGap = isComfortable ? '14px' : isMedium ? '10px' : '6px'
-  const tileRadius = isComfortable ? '10px' : isMedium ? '6px' : '3px'
-  const checkboxSize = isComfortable ? 24 : isMedium ? 20 : 18
-  const checkIconSize = isComfortable ? 16 : isMedium ? 13 : 11
-  const checkboxOffset = isComfortable ? '8px' : isMedium ? '6px' : '4px'
+  const { showToast } = useApp()
 
   const [activeTab, setActiveTab] = useState<SocialAppCategory>('all')
   const [mediaTypeFilter, setMediaTypeFilter] = useState<'all' | 'video' | 'image'>('all')
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [classifiedMap, setClassifiedMap] = useState<Map<number, SocialAppOrigin>>(new Map())
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; photoId: number } | null>(null)
+  const [collageModal, setCollageModal] = useState(false)
+  const [compareModal, setCompareModal] = useState(false)
+  const [targetYear, setTargetYear] = useState<number | null>(null)
 
   // Progressive Scan State
   const [isScanning, setIsScanning] = useState(false)
@@ -240,37 +234,48 @@ export default function JunkPage() {
   }, [appMediaCandidates])
 
   const selectedPhotos = useMemo(() => {
-    return appMediaCandidates.filter(p => selectedIds.has(p.id))
-  }, [appMediaCandidates, selectedIds])
+    return appMediaCandidates.filter(p => photoState.selectedIds.has(p.id))
+  }, [appMediaCandidates, photoState.selectedIds])
 
   const selectedBytes = useMemo(() => {
     return selectedPhotos.reduce((acc, p) => acc + (p.file_size || 0), 0)
   }, [selectedPhotos])
 
-  // Selection handlers
-  const handleToggleSelect = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
+  const uniqueYears = useMemo(() => {
+    return Array.from(
+      new Set(appMediaCandidates.map(p => new Date(p.created_at).getFullYear()))
+    ).filter(y => !isNaN(y))
+  }, [appMediaCandidates])
+
+  // Context Menu handlers
+  function handleContextMenu(e: React.MouseEvent, photoId: number) {
+    setContextMenu({ x: e.clientX, y: e.clientY, photoId })
+  }
+
+  async function handleContextFavorite(id: number) {
+    await window.photoVault.toggleFavorite(id)
+    refreshPhotos()
+  }
+
+  async function handleContextTrash(id: number) {
+    await window.photoVault.trash([id])
+    photoDispatch({ type: 'REMOVE_PHOTOS', payload: [id] })
+    showToast('Moved to trash', async () => {
+      await window.photoVault.restore([id])
+      refreshPhotos()
     })
   }
 
-  const handleSelectAll = () => {
-    if (selectedIds.size === appMediaCandidates.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(appMediaCandidates.map(p => p.id)))
-    }
-  }
-
-  const handleTileClick = (photo: Photo) => {
+  function handleContextInfo(id: number) {
     photoDispatch({
       type: 'SET_VIEWER_SCOPED',
-      payload: { photoId: photo.id, photos: appMediaCandidates }
+      payload: { photoId: id, photos: appMediaCandidates }
     })
+  }
+
+  function handleContextOpenInExplorer(id: number) {
+    const photo = appMediaCandidates.find(p => p.id === id)
+    if (photo) window.photoVault.openInExplorer(photo.file_path)
   }
 
   // Move selected to Trash
@@ -284,7 +289,7 @@ export default function JunkPage() {
       if (window.photoVault?.trash) {
         await window.photoVault.trash(ids)
         photoDispatch({ type: 'REMOVE_PHOTOS', payload: ids })
-        setSelectedIds(new Set())
+        photoDispatch({ type: 'DESELECT_ALL' })
         showToast(`Moved ${count} items to Trash`)
         refreshPhotos()
       }
@@ -298,132 +303,40 @@ export default function JunkPage() {
   const handleKeepSelected = () => {
     if (selectedPhotos.length === 0) return
     const count = selectedPhotos.length
-    setSelectedIds(new Set())
+    photoDispatch({ type: 'DESELECT_ALL' })
     showToast(`Kept ${count} items in your photo library`)
   }
 
   return (
-    <div className="photos-page" style={{ padding: '20px 28px' }}>
-      {/* ─── Action Header ─────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '16px',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {appMediaCandidates.length > 0 && (
-            <span className="apple-storage-pill">
-              {appMediaCandidates.length} items • {formatFileSize(totalBytes)}
-            </span>
-          )}
-        </div>
-
-        {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
-          {selectedPhotos.length > 0 && (
-            <>
-              <button
-                type="button"
-                className="apple-secondary-btn"
-                onClick={handleKeepSelected}
-              >
-                <BookmarkCheck size={14} />
-                <span>Keep Selected ({selectedPhotos.length})</span>
-              </button>
-
-              <button
-                type="button"
-                className="apple-secondary-btn"
-                onClick={handleTrashSelected}
-                style={{
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  color: '#ef4444',
-                  borderColor: 'rgba(239, 68, 68, 0.25)',
-                  gap: '6px'
-                }}
-              >
-                <Trash2 size={14} />
-                <span>Move to Trash ({selectedPhotos.length} • {formatFileSize(selectedBytes)})</span>
-              </button>
-            </>
-          )}
-
-          {/* Scan Social Media Button */}
+    <div className="photos-page-container">
+      <SelectionBar
+        onCollage={() => setCollageModal(true)}
+        onCompare={() => setCompareModal(true)}
+        customActions={
           <button
             type="button"
-            className={appMediaCandidates.length > 0 ? 'apple-secondary-btn' : 'apple-primary-btn'}
-            onClick={handleStartRescan}
-            disabled={isScanning}
-            title="Scan Social Media & Apps"
+            className="dock-action-btn"
+            onClick={handleKeepSelected}
+            title="Keep selected in library"
           >
-            {isScanning ? (
-              <>
-                <Loader2 size={14} className="animate-spin" />
-                <span>Scanning Social Media...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={14} />
-                <span>Scan Social Media</span>
-              </>
-            )}
+            <BookmarkCheck size={15} />
+            <span>Keep ({selectedPhotos.length})</span>
           </button>
-        </div>
-      </div>
+        }
+        onTrash={handleTrashSelected}
+      />
 
-      {/* ─── Live Scanner Progress Banner (People / Documents / Places Pattern) ── */}
-      {isScanning && (
-        <div
-          style={{
-            background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)',
-            border: '1px solid rgba(99, 102, 241, 0.25)',
-            borderRadius: '16px',
-            padding: '14px 20px',
-            marginBottom: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: 'rgba(99, 102, 241, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#6366f1'
-              }}
-            >
-              <Loader2 size={18} className="animate-spin" />
-            </div>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                Scanning photo library for social media & apps...
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                Scanned {scanProgress?.completed || 0} of {scanProgress?.total || (photoState.photos.length || 0)} photos (
-                {scanProgress && scanProgress.total > 0
-                  ? Math.round((scanProgress.completed / scanProgress.total) * 100)
-                  : 0}
-                %){scanProgress && scanProgress.foundCount > 0 ? ` • ${scanProgress.foundCount} media items found` : ''}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Date Scrubber Bar for 100GB fast scroll */}
+      <DateScrubber
+        years={uniqueYears}
+        onSelectYear={(year) => {
+          setTargetYear(year)
+          showToast(`Jumped to year ${year}`)
+        }}
+      />
 
-      {/* ─── Filter Bar ──────────────────────────────────────────────────── */}
-      {appMediaCandidates.length > 0 && (
+      {/* ─── Action Header & Filters Container ─── */}
+      <div style={{ padding: '0 20px', marginBottom: '16px' }}>
         <div
           style={{
             display: 'flex',
@@ -431,51 +344,169 @@ export default function JunkPage() {
             justifyContent: 'space-between',
             marginBottom: '16px',
             flexWrap: 'wrap',
-            gap: '10px',
-            paddingBottom: '12px',
-            borderBottom: '1px solid var(--border)'
+            gap: '12px'
           }}
         >
-          {/* App Platform Origin Tabs */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            {[
-              { id: 'all', label: `All Apps (${tabCounts.all})`, show: true },
-              { id: 'whatsapp', label: `WhatsApp (${tabCounts.whatsapp})`, show: tabCounts.whatsapp > 0 },
-              { id: 'instagram', label: `Instagram (${tabCounts.instagram})`, show: tabCounts.instagram > 0 },
-              { id: 'snapchat', label: `Snapchat (${tabCounts.snapchat})`, show: tabCounts.snapchat > 0 },
-              { id: 'linkedin', label: `LinkedIn (${tabCounts.linkedin})`, show: tabCounts.linkedin > 0 },
-              { id: 'browser', label: `Web Downloads (${tabCounts.browser})`, show: tabCounts.browser > 0 },
-              { id: 'editor', label: `Editor Apps (${tabCounts.editor})`, show: tabCounts.editor > 0 },
-              { id: 'other-social', label: `Other Social (${tabCounts['other-social']})`, show: tabCounts['other-social'] > 0 },
-              { id: 'other-apps', label: `Unidentified Apps (${tabCounts['other-apps']})`, show: tabCounts['other-apps'] > 0 }
-            ].filter(t => t.show).map(tab => {
-              const isActive = activeTab === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id as any)}
-                  style={{
-                    fontSize: '12px',
-                    padding: '5px 12px',
-                    borderRadius: '99px',
-                    fontWeight: isActive ? 600 : 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    border: isActive ? '1px solid transparent' : '1px solid var(--border)',
-                    background: isActive ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' : 'var(--bg-secondary)',
-                    color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                    boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none'
-                  }}
-                >
-                  {tab.label}
-                </button>
-              )
-            })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {appMediaCandidates.length > 0 && (
+              <span className="apple-storage-pill">
+                {appMediaCandidates.length} items • {formatFileSize(totalBytes)}
+              </span>
+            )}
           </div>
 
-          {/* Media Filters & Select All */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Action Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            {selectedPhotos.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="apple-secondary-btn"
+                  onClick={handleKeepSelected}
+                >
+                  <BookmarkCheck size={14} />
+                  <span>Keep Selected ({selectedPhotos.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="apple-secondary-btn"
+                  onClick={handleTrashSelected}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    color: '#ef4444',
+                    borderColor: 'rgba(239, 68, 68, 0.25)',
+                    gap: '6px'
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>Move to Trash ({selectedPhotos.length} • {formatFileSize(selectedBytes)})</span>
+                </button>
+              </>
+            )}
+
+            {/* Scan Social Media Button */}
+            <button
+              type="button"
+              className={appMediaCandidates.length > 0 ? 'apple-secondary-btn' : 'apple-primary-btn'}
+              onClick={handleStartRescan}
+              disabled={isScanning}
+              title="Scan Social Media & Apps"
+            >
+              {isScanning ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Scanning Social Media...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  <span>Scan Social Media</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ─── Live Scanner Progress Banner ── */}
+        {isScanning && (
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)',
+              border: '1px solid rgba(99, 102, 241, 0.25)',
+              borderRadius: '16px',
+              padding: '14px 20px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'rgba(99, 102, 241, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#6366f1'
+                }}
+              >
+                <Loader2 size={18} className="animate-spin" />
+              </div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Scanning photo library for social media & apps...
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Scanned {scanProgress?.completed || 0} of {scanProgress?.total || (photoState.photos.length || 0)} photos (
+                  {scanProgress && scanProgress.total > 0
+                    ? Math.round((scanProgress.completed / scanProgress.total) * 100)
+                    : 0}
+                  %){scanProgress && scanProgress.foundCount > 0 ? ` • ${scanProgress.foundCount} media items found` : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Filter Bar ──────────────────────────────────────────────────── */}
+        {appMediaCandidates.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '16px',
+              flexWrap: 'wrap',
+              gap: '10px',
+              paddingBottom: '12px',
+              borderBottom: '1px solid var(--border)'
+            }}
+          >
+            {/* App Platform Origin Tabs */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              {[
+                { id: 'all', label: `All Apps (${tabCounts.all})`, show: true },
+                { id: 'whatsapp', label: `WhatsApp (${tabCounts.whatsapp})`, show: tabCounts.whatsapp > 0 },
+                { id: 'instagram', label: `Instagram (${tabCounts.instagram})`, show: tabCounts.instagram > 0 },
+                { id: 'snapchat', label: `Snapchat (${tabCounts.snapchat})`, show: tabCounts.snapchat > 0 },
+                { id: 'linkedin', label: `LinkedIn (${tabCounts.linkedin})`, show: tabCounts.linkedin > 0 },
+                { id: 'browser', label: `Web Downloads (${tabCounts.browser})`, show: tabCounts.browser > 0 },
+                { id: 'editor', label: `Editor Apps (${tabCounts.editor})`, show: tabCounts.editor > 0 },
+                { id: 'other-social', label: `Other Social (${tabCounts['other-social']})`, show: tabCounts['other-social'] > 0 },
+                { id: 'other-apps', label: `Unidentified Apps (${tabCounts['other-apps']})`, show: tabCounts['other-apps'] > 0 }
+              ].filter(t => t.show).map(tab => {
+                const isActive = activeTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id as any)}
+                    style={{
+                      fontSize: '12px',
+                      padding: '5px 12px',
+                      borderRadius: '99px',
+                      fontWeight: isActive ? 600 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      border: isActive ? '1px solid transparent' : '1px solid var(--border)',
+                      background: isActive ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' : 'var(--bg-secondary)',
+                      color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                      boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none'
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Media Filters */}
             <div className="apple-segmented-bar">
               <button
                 type="button"
@@ -499,27 +530,11 @@ export default function JunkPage() {
                 <ImageIcon size={12} /> Photos
               </button>
             </div>
-
-            {appMediaCandidates.length > 0 && (
-              <button
-                type="button"
-                className="apple-secondary-btn"
-                onClick={handleSelectAll}
-                style={{ fontSize: '12px', padding: '5px 12px', gap: '6px' }}
-              >
-                {selectedIds.size === appMediaCandidates.length ? (
-                  <CheckSquare size={14} color="#6366f1" />
-                ) : (
-                  <Square size={14} />
-                )}
-                <span>{selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}</span>
-              </button>
-            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ─── Media-First Grid ─────────────────────────────────────────────── */}
+      {/* ─── Main Virtualized Grid Identical to All Photos ─────────────────── */}
       {appMediaCandidates.length === 0 ? (
         <EmptyState
           icon={
@@ -549,130 +564,47 @@ export default function JunkPage() {
           description="All media in your library are genuine camera photos or screenshots."
         />
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(auto-fill, minmax(${minTileWidth}px, 1fr))`,
-            gap: gridGap,
-            marginBottom: '40px'
+        <PhotoGrid
+          photos={appMediaCandidates}
+          showDateHeaders={true}
+          onContextMenu={handleContextMenu}
+          scrollToYear={targetYear}
+        />
+      )}
+
+      {/* Collage Modal */}
+      {collageModal && (
+        <CollageModal
+          photos={selectedPhotos}
+          onClose={() => setCollageModal(false)}
+          onSaved={() => {
+            photoDispatch({ type: 'DESELECT_ALL' })
+            refreshPhotos()
           }}
-        >
-          {appMediaCandidates.map((photo) => {
-            const isSelected = selectedIds.has(photo.id)
-            const isVid = isVideoFile(photo.file_path)
-            const info = classifiedMap.get(photo.id) || detectJunk(photo)
+        />
+      )}
 
-            return (
-              <div
-                key={photo.id}
-                onClick={() => handleTileClick(photo)}
-                title={`${photo.filename}\nOrigin: ${info.label}\n${info.reason}`}
-                style={{
-                  background: '#0b0f19',
-                  border: isSelected ? '2px solid var(--primary, #3b82f6)' : '1px solid var(--border)',
-                  borderRadius: tileRadius,
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  aspectRatio: '1 / 1',
-                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  boxShadow: isSelected ? '0 4px 18px rgba(59, 130, 246, 0.3)' : 'none'
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-              >
-                {/* Media Image Thumbnail */}
-                <img
-                  src={getThumbnailUrl(photo.thumbnail_path, photo.file_path)}
-                  alt={photo.filename}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  loading="lazy"
-                />
+      {/* Side-by-Side Compare Modal */}
+      {compareModal && selectedPhotos.length >= 2 && (
+        <PhotoCompareModal
+          photo1={selectedPhotos[0]}
+          photo2={selectedPhotos[1]}
+          onClose={() => setCompareModal(false)}
+        />
+      )}
 
-                {/* Select Checkbox Button */}
-                <div
-                  onClick={(e) => handleToggleSelect(photo.id, e)}
-                  style={{
-                    position: 'absolute',
-                    top: checkboxOffset,
-                    left: checkboxOffset,
-                    width: `${checkboxSize}px`,
-                    height: `${checkboxSize}px`,
-                    borderRadius: isDense ? '4px' : '6px',
-                    background: isSelected ? 'var(--primary, #3b82f6)' : 'rgba(0, 0, 0, 0.45)',
-                    border: '1.5px solid #ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    zIndex: 2
-                  }}
-                >
-                  {isSelected && <Check size={checkIconSize} strokeWidth={3} />}
-                </div>
-
-                {/* Video Badge */}
-                {isVid && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: checkboxOffset,
-                      left: checkboxOffset,
-                      background: 'rgba(0, 0, 0, 0.75)',
-                      color: '#ffffff',
-                      fontSize: isDense ? '8px' : '9.5px',
-                      fontWeight: 700,
-                      padding: isDense ? '1px 4px' : '2px 6px',
-                      borderRadius: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '3px'
-                    }}
-                  >
-                    <Play size={isDense ? 7 : 9} fill="#fff" /> {isDense ? 'VID' : 'VIDEO'}
-                  </div>
-                )}
-
-                {/* Platform Origin Pill */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: checkboxOffset,
-                    right: checkboxOffset,
-                    pointerEvents: 'none',
-                    zIndex: 2
-                  }}
-                >
-                  <span
-                    style={{
-                      background: info.gradient,
-                      color: '#ffffff',
-                      fontWeight: 700,
-                      fontSize: isComfortable ? '10px' : isMedium ? '9px' : '8px',
-                      padding: isComfortable ? '2.5px 8px' : isMedium ? '2px 6.5px' : '1px 4.5px',
-                      borderRadius: isDense ? '4px' : '6px',
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
-                      letterSpacing: '0.02em',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {isDense ? (
-                      info.category === 'whatsapp' ? 'WA' :
-                      info.category === 'instagram' ? 'IG' :
-                      info.category === 'snapchat' ? 'Snap' :
-                      info.category === 'linkedin' ? 'LinkedIn' :
-                      info.category === 'browser' ? 'Web' :
-                      info.category === 'editor' ? 'Editor' :
-                      info.category === 'other-social' ? 'Social' : 'App'
-                    ) : (
-                      info.label
-                    )}
-                  </span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          photoId={contextMenu.photoId}
+          onClose={() => setContextMenu(null)}
+          onFavorite={handleContextFavorite}
+          onTrash={handleContextTrash}
+          onInfo={handleContextInfo}
+          onOpenInExplorer={handleContextOpenInExplorer}
+        />
       )}
     </div>
   )

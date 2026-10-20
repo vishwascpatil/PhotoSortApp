@@ -3,9 +3,13 @@ import { app } from 'electron'
 import { join, basename } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 
+import { writeFile } from 'fs/promises'
+
 let db: SqlJsDatabase | null = null
 let dbPath = ''
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let isSaving = false
+let pendingSave = false
 
 export function getDb(): SqlJsDatabase {
   if (!db) throw new Error('Database not initialized')
@@ -21,12 +25,37 @@ function scheduleSave(): void {
 
 export function saveDatabase(): void {
   if (!db || !dbPath) return
+  if (isSaving) {
+    pendingSave = true
+    return
+  }
+  isSaving = true
+  try {
+    const data = db.export()
+    const buffer = Buffer.from(data)
+    writeFile(dbPath, buffer)
+      .catch((err) => console.error('Failed to save database:', err))
+      .finally(() => {
+        isSaving = false
+        if (pendingSave) {
+          pendingSave = false
+          scheduleSave()
+        }
+      })
+  } catch (err) {
+    isSaving = false
+    console.error('Failed to export database:', err)
+  }
+}
+
+export function saveDatabaseSync(): void {
+  if (!db || !dbPath) return
   try {
     const data = db.export()
     const buffer = Buffer.from(data)
     writeFileSync(dbPath, buffer)
   } catch (err) {
-    console.error('Failed to save database:', err)
+    console.error('Failed to save database synchronously:', err)
   }
 }
 
@@ -59,7 +88,6 @@ export async function initDatabase(): Promise<void> {
     createTables()
     cleanupOrphanedPhotos()
     cleanupOrphanedPeople()
-    rebuildExifData()
     cleanupNonExifLocations()
     saveDatabase()
   })()
@@ -365,7 +393,7 @@ export async function rebuildExifData(): Promise<void> {
     let processed = 0
     for (const photo of photos) {
       processed++
-      if (processed % 10 === 0) {
+      if (processed % 3 === 0) {
         await new Promise(r => setImmediate(r))
       }
       if (!photo.file_path || !existsSync(photo.file_path)) continue
@@ -414,21 +442,19 @@ export async function rebuildExifData(): Promise<void> {
           } catch {}
         }
 
-        if (lat !== undefined && lon !== undefined) {
-          runSql(`
-            INSERT INTO exif_data (photo_id, make, model, gps_lat, gps_lon, date_taken)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(photo_id) DO UPDATE SET
-              make = COALESCE(excluded.make, exif_data.make),
-              model = COALESCE(excluded.model, exif_data.model),
-              gps_lat = excluded.gps_lat,
-              gps_lon = excluded.gps_lon,
-              date_taken = COALESCE(excluded.date_taken, exif_data.date_taken)
-          `, [photo.id, make || null, model || null, lat, lon, dateStr])
-        }
+        runSql(`
+          INSERT INTO exif_data (photo_id, make, model, gps_lat, gps_lon, date_taken)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(photo_id) DO UPDATE SET
+            make = COALESCE(excluded.make, exif_data.make),
+            model = COALESCE(excluded.model, exif_data.model),
+            gps_lat = excluded.gps_lat,
+            gps_lon = excluded.gps_lon,
+            date_taken = COALESCE(excluded.date_taken, exif_data.date_taken)
+        `, [photo.id, make || null, model || null, lat || null, lon || null, dateStr || null])
       } catch {}
     }
-    saveDatabase()
+    scheduleSave()
   } catch (err) {
     console.error('rebuildExifData error:', err)
   }
@@ -1268,7 +1294,7 @@ export async function scanPerceptualHashesBatch(
   }
 
   let completed = 0
-  const BATCH_SIZE = 8
+  const BATCH_SIZE = 4
 
   for (let i = 0; i < unanalyzed.length; i += BATCH_SIZE) {
     const batch = unanalyzed.slice(i, i + BATCH_SIZE)
@@ -1302,7 +1328,7 @@ export async function scanPerceptualHashesBatch(
     }
 
     // Yield to the Node.js event loop between batches so IPC and navigation stay 100% responsive
-    await new Promise(r => setTimeout(r, 40))
+    await new Promise(r => setTimeout(r, 60))
   }
 
   scheduleSave()

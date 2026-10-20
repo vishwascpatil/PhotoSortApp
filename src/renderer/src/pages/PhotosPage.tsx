@@ -77,6 +77,7 @@ export default function PhotosPage() {
 
   const [collageModal, setCollageModal] = useState(false)
   const [compareModal, setCompareModal] = useState(false)
+  const [targetYear, setTargetYear] = useState<number | null>(null)
 
   if (!state.isLoading && state.photos.length === 0) {
     return (
@@ -127,6 +128,7 @@ export default function PhotosPage() {
       <DateScrubber
         years={uniqueYears}
         onSelectYear={(year) => {
+          setTargetYear(year)
           showToast(`Jumped to year ${year}`)
         }}
       />
@@ -149,6 +151,7 @@ export default function PhotosPage() {
         photos={state.photos}
         showDateHeaders={true}
         onContextMenu={handleContextMenu}
+        scrollToYear={targetYear}
       />
 
       {/* Collage Modal */}

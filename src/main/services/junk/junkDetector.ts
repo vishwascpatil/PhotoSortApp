@@ -4,6 +4,7 @@ import exifr from 'exifr'
 import { imageSize } from 'image-size'
 import ffmpeg from 'fluent-ffmpeg'
 import ffprobeInstaller from '@ffprobe-installer/ffprobe'
+import { ALL_IMAGE_EXTENSIONS, ALL_VIDEO_EXTENSIONS } from '../../mediaRegistry'
 
 // Configure ffprobe path if available
 if (ffprobeInstaller && ffprobeInstaller.path) {
@@ -49,8 +50,8 @@ export const KNOWN_PLATFORM_DIMENSIONS: readonly [number, number][] = [
   [512, 512]
 ] as const
 
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.heic', '.webp', '.bmp', '.gif'])
-const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.avi', '.webm', '.3gp'])
+const IMAGE_EXTENSIONS = ALL_IMAGE_EXTENSIONS
+const VIDEO_EXTENSIONS = ALL_VIDEO_EXTENSIONS
 
 // ─── Signal 1: Filename Pattern (+35 to +50) ────────────────────────────────
 export function checkFilenamePattern(filename: string): { matched: boolean; points: number; reason: string; category?: JunkDetectionResult['category'] } {

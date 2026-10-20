@@ -952,6 +952,58 @@ a {
   margin: var(--space-3) var(--space-4);
 }
 
+/* ─── Sidebar Quick Action: Organize & Export ──────────────────────────── */
+.sidebar-action-container {
+  padding: 10px var(--space-3, 12px);
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-organize-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md, 10px);
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s ease);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-organize-btn:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+}
+
+.sidebar-organize-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.2);
+}
+
+.sidebar.collapsed .sidebar-action-container {
+  padding: 8px 6px;
+}
+
+.sidebar.collapsed .sidebar-organize-btn {
+  padding: 0;
+  width: 38px;
+  height: 38px;
+  margin: 0 auto;
+}
+
+
 .sidebar-footer {
   padding: var(--space-4);
   border-top: 1px solid var(--border);
@@ -7614,3 +7666,183 @@ a {
 .island-delete-btn:hover {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
 }
+
+/* ─── Modern Organize & Export Wizard Styles ────────────────────────────── */
+.export-wizard-stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 14px;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="light"] .export-wizard-stepper {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.export-wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+[data-theme="light"] .export-wizard-step {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.export-wizard-step.active {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+[data-theme="light"] .export-wizard-step.active {
+  color: #0284c7;
+}
+
+.export-wizard-step.completed {
+  color: #22c55e;
+  cursor: pointer;
+}
+
+.export-step-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+}
+
+.export-wizard-step.active .export-step-circle {
+  background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4);
+}
+
+.export-wizard-step.completed .export-step-circle {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.export-step-arrow {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 11px;
+}
+
+[data-theme="light"] .export-step-arrow {
+  color: rgba(0, 0, 0, 0.2);
+}
+
+/* Category Grid Tiles */
+.export-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 12px;
+}
+
+.export-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  user-select: none;
+}
+
+[data-theme="light"] .export-tile {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.export-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(14, 165, 233, 0.4);
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.export-tile.selected {
+  border-color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.09);
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.15);
+}
+
+[data-theme="light"] .export-tile.selected {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: #0ea5e9;
+}
+
+.export-tile-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.export-tile:hover .export-tile-icon-box {
+  transform: scale(1.08);
+}
+
+.export-tile-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+[data-theme="light"] .export-tile-checkbox {
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+.export-tile.selected .export-tile-checkbox {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #ffffff;
+}
+
+/* Magic Preset Pill */
+.export-magic-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.export-magic-btn:hover {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.3) 0%, rgba(99, 102, 241, 0.3) 100%);
+  transform: scale(1.02);
+  color: #d8b4fe;
+}

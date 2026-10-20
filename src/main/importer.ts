@@ -3,7 +3,15 @@ import { join, extname, basename } from 'path'
 import { statSync } from 'fs'
 import sharp from 'sharp'
 import exifReader from 'exif-reader'
+import exifr from 'exifr'
 import { PhotoInsert, ExifInsert } from './database'
+import {
+  ALL_SUPPORTED_EXTENSIONS,
+  MIME_TYPES,
+  isVideoFile,
+  isDocFile,
+  getMimeType
+} from './mediaRegistry'
 
 function convertDMSToDecimal(dms: number[] | undefined, ref: string | undefined): number | undefined {
   if (!dms || !Array.isArray(dms) || dms.length !== 3) return undefined;
@@ -14,45 +22,7 @@ function convertDMSToDecimal(dms: number[] | undefined, ref: string | undefined)
   return decimal;
 }
 
-const SUPPORTED_EXTENSIONS = new Set([
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif',
-  '.avif', '.svg', '.heic', '.heif',
-  '.dng', '.cr2', '.nef', '.arw', '.raw', '.orf', '.rw2', '.pef', '.raf',
-  '.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.m4v', '.3gp', '.flv', '.mts', '.m2ts',
-  '.pdf', '.txt', '.doc', '.docx'
-])
-
-const MIME_TYPES: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.tiff': 'image/tiff',
-  '.tif': 'image/tiff',
-  '.avif': 'image/avif',
-  '.svg': 'image/svg+xml',
-  '.heic': 'image/heic',
-  '.heif': 'image/heif',
-  '.dng': 'image/x-adobe-dng',
-  '.cr2': 'image/x-canon-cr2',
-  '.nef': 'image/x-nikon-nef',
-  '.arw': 'image/x-sony-arw',
-  '.raw': 'image/x-panasonic-raw',
-  '.mp4': 'video/mp4',
-  '.mov': 'video/quicktime',
-  '.avi': 'video/x-msvideo',
-  '.mkv': 'video/x-matroska',
-  '.webm': 'video/webm',
-  '.wmv': 'video/x-ms-wmv',
-  '.m4v': 'video/x-m4v',
-  '.3gp': 'video/3gpp',
-  '.pdf': 'application/pdf',
-  '.txt': 'text/plain',
-  '.doc': 'application/msword',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-}
+const SUPPORTED_EXTENSIONS = ALL_SUPPORTED_EXTENSIONS
 
 export interface ImportedFile {
   photo: PhotoInsert
@@ -93,13 +63,13 @@ export async function processFile(filePath: string): Promise<ImportedFile> {
   const ext = extname(filePath).toLowerCase()
   const filename = basename(filePath)
   const fileStat = statSync(filePath)
-  const mimeType = MIME_TYPES[ext] || 'image/jpeg'
+  const mimeType = getMimeType(filePath)
 
   let width = 0
   let height = 0
   let createdAt = fileStat.birthtime.toISOString()
   let exifData: ExifInsert | undefined
-  const isVideoOrDoc = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.m4v', '.3gp', '.flv', '.mts', '.m2ts', '.pdf', '.txt', '.doc', '.docx'].includes(ext)
+  const isVideoOrDoc = isVideoFile(filePath) || isDocFile(filePath)
 
   if (!isVideoOrDoc) {
     try {
@@ -107,53 +77,88 @@ export async function processFile(filePath: string): Promise<ImportedFile> {
       width = metadata.width || 0
       height = metadata.height || 0
 
-    // Try to extract EXIF data
-    if (metadata.exif) {
-      try {
-        const parsed: any = exifReader(metadata.exif)
-        const photoObj = parsed.Photo || parsed.exif || parsed.image || {}
-        const imageObj = parsed.Image || parsed.image || {}
-        const gpsObj = parsed.GPSInfo || parsed.gps || {}
+      // Try to extract EXIF data
+      if (metadata.exif) {
+        try {
+          const parsed: any = exifReader(metadata.exif)
+          const photoObj = parsed.Photo || parsed.exif || parsed.image || {}
+          const imageObj = parsed.Image || parsed.image || {}
+          const gpsObj = parsed.GPSInfo || parsed.gps || {}
 
-        // Get date from EXIF
-        if (photoObj.DateTimeOriginal) {
-          const d = photoObj.DateTimeOriginal
-          if (d instanceof Date) {
-            createdAt = d.toISOString()
+          // Get date from EXIF
+          if (photoObj.DateTimeOriginal) {
+            const d = photoObj.DateTimeOriginal
+            if (d instanceof Date) {
+              createdAt = d.toISOString()
+            }
+          } else if (photoObj.DateTimeDigitized) {
+            const d = photoObj.DateTimeDigitized
+            if (d instanceof Date) {
+              createdAt = d.toISOString()
+            }
           }
-        } else if (photoObj.DateTimeDigitized) {
-          const d = photoObj.DateTimeDigitized
-          if (d instanceof Date) {
-            createdAt = d.toISOString()
+
+          const lat = convertDMSToDecimal(gpsObj.GPSLatitude as number[] | undefined, gpsObj.GPSLatitudeRef as string | undefined)
+          const lon = convertDMSToDecimal(gpsObj.GPSLongitude as number[] | undefined, gpsObj.GPSLongitudeRef as string | undefined)
+
+          exifData = {
+            photo_id: 0, // Will be set after insert
+            make: imageObj.Make as string | undefined,
+            model: imageObj.Model as string | undefined,
+            iso: photoObj.ISO as number | undefined,
+            f_number: photoObj.FNumber as number | undefined,
+            exposure_time: photoObj.ExposureTime
+              ? `1/${Math.round(1 / (photoObj.ExposureTime as number))}`
+              : undefined,
+            focal_length: photoObj.FocalLength as number | undefined,
+            gps_lat: lat,
+            gps_lon: lon,
+            date_taken: createdAt,
+            lens_model: photoObj.LensModel as string | undefined
           }
+        } catch (e) {
+          console.warn('EXIF parsing error for', filePath, e)
         }
-
-        const lat = convertDMSToDecimal(gpsObj.GPSLatitude as number[] | undefined, gpsObj.GPSLatitudeRef as string | undefined)
-        const lon = convertDMSToDecimal(gpsObj.GPSLongitude as number[] | undefined, gpsObj.GPSLongitudeRef as string | undefined)
-
-        exifData = {
-          photo_id: 0, // Will be set after insert
-          make: imageObj.Make as string | undefined,
-          model: imageObj.Model as string | undefined,
-          iso: photoObj.ISO as number | undefined,
-          f_number: photoObj.FNumber as number | undefined,
-          exposure_time: photoObj.ExposureTime
-            ? `1/${Math.round(1 / (photoObj.ExposureTime as number))}`
-            : undefined,
-          focal_length: photoObj.FocalLength as number | undefined,
-          gps_lat: lat,
-          gps_lon: lon,
-          date_taken: createdAt,
-          lens_model: photoObj.LensModel as string | undefined
-        }
-      } catch (e) {
-        console.warn('EXIF parsing error for', filePath, e)
       }
+    } catch {
+      // If sharp can't read it, we proceed to exifr fallback below
     }
-  } catch {
-    // If sharp can't read it, we still import with basic info
+
+    // Fallback for camera RAW formats (.cr3, .nef, .arw, etc.) using exifr directly
+    if (!exifData) {
+      try {
+        const parsed: any = await exifr.parse(filePath, { tiff: true, xmp: true, exif: true, gps: true })
+        if (parsed) {
+          if (parsed.DateTimeOriginal instanceof Date) {
+            createdAt = parsed.DateTimeOriginal.toISOString()
+          } else if (parsed.CreateDate instanceof Date) {
+            createdAt = parsed.CreateDate.toISOString()
+          } else if (typeof parsed.DateTimeOriginal === 'string') {
+            const parsedD = new Date(parsed.DateTimeOriginal)
+            if (!isNaN(parsedD.getTime())) createdAt = parsedD.toISOString()
+          }
+          if (parsed.ImageWidth && !width) width = parsed.ImageWidth
+          if (parsed.ImageHeight && !height) height = parsed.ImageHeight
+
+          exifData = {
+            photo_id: 0,
+            make: parsed.Make,
+            model: parsed.Model,
+            iso: parsed.ISO,
+            f_number: parsed.FNumber,
+            exposure_time: parsed.ExposureTime
+              ? `1/${Math.round(1 / parsed.ExposureTime)}`
+              : undefined,
+            focal_length: parsed.FocalLength,
+            gps_lat: typeof parsed.latitude === 'number' ? parsed.latitude : undefined,
+            gps_lon: typeof parsed.longitude === 'number' ? parsed.longitude : undefined,
+            date_taken: createdAt,
+            lens_model: parsed.LensModel
+          }
+        }
+      } catch {}
+    }
   }
-}
 
   const photo: PhotoInsert = {
     file_path: filePath,
@@ -191,8 +196,8 @@ export async function processFiles(
         onProgress?.(completed, total, filePath)
       })
     )
-    // Yield to the event loop so timer heartbeats and IPC can process
-    await new Promise(r => setImmediate(r))
+    // Yield to the event loop so timer heartbeats, IPC, and watchdog can process
+    await new Promise(r => setTimeout(r, 10))
   }
 
   return results.filter(Boolean)

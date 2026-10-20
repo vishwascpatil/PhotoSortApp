@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Grid3x3, LayoutGrid, Sun, Moon, Menu, Minus, Square, X, FolderTree, Download } from 'lucide-react'
+import { Grid3x3, LayoutGrid, Sun, Moon, Menu, Minus, Square, X } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 
 export default function TopBar() {
-  const { state, dispatch, toggleTheme, openExportModal } = useApp()
+  const { state, dispatch, toggleTheme } = useApp()
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -65,17 +65,6 @@ export default function TopBar() {
 
       {/* Actions */}
       <div className="topbar-actions">
-        {/* Organize & Export Folder Button */}
-        <button
-          type="button"
-          className="topbar-organize-btn"
-          onClick={() => openExportModal({ mode: 'copy' })}
-          title="Organize files by Year -> Trips -> Documents -> Months and Export"
-        >
-          <FolderTree size={14} />
-          <span>Organize & Export</span>
-        </button>
-
         <button
           className="topbar-btn"
           onClick={() => {
