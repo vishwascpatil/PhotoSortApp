@@ -1,6 +1,6 @@
 import { readdir, stat } from 'fs/promises'
 import { join, extname, basename } from 'path'
-import { statSync } from 'fs'
+import { statSync, existsSync } from 'fs'
 import sharp from 'sharp'
 sharp.cache(false)
 import exifReader from 'exif-reader'
@@ -11,7 +11,8 @@ import {
   MIME_TYPES,
   isVideoFile,
   isDocFile,
-  getMimeType
+  getMimeType,
+  isRawPhotoFile
 } from './mediaRegistry'
 
 function convertDMSToDecimal(dms: number[] | undefined, ref: string | undefined): number | undefined {
@@ -32,9 +33,13 @@ export interface ImportedFile {
 
 export async function scanDirectory(dirPath: string): Promise<string[]> {
   const files: string[] = []
+  if (!dirPath || !existsSync(dirPath)) {
+    return files
+  }
 
   async function walk(dir: string): Promise<void> {
     try {
+      if (!existsSync(dir)) return
       const entries = await readdir(dir, { withFileTypes: true })
       for (const entry of entries) {
         const fullPath = join(dir, entry.name)
@@ -125,8 +130,8 @@ export async function processFile(filePath: string): Promise<ImportedFile> {
       // If sharp can't read it, we proceed to exifr fallback below
     }
 
-    // Fallback for camera RAW formats (.cr3, .nef, .arw, etc.) using exifr directly
-    if (!exifData) {
+    // Fast fallback specifically for camera RAW formats (.cr3, .nef, .arw, .dng, etc.) using exifr directly
+    if (!exifData && isRawPhotoFile(filePath)) {
       try {
         const parsed: any = await exifr.parse(filePath, { tiff: true, xmp: true, exif: true, gps: true })
         if (parsed) {
@@ -181,7 +186,7 @@ export async function processFiles(
 ): Promise<ImportedFile[]> {
   const total = filePaths.length
   const results: ImportedFile[] = []
-  const CONCURRENCY = 16
+  const CONCURRENCY = 32
   let completed = 0
 
   for (let i = 0; i < total; i += CONCURRENCY) {
@@ -202,9 +207,10 @@ export async function processFiles(
         onProgress?.(completed, total, filePath)
       })
     )
-    // Yield to the event loop so timer heartbeats, IPC, and watchdog can process
-    await new Promise(r => setTimeout(r, 10))
+    // Yield to the event loop with setImmediate so IPC remains 100% responsive without artificial delay
+    await new Promise(r => setImmediate(r))
   }
 
   return results
 }
+

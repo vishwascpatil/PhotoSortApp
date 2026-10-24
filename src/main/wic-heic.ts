@@ -30,7 +30,7 @@ class WicThumbnailer
                 if (frame == null) frame = dec.Frames[0];
 
                 JpegBitmapEncoder encoder = new JpegBitmapEncoder();
-                encoder.QualityLevel = 75;
+                encoder.QualityLevel = 65;
                 encoder.Frames.Add(BitmapFrame.Create(frame));
 
                 using (FileStream fs = File.OpenWrite(outPath))
@@ -67,7 +67,7 @@ export class WicHeicExtractor {
   private exePath: string = ''
   private workers: WorkerSlot[] = []
   private queue: WicTask[] = []
-  private numWorkers: number = 4
+  private numWorkers: number = Math.min(8, Math.max(4, cpus().length))
 
   constructor() {
     this.init()

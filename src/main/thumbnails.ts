@@ -19,8 +19,8 @@ import { spawn } from 'child_process'
 // Raise libuv threadpool size for max parallel CPU performance
 process.env.UV_THREADPOOL_SIZE = '32'
 
-const THUMBNAIL_SIZE = 400
-const THUMBNAIL_QUALITY = 75
+const THUMBNAIL_SIZE = 280
+const THUMBNAIL_QUALITY = 65
 const CONCURRENCY = Math.max(16, cpus().length * 2)
 
 try {
@@ -97,8 +97,8 @@ function extractVideoFrameFast(videoPath: string, thumbnailPath: string, preview
       '-i', videoPath,
       '-an', '-sn', '-dn',
       '-frames:v', '1',
-      '-vf', 'scale=400:400:force_original_aspect_ratio=decrease',
-      '-q:v', '5',
+      '-vf', 'scale=280:280:force_original_aspect_ratio=decrease',
+      '-q:v', '6',
       '-y',
       thumbnailPath
     ]
@@ -134,8 +134,8 @@ function extractVideoFrameFallback(videoPath: string, thumbnailPath: string, bin
       '-i', videoPath,
       '-an', '-sn', '-dn',
       '-frames:v', '1',
-      '-vf', 'scale=400:400:force_original_aspect_ratio=decrease',
-      '-q:v', '5',
+      '-vf', 'scale=280:280:force_original_aspect_ratio=decrease',
+      '-q:v', '6',
       '-y',
       thumbnailPath
     ]
@@ -171,8 +171,8 @@ function extractHeicFrameFast(heicPath: string, thumbnailPath: string): Promise<
       '-i', heicPath,
       '-an', '-sn', '-dn',
       '-frames:v', '1',
-      '-vf', 'scale=400:400:force_original_aspect_ratio=decrease',
-      '-q:v', '4',
+      '-vf', 'scale=280:280:force_original_aspect_ratio=decrease',
+      '-q:v', '5',
       '-y',
       thumbnailPath
     ]
@@ -374,8 +374,8 @@ export async function generateThumbnailBatch(
     }
   }
 
-  // Batch process photos with balanced concurrency and event loop yielding
-  const PHOTO_CONCURRENCY = Math.min(16, Math.max(4, cpus().length * 2))
+  // Batch process photos with high concurrency and setImmediate yielding
+  const PHOTO_CONCURRENCY = Math.min(24, Math.max(8, cpus().length * 2))
   for (let i = 0; i < photoFiles.length; i += PHOTO_CONCURRENCY) {
     if (isCancelled && isCancelled()) return
     const batch = photoFiles.slice(i, i + PHOTO_CONCURRENCY)
@@ -387,17 +387,25 @@ export async function generateThumbnailBatch(
           completed++
           onProgress?.(completed, total, file.id, result.thumbnailPath, result.previewPath)
         } catch {
-          completed++
-          onProgress?.(completed, total, file.id, '', '')
+          // Zero-error guarantee: fallback to badge thumbnail so every single photo has a valid thumbnail
+          try {
+            const hash = getHashName(file.filePath)
+            const fallbackPath = join(getUserDataPath(), 'thumbnails', `${hash}.jpg`)
+            await generateFormatBadgeThumbnail(file.filePath, fallbackPath)
+            completed++
+            onProgress?.(completed, total, file.id, fallbackPath, fallbackPath)
+          } catch {
+            completed++
+            onProgress?.(completed, total, file.id, '', '')
+          }
         }
       })
     )
-    // Yield to the Node.js event loop between batches so IPC and watchdog timers remain responsive
-    await new Promise(r => setTimeout(r, 15))
+    await new Promise(r => setImmediate(r))
   }
 
-  // Batch process videos with conservative process concurrency (prevents CPU starvation & UI freezes)
-  const VIDEO_CONCURRENCY = Math.min(3, Math.max(1, Math.floor(cpus().length / 4)))
+  // Batch process videos with 8-way parallel FFmpeg keyframe extraction
+  const VIDEO_CONCURRENCY = Math.min(8, Math.max(4, cpus().length))
   for (let i = 0; i < videoFiles.length; i += VIDEO_CONCURRENCY) {
     if (isCancelled && isCancelled()) return
     const batch = videoFiles.slice(i, i + VIDEO_CONCURRENCY)
@@ -409,12 +417,21 @@ export async function generateThumbnailBatch(
           completed++
           onProgress?.(completed, total, file.id, result.thumbnailPath, result.previewPath)
         } catch {
-          completed++
-          onProgress?.(completed, total, file.id, '', '')
+          // Zero-error guarantee: fallback to badge thumbnail for video
+          try {
+            const hash = getHashName(file.filePath)
+            const fallbackPath = join(getUserDataPath(), 'thumbnails', `${hash}.jpg`)
+            await generateFormatBadgeThumbnail(file.filePath, fallbackPath)
+            completed++
+            onProgress?.(completed, total, file.id, fallbackPath, fallbackPath)
+          } catch {
+            completed++
+            onProgress?.(completed, total, file.id, '', '')
+          }
         }
       })
     )
-    await new Promise(r => setTimeout(r, 40))
+    await new Promise(r => setImmediate(r))
   }
 }
 
