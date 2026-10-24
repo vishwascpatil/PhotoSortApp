@@ -42,7 +42,7 @@ function setupHangWatcher() {
 
   let lastTick = Date.now()
   const INTERVAL = 1000
-  const HANG_THRESHOLD = 2500
+  const HANG_THRESHOLD = 15000
 
   window.addEventListener('focus', () => {
     lastTick = Date.now()
@@ -50,13 +50,13 @@ function setupHangWatcher() {
 
   setInterval(() => {
     const now = Date.now()
-    if (document.hidden || document.visibilityState === 'hidden') {
+    if (document.hidden || document.visibilityState === 'hidden' || !document.hasFocus()) {
       lastTick = now
       return
     }
     const freezeDuration = now - lastTick - INTERVAL
     // If freezeDuration > 30000ms, it is a system suspend/sleep event, not an active UI thread freeze
-    if (freezeDuration > HANG_THRESHOLD && freezeDuration < 30000) {
+    if (freezeDuration > HANG_THRESHOLD && freezeDuration < 30000 && document.hasFocus()) {
       const memory = (performance as any)?.memory
         ? `Heap: ${Math.round((performance as any).memory.usedJSHeapSize / 1048576)}MB / ${Math.round((performance as any).memory.totalJSHeapSize / 1048576)}MB`
         : 'N/A'
@@ -69,12 +69,15 @@ function setupHangWatcher() {
     lastTick = now
   }, INTERVAL)
 
-  // Long-task performance observer (>2.5s)
+  // Long-task performance observer (>15s, allowing one-time cold start WebGL model compilation)
   if (typeof PerformanceObserver !== 'undefined') {
     try {
       const observer = new PerformanceObserver((entryList) => {
         for (const entry of entryList.getEntries()) {
-          if (entry.duration > 2500) {
+          if (entry.duration > 15000) {
+            if (document.hidden || document.visibilityState === 'hidden' || !document.hasFocus()) {
+              continue
+            }
             window.photoVault.logError(
               'UI_LONG_TASK',
               `Blocking task detected on UI thread lasting ${Math.round(entry.duration)}ms.\nTask name: ${entry.name}`

@@ -1,5 +1,5 @@
 import { existsSync } from 'fs'
-import { scanDirectory, processFile } from './importer'
+import { scanDirectory, processFiles } from './importer'
 import {
   queryAll,
   insertPhotoBatch,
@@ -47,13 +47,14 @@ export async function syncFolder(
     diskFileMap.set(file.replace(/\\/g, '/'), file)
   }
 
-  // 2. Query DB photos belonging to this folder (lightweight query for paths and IDs only)
+  // 2. Query DB photos belonging to this folder (scoped indexed query to avoid 500,000 photo full-table scan)
+  const normalizedFolderBackslash = normalizedFolder.replace(/\//g, '\\')
   const dbPhotos = queryAll<{ id: number; file_path: string; source_folder_path: string | null }>(
-    'SELECT id, file_path, source_folder_path FROM photos WHERE is_trashed = 0'
-  ).filter(p => {
-    const pPath = p.file_path.replace(/\\/g, '/')
-    return p.source_folder_path === normalizedFolder || pPath.startsWith(normalizedFolder + '/')
-  })
+    `SELECT id, file_path, source_folder_path FROM photos 
+     WHERE is_trashed = 0 
+       AND (source_folder_path = ? OR source_folder_path = ? OR file_path LIKE ? OR file_path LIKE ?)`,
+    [normalizedFolder, normalizedFolderBackslash, `${normalizedFolder}/%`, `${normalizedFolderBackslash}\\%`]
+  )
   const dbFileSet = new Set<string>()
   for (const photo of dbPhotos) {
     dbFileSet.add(photo.file_path.replace(/\\/g, '/'))

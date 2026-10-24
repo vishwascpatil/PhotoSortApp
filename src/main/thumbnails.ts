@@ -44,6 +44,9 @@ export function isHeicFileHeader(filePath: string): boolean {
 }
 
 export function getUserDataPath(): string {
+  if (process.env.PHOTOSORT_USER_DATA) {
+    return process.env.PHOTOSORT_USER_DATA
+  }
   try {
     if (app && typeof app.getPath === 'function') {
       return app.getPath('userData')
@@ -88,7 +91,7 @@ function extractVideoFrameFast(videoPath: string, thumbnailPath: string, preview
 
     // Fast-demuxer seek BEFORE -i reads the MOV index atom in < 5ms without decoding video stream
     const args1 = [
-      '-threads', '2',
+      '-threads', '1',
       '-ss', '0',
       '-noaccurate_seek',
       '-i', videoPath,
@@ -127,7 +130,7 @@ function extractVideoFrameFast(videoPath: string, thumbnailPath: string, preview
 function extractVideoFrameFallback(videoPath: string, thumbnailPath: string, binPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const args2 = [
-      '-threads', '2',
+      '-threads', '1',
       '-i', videoPath,
       '-an', '-sn', '-dn',
       '-frames:v', '1',
@@ -299,12 +302,10 @@ export async function generateThumbnail(
     if (res.success && existsSync(thumbnailPath) && statSync(thumbnailPath).size > 0) {
       return { thumbnailPath, previewPath, width: 0, height: 0 }
     }
-    try {
-      const buf = await readFile(filePath)
-      const converted = await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.65 })
-      writeFileSync(thumbnailPath, converted)
-      return { thumbnailPath, previewPath, width: 0, height: 0 }
-    } catch {}
+    const badgeCreated = await generateFormatBadgeThumbnail(filePath, thumbnailPath)
+    if (badgeCreated) {
+      return { thumbnailPath, previewPath, width: 400, height: 400 }
+    }
   }
 
   // 3. Handle RAW Camera Photos with embedded preview extraction
@@ -355,7 +356,8 @@ export async function generateThumbnail(
 
 export async function generateThumbnailBatch(
   files: { id: number; filePath: string }[],
-  onProgress?: (completed: number, total: number, id: number, thumbnailPath: string, previewPath: string) => void
+  onProgress?: (completed: number, total: number, id: number, thumbnailPath: string, previewPath: string) => void,
+  isCancelled?: () => boolean
 ): Promise<void> {
   let completed = 0
   const total = files.length
@@ -375,9 +377,11 @@ export async function generateThumbnailBatch(
   // Batch process photos with balanced concurrency and event loop yielding
   const PHOTO_CONCURRENCY = Math.min(16, Math.max(4, cpus().length * 2))
   for (let i = 0; i < photoFiles.length; i += PHOTO_CONCURRENCY) {
+    if (isCancelled && isCancelled()) return
     const batch = photoFiles.slice(i, i + PHOTO_CONCURRENCY)
     await Promise.allSettled(
       batch.map(async (file) => {
+        if (isCancelled && isCancelled()) return
         try {
           const result = await generateThumbnail(file.filePath)
           completed++
@@ -389,15 +393,17 @@ export async function generateThumbnailBatch(
       })
     )
     // Yield to the Node.js event loop between batches so IPC and watchdog timers remain responsive
-    await new Promise(r => setImmediate(r))
+    await new Promise(r => setTimeout(r, 15))
   }
 
-  // Batch process videos with optimal process concurrency (prevents CPU process thrashing)
-  const VIDEO_CONCURRENCY = Math.min(8, Math.max(2, cpus().length))
+  // Batch process videos with conservative process concurrency (prevents CPU starvation & UI freezes)
+  const VIDEO_CONCURRENCY = Math.min(3, Math.max(1, Math.floor(cpus().length / 4)))
   for (let i = 0; i < videoFiles.length; i += VIDEO_CONCURRENCY) {
+    if (isCancelled && isCancelled()) return
     const batch = videoFiles.slice(i, i + VIDEO_CONCURRENCY)
     await Promise.allSettled(
       batch.map(async (file) => {
+        if (isCancelled && isCancelled()) return
         try {
           const result = await generateThumbnail(file.filePath)
           completed++
@@ -408,13 +414,61 @@ export async function generateThumbnailBatch(
         }
       })
     )
-    await new Promise(r => setTimeout(r, 20))
+    await new Promise(r => setTimeout(r, 40))
   }
 }
 
 export function pauseVideoQueue(): void {}
 export function resumeVideoQueue(): void {}
 export function queueMissingVideoThumbnails(): void {}
+
+export async function recoverMissingThumbnails(
+  onProgress?: (completed: number, total: number) => void,
+  isCancelled?: () => boolean
+): Promise<{ recovered: number; total: number }> {
+  try {
+    const database = getDb()
+    const stmt = database.prepare(
+      "SELECT id, file_path, thumbnail_path FROM photos WHERE is_trashed = 0 AND (thumbnail_path IS NULL OR thumbnail_path = '')"
+    )
+    const missing: { id: number; filePath: string }[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as { id: number; file_path: string; thumbnail_path: string | null }
+      if (!row.thumbnail_path || !existsSync(row.thumbnail_path)) {
+        missing.push({ id: row.id, filePath: row.file_path })
+      }
+    }
+    stmt.free()
+
+    if (missing.length === 0) {
+      return { recovered: 0, total: 0 }
+    }
+
+    let count = 0
+    await generateThumbnailBatch(
+      missing,
+      (completed, total, id, thumbPath, prevPath) => {
+        if (thumbPath || prevPath) {
+          count++
+          try {
+            database.run('UPDATE photos SET thumbnail_path = ?, preview_path = ? WHERE id = ?', [
+              thumbPath || prevPath,
+              prevPath || thumbPath,
+              id
+            ])
+          } catch {}
+        }
+        onProgress?.(completed, total)
+      },
+      isCancelled
+    )
+
+    return { recovered: count, total: missing.length }
+  } catch (err) {
+    console.warn('recoverMissingThumbnails skipped:', err)
+    return { recovered: 0, total: 0 }
+  }
+}
 
 export async function applyEdits(
   inputPath: string,

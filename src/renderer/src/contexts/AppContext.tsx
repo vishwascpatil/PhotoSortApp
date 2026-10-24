@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useReducer, useCallback, ReactNode, useEffect } from 'react'
 
-interface Toast {
+export interface Toast {
   id: string
   message: string
   undoAction?: () => void
   duration?: number
+  title?: string
+  type?: 'success' | 'error' | 'info' | 'warning'
 }
 
 interface AppState {
@@ -70,7 +72,7 @@ type AppAction =
 const savedTheme = (typeof localStorage !== 'undefined' && (localStorage.getItem('photovault_theme') as 'dark' | 'light')) || 'light'
 
 const initialState: AppState = {
-  currentView: 'loading',
+  currentView: 'welcome',
   currentAlbumId: null,
   sidebarCollapsed: false,
   theme: savedTheme,
@@ -158,7 +160,11 @@ interface AppContextType {
   dispatch: React.Dispatch<AppAction>
   navigateTo: (view: AppState['currentView']) => void
   openAlbum: (albumId: number) => void
-  showToast: (message: string, undoAction?: () => void) => void
+  showToast: (
+    message: string,
+    undoAction?: () => void,
+    options?: { title?: string; type?: 'success' | 'error' | 'info' | 'warning'; duration?: number }
+  ) => void
   toggleTheme: () => void
   openExportModal: (options?: { mode?: 'copy' | 'move'; specificFolderFilter?: string }) => void
   closeExportModal: () => void
@@ -195,12 +201,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'CLOSE_CLEANUP_MODAL' })
   }, [])
 
-  const showToast = useCallback((message: string, undoAction?: () => void) => {
+  const showToast = useCallback((
+    message: string,
+    undoAction?: () => void,
+    options?: { title?: string; type?: 'success' | 'error' | 'info' | 'warning'; duration?: number }
+  ) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-    dispatch({ type: 'ADD_TOAST', payload: { id, message, undoAction, duration: 5000 } })
+    const duration = options?.duration || 5000
+    dispatch({
+      type: 'ADD_TOAST',
+      payload: {
+        id,
+        message,
+        undoAction,
+        duration,
+        title: options?.title,
+        type: options?.type
+      }
+    })
     setTimeout(() => {
       dispatch({ type: 'REMOVE_TOAST', payload: id })
-    }, 5000)
+    }, duration)
   }, [])
 
   const toggleTheme = useCallback(() => {
@@ -220,10 +241,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  useEffect(() => {
-    // Always start on the welcome screen; it will handle loading and navigation
-    dispatch({ type: 'SET_VIEW', payload: 'welcome' })
-  }, [])
 
 
   // Listen for import status
@@ -252,10 +269,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           window.dispatchEvent(new CustomEvent('photosort:library-imported', { detail: { count: status.total } }))
         } catch {}
+        showToast(
+          status.total && status.total > 0
+            ? `Library scan complete! ${status.total.toLocaleString()} photos & videos ready.`
+            : 'Library scan complete! Your collection is ready.',
+          undefined,
+          { title: 'Scan Complete', type: 'success' }
+        )
       }
     })
     return cleanup
-  }, [])
+  }, [showToast])
 
   return (
     <AppContext.Provider

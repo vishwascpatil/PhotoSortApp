@@ -1,6 +1,6 @@
 import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import { basename, join, extname } from 'path'
-import { existsSync, copyFileSync } from 'fs'
+import { existsSync, copyFileSync, mkdirSync } from 'fs'
 import { app } from 'electron'
 import {
   getPhotos, getGeoPhotos, getPhotoById, getExifByPhotoId, toggleFavorite, batchFavorite,
@@ -17,10 +17,11 @@ import {
   scanPerceptualHashesBatch,
   getAllTags, createTag, deleteTag, renameTag, addTagsToPhotos, syncPhotoTags, removeTagFromPhotos, getTagsForPhoto, getPhotosByTag, getAllTaggedPhotos,
   updateLocationNameForPhotos,
+  setLocked, updatePhotoMetadata, getDb, saveDatabase,
   PhotoFilter
 } from './database'
 import { scanDirectory, processFiles } from './importer'
-import { generateThumbnailBatch, generateThumbnail, applyEdits, pauseVideoQueue, resumeVideoQueue } from './thumbnails'
+import { generateThumbnailBatch, generateThumbnail, applyEdits, pauseVideoQueue, resumeVideoQueue, recoverMissingThumbnails } from './thumbnails'
 import { syncFolder, syncAllTrackedFolders } from './syncer'
 import { scanLocations, stopLocationScanning } from './location-scanner'
 import { startFullDocumentScan, stopFullDocumentScan, startFastDocScan, stopFastDocScan, getOcrBuffer } from './fast-doc-scanner'
@@ -48,15 +49,47 @@ import {
 import { logErrorToFile } from './logger'
 
 export function registerIpcHandlers(): void {
-  // ─── Import ──────────────────────────────────────────────────────────
-  ipcMain.handle('photos:import-folder', async (event) => {
+  // ─── Import & Cancellation ──────────────────────────────────────────
+  let isImportCancelled = false
+
+  ipcMain.handle('photos:cancel-import', () => {
+    isImportCancelled = true
+    return true
+  })
+
+  ipcMain.handle('photos:recover-thumbnails', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    isImportCancelled = false
+    return await recoverMissingThumbnails((completed, total) => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('import:status', {
+          stage: 'thumbnails',
+          message: `Recovering missing thumbnails... ${completed}/${total}`,
+          total,
+          completed
+        })
+      }
+    }, () => isImportCancelled)
+  })
+
+  ipcMain.handle('photos:import-folder', async (event, explicitDir?: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return { success: false, count: 0 }
+    isImportCancelled = false
 
-    const result = await dialog.showOpenDialog(win, {
-      properties: ['openDirectory', 'multiSelections'],
-      title: 'Import Photos from Folder'
-    })
+    let result: { canceled: boolean; filePaths: string[] }
+    if (explicitDir && typeof explicitDir === 'string') {
+      result = { canceled: false, filePaths: [explicitDir] }
+    } else if (process.env.PHOTOSORT_IMPORT_PATH) {
+      result = { canceled: false, filePaths: [process.env.PHOTOSORT_IMPORT_PATH] }
+    } else if (process.env.PHOTOSORT_TEST_MODE === '1') {
+      result = { canceled: true, filePaths: [] }
+    } else {
+      result = await dialog.showOpenDialog(win, {
+        properties: ['openDirectory', 'multiSelections'],
+        title: 'Import Photos from Folder'
+      })
+    }
 
     if (result.canceled || result.filePaths.length === 0) {
       return { success: false, count: 0 }
@@ -73,20 +106,21 @@ export function registerIpcHandlers(): void {
     pauseVideoQueue()
     let filePaths: string[] = []
     for (const dirPath of selectedDirs) {
+      if (isImportCancelled) break
       const scanned = await scanDirectory(dirPath)
       filePaths.push(...scanned)
     }
     filePaths = Array.from(new Set(filePaths)) // Deduplicate
 
-    if (filePaths.length === 0) {
+    if (filePaths.length === 0 || isImportCancelled) {
       resumeVideoQueue()
       event.sender.send('import:status', {
         stage: 'done',
-        message: 'No supported media files found',
+        message: isImportCancelled ? 'Import cancelled' : 'No supported media files found',
         total: 0,
         completed: 0
       })
-      return { success: true, count: 0, message: 'No supported images found' }
+      return { success: !isImportCancelled, count: 0, message: isImportCancelled ? 'Import cancelled' : 'No supported images found' }
     }
 
     event.sender.send('import:status', {
@@ -96,20 +130,24 @@ export function registerIpcHandlers(): void {
       completed: 0
     })
 
-    // Process files (extract metadata) with throttled IPC updates
+    // Process files (extract metadata) with throttled IPC updates and cancellation check
     let lastProcessSent = 0
-    const importedFiles = await processFiles(filePaths, (completed, total, currentFile) => {
-      const now = Date.now()
-      if (now - lastProcessSent > 120 || completed === total) {
-        lastProcessSent = now
-        event.sender.send('import:status', {
-          stage: 'processing',
-          message: `Processing ${basename(currentFile)}... (${completed}/${total})`,
-          total,
-          completed
-        })
-      }
-    })
+    const importedFiles = await processFiles(
+      filePaths,
+      (completed, total, currentFile) => {
+        const now = Date.now()
+        if (now - lastProcessSent > 120 || completed === total) {
+          lastProcessSent = now
+          event.sender.send('import:status', {
+            stage: 'processing',
+            message: `Processing ${basename(currentFile)}... (${completed}/${total})`,
+            total,
+            completed
+          })
+        }
+      },
+      () => isImportCancelled
+    )
 
     importedFiles.forEach(f => {
       const filePathStr = f?.photo?.file_path || ''
@@ -128,8 +166,8 @@ export function registerIpcHandlers(): void {
 
     const insertedItems = insertPhotoBatch(importedFiles)
 
-    // Generate thumbnails for newly imported photos
-    if (insertedItems.length > 0) {
+    // Generate thumbnails for newly imported photos with cancellation support
+    if (insertedItems.length > 0 && !isImportCancelled) {
       event.sender.send('import:status', {
         stage: 'thumbnails',
         message: 'Generating thumbnails...',
@@ -163,7 +201,8 @@ export function registerIpcHandlers(): void {
               completed
             })
           }
-        }
+        },
+        () => isImportCancelled
       )
 
       if (pendingUpdates.length > 0) {
@@ -173,23 +212,26 @@ export function registerIpcHandlers(): void {
 
     event.sender.send('import:status', {
       stage: 'done',
-      message: `Successfully imported ${insertedItems.length} photos`,
+      message: isImportCancelled ? `Import cancelled (imported ${insertedItems.length} photos)` : `Successfully imported ${insertedItems.length} photos`,
       total: insertedItems.length,
       completed: insertedItems.length
     })
 
     resumeVideoQueue()
-    return { success: true, count: insertedItems.length }
+    return { success: !isImportCancelled, count: insertedItems.length, cancelled: isImportCancelled }
   })
 
   ipcMain.handle('photos:import-files', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return { success: false, count: 0 }
+    isImportCancelled = false
 
-    const result = await dialog.showOpenDialog(win, {
-      properties: ['openFile', 'multiSelections'],
-      title: 'Import Photos',
-      filters: [
+    const result = process.env.PHOTOSORT_TEST_MODE === '1'
+      ? { canceled: true, filePaths: [] }
+      : await dialog.showOpenDialog(win, {
+          properties: ['openFile', 'multiSelections'],
+          title: 'Import Photos',
+          filters: [
         {
           name: 'All Supported Media',
           extensions: Array.from(ALL_SUPPORTED_EXTENSIONS).map((e) => e.replace('.', ''))
@@ -219,19 +261,23 @@ export function registerIpcHandlers(): void {
       completed: 0
     })
 
-    const importedFiles = await processFiles(filePaths, (completed, total, currentFile) => {
-      event.sender.send('import:status', {
-        stage: 'processing',
-        message: `Processing ${basename(currentFile)}...`,
-        total,
-        completed
-      })
-    })
+    const importedFiles = await processFiles(
+      filePaths,
+      (completed, total, currentFile) => {
+        event.sender.send('import:status', {
+          stage: 'processing',
+          message: `Processing ${basename(currentFile)}...`,
+          total,
+          completed
+        })
+      },
+      () => isImportCancelled
+    )
 
     const insertedItems = insertPhotoBatch(importedFiles)
 
     // Generate thumbnails
-    if (insertedItems.length > 0) {
+    if (insertedItems.length > 0 && !isImportCancelled) {
       let lastSent = 0
       const pendingUpdates: { id: number; thumbnailPath: string; previewPath: string }[] = []
 
@@ -259,7 +305,8 @@ export function registerIpcHandlers(): void {
               completed
             })
           }
-        }
+        },
+        () => isImportCancelled
       )
 
       if (pendingUpdates.length > 0) {
@@ -269,13 +316,13 @@ export function registerIpcHandlers(): void {
 
     event.sender.send('import:status', {
       stage: 'done',
-      message: `Successfully imported ${insertedItems.length} photos`,
+      message: isImportCancelled ? `Import cancelled (imported ${insertedItems.length} photos)` : `Successfully imported ${insertedItems.length} photos`,
       total: insertedItems.length,
       completed: insertedItems.length
     })
 
     resumeVideoQueue()
-    return { success: true, count: insertedItems.length }
+    return { success: !isImportCancelled, count: insertedItems.length, cancelled: isImportCancelled }
   })
 
   // ─── Photos CRUD ─────────────────────────────────────────────────────
@@ -321,14 +368,12 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('photos:scan-documents', () => {
-    const { scanDocuments } = require('./document-scanner')
-    scanDocuments()
+    startFullDocumentScan()
     return true
   })
 
   ipcMain.handle('photos:stop-document-scan', () => {
-    const { stopDocumentScanning } = require('./document-scanner')
-    stopDocumentScanning()
+    stopFullDocumentScan()
     return true
   })
 
@@ -349,13 +394,11 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('photos:lock', (_event, ids: number[], locked: boolean) => {
-    const { setLocked } = require('./database')
     setLocked(ids, locked)
     return true
   })
 
   ipcMain.handle('photos:update-metadata', (_event, id: number, data: { description?: string; created_at?: string }) => {
-    const { updatePhotoMetadata } = require('./database')
     updatePhotoMetadata(id, data)
     return true
   })
@@ -376,7 +419,7 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('photos:empty-trash', () => {
-    const db = require('./database').getDb()
+    const db = getDb()
     const trashed = db.prepare("SELECT id FROM photos WHERE is_trashed = 1").all() as { id: number }[]
     if (trashed.length > 0) {
       deletePermanently(trashed.map((r: any) => r.id))
@@ -481,7 +524,6 @@ export function registerIpcHandlers(): void {
     const ext = extname(photo.file_path)
     const editedDir = join(app.getPath('userData'), 'edited')
     if (!existsSync(editedDir)) {
-      const { mkdirSync } = require('fs')
       mkdirSync(editedDir, { recursive: true })
     }
 
@@ -592,8 +634,8 @@ export function registerIpcHandlers(): void {
     return true
   })
 
-  ipcMain.handle('faces:get-unscanned', () => {
-    return getUnscannedPhotos()
+  ipcMain.handle('faces:get-unscanned', (_event, limit?: number) => {
+    return getUnscannedPhotos(limit)
   })
 
   ipcMain.handle('faces:mark-scanned', (_event, photoId: number) => {
@@ -839,7 +881,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('organizer:execute', async (event, options: OrganizationOptions) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     return executeOrganization(options, (progress) => {
-      win?.webContents.send('organizer:progress', progress)
+      try {
+        if (win && !win.isDestroyed() && !win.webContents?.isDestroyed()) {
+          win.webContents.send('organizer:progress', progress)
+        }
+      } catch {}
     })
   })
 
@@ -891,5 +937,110 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('window:is-maximized', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     return win?.isMaximized() ?? false
+  })
+
+  // ─── Benchmark & Scale Handlers ──────────────────────────────────────
+  ipcMain.handle('benchmark:get-memory', () => {
+    const m = process.memoryUsage()
+    return {
+      rss: Math.round(m.rss / 1048576),
+      heapUsed: Math.round(m.heapUsed / 1048576),
+      heapTotal: Math.round(m.heapTotal / 1048576)
+    }
+  })
+
+  ipcMain.handle('benchmark:simulate-missing-thumbnails', (_event, count: number = 50) => {
+    const db = getDb()
+    db.run(`UPDATE photos SET thumbnail_path = NULL, preview_path = NULL WHERE id IN (SELECT id FROM photos LIMIT ${count})`)
+    saveDatabase()
+    return true
+  })
+
+  ipcMain.handle('benchmark:check-db-integrity', () => {
+    const db = getDb()
+    const res = db.exec('PRAGMA quick_check')
+    return res[0]?.values[0]?.[0] === 'ok'
+  })
+
+  ipcMain.handle('benchmark:scale-database', async (_event, targetCount: number) => {
+    const db = getDb()
+    const t0 = Date.now()
+
+    const insertStmt = db.prepare(`
+      INSERT INTO photos (file_path, filename, mime_type, width, height, file_size, created_at, is_favorite, is_archived, is_trashed, is_locked)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    const currentCount = (db.exec('SELECT COUNT(*) FROM photos')[0]?.values[0]?.[0] as number) || 0
+    const needed = Math.max(0, targetCount - currentCount)
+
+    const BLOCK_SIZE = 25000
+    for (let b = 0; b < needed; b += BLOCK_SIZE) {
+      db.run('BEGIN TRANSACTION')
+      const end = Math.min(b + BLOCK_SIZE, needed)
+      for (let i = b; i < end; i++) {
+        const id = currentCount + i + 1
+        const date = new Date(Date.now() - (i % 1500) * 86400000).toISOString()
+        insertStmt.run([
+          `C:/Users/vishw/Pictures/synthetic_scale/photo_${id}.jpg`,
+          `photo_${id}.jpg`,
+          'image/jpeg',
+          1920,
+          1080,
+          2450000,
+          date,
+          i % 50 === 0 ? 1 : 0,
+          0,
+          0,
+          0
+        ])
+      }
+      db.run('COMMIT')
+      // Yield to Node event loop so IPC and renderer communication remain responsive
+      await new Promise((r) => setTimeout(r, 10))
+    }
+
+    insertStmt.free()
+    const insertSec = (Date.now() - t0) / 1000
+
+    // Benchmark queries on targetCount rows
+    const tTimeline = Date.now()
+    db.exec('SELECT substr(created_at, 1, 10) as date, count(*) as count FROM photos WHERE is_trashed = 0 GROUP BY substr(created_at, 1, 10) ORDER BY date DESC')
+    const timelineMs = Date.now() - tTimeline
+
+    const tPage = Date.now()
+    const offset = Math.floor(targetCount / 2)
+    db.exec(`SELECT * FROM photos WHERE is_trashed = 0 ORDER BY created_at DESC LIMIT 100 OFFSET ${offset}`)
+    const pageMs = Date.now() - tPage
+
+    const tSearch = Date.now()
+    db.exec("SELECT * FROM photos WHERE filename LIKE '%photo_49999%' LIMIT 20")
+    const searchMs = Date.now() - tSearch
+
+    const tCount = Date.now()
+    const countRes = db.exec('SELECT COUNT(*) FROM photos WHERE is_trashed = 0')
+    const countMs = Date.now() - tCount
+
+    if (typeof (global as any).gc === 'function') {
+      try { (global as any).gc() } catch {}
+    }
+
+    const m = process.memoryUsage()
+    return {
+      totalPhotos: countRes[0]?.values[0]?.[0] as number,
+      insertSec,
+      timelineMs,
+      pageMs,
+      searchMs,
+      countMs,
+      rssMb: Math.round(m.rss / 1048576),
+      heapUsedMb: Math.round(m.heapUsed / 1048576)
+    }
+  })
+
+  ipcMain.handle('benchmark:cleanup-synthetic', () => {
+    const db = getDb()
+    db.run("DELETE FROM photos WHERE file_path LIKE '%synthetic_%'")
+    return true
   })
 }

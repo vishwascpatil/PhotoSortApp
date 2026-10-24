@@ -2,6 +2,7 @@ import { readdir, stat } from 'fs/promises'
 import { join, extname, basename } from 'path'
 import { statSync } from 'fs'
 import sharp from 'sharp'
+sharp.cache(false)
 import exifReader from 'exif-reader'
 import exifr from 'exifr'
 import { PhotoInsert, ExifInsert } from './database'
@@ -175,20 +176,25 @@ export async function processFile(filePath: string): Promise<ImportedFile> {
 
 export async function processFiles(
   filePaths: string[],
-  onProgress?: (completed: number, total: number, currentFile: string) => void
+  onProgress?: (completed: number, total: number, currentFile: string) => void,
+  isCancelled?: () => boolean
 ): Promise<ImportedFile[]> {
   const total = filePaths.length
-  const results: ImportedFile[] = new Array(total)
+  const results: ImportedFile[] = []
   const CONCURRENCY = 16
   let completed = 0
 
   for (let i = 0; i < total; i += CONCURRENCY) {
+    if (isCancelled && isCancelled()) {
+      break
+    }
     const chunk = filePaths.slice(i, i + CONCURRENCY)
     await Promise.all(
-      chunk.map(async (filePath, idx) => {
-        const fileIndex = i + idx
+      chunk.map(async (filePath) => {
+        if (isCancelled && isCancelled()) return
         try {
-          results[fileIndex] = await processFile(filePath)
+          const item = await processFile(filePath)
+          if (item) results.push(item)
         } catch (err) {
           console.error(`Error processing ${filePath}:`, err)
         }
@@ -200,5 +206,5 @@ export async function processFiles(
     await new Promise(r => setTimeout(r, 10))
   }
 
-  return results.filter(Boolean)
+  return results
 }

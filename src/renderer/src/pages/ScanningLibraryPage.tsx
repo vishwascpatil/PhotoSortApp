@@ -184,10 +184,16 @@ export default function ScanningLibraryPage() {
         <button 
           type="button" 
           className="scan-pause-btn"
-          onClick={() => setIsPaused(!isPaused)}
+          onClick={async () => {
+            if (isImporting && window.photoVault?.cancelImport) {
+              await window.photoVault.cancelImport();
+            } else {
+              setIsPaused(!isPaused);
+            }
+          }}
         >
           {isPaused ? <Play size={16} /> : <Pause size={16} />}
-          <span>{isPaused ? 'Resume' : 'Pause'}</span>
+          <span>{isImporting ? 'Cancel' : isPaused ? 'Resume' : 'Pause'}</span>
         </button>
       </header>
 

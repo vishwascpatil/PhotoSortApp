@@ -1,7 +1,7 @@
 import { join, dirname, basename, extname, isAbsolute, relative } from 'path'
 import {
   existsSync, mkdirSync, copyFileSync, unlinkSync,
-  statSync, writeFileSync, readdirSync
+  statSync, writeFileSync, readdirSync, promises as fsPromises
 } from 'fs'
 import { app, dialog, BrowserWindow } from 'electron'
 import { getDb, saveDatabase, PhotoRow } from '../../database'
@@ -598,6 +598,10 @@ function fetchCandidatePhotos(options: OrganizationOptions): PhotoRow[] {
  * Prompts user for destination folder selection.
  */
 export async function selectOrganizationDestination(browserWindow?: BrowserWindow): Promise<string | null> {
+  if (process.env.PHOTOSORT_TEST_MODE === '1') {
+    return join(process.cwd(), 'test-fixtures', 'export-destination')
+  }
+
   const dialogOptions: Electron.OpenDialogOptions = {
     title: 'Select Destination Folder for Organized Photos',
     properties: ['openDirectory', 'createDirectory']
@@ -832,8 +836,8 @@ export async function executeOrganization(
         mkdirSync(targetDirName, { recursive: true })
       }
 
-      // 1. Copy file to destination
-      copyFileSync(srcPath, resolvedTargetPath)
+      // 1. Copy file to destination asynchronously without blocking Node.js main event loop
+      await fsPromises.copyFile(srcPath, resolvedTargetPath)
 
       // 2. Zero-Loss Verification: Check destination file exists and byte size matches exactly
       if (!existsSync(resolvedTargetPath)) {
@@ -865,6 +869,11 @@ export async function executeOrganization(
       bytesTransferred += srcStat.size
       completed++
 
+      // Periodically yield to event loop to keep IPC and UI thread 100% responsive
+      if (completed % 10 === 0) {
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+
       entries.push({
         photoId: photo.id,
         originalPath: srcPath,
@@ -890,8 +899,8 @@ export async function executeOrganization(
       })
     }
 
-    // Emit live progress
-    if (onProgress) {
+    // Emit live progress (throttled to avoid IPC saturation during massive 20GB transfers)
+    if (onProgress && (completed === 1 || completed % 5 === 0 || completed === totalFiles)) {
       const elapsedSec = (Date.now() - startTime) / 1000
       const speed = elapsedSec > 0 ? bytesTransferred / elapsedSec : 0
       onProgress({

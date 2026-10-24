@@ -402,6 +402,22 @@ export function setupMockApi() {
     }),
     cancelOrganization: async () => true,
     showInFolder: async () => true,
-    onOrganizationProgress: () => () => {}
+    onOrganizationProgress: () => () => {},
+    cancelImport: async () => true,
+    recoverMissingThumbnails: async () => ({ recovered: 0, total: 0 }),
+    getBenchmarkMemory: async () => ({ rss: 120, heapUsed: 60, heapTotal: 80 }),
+    simulateMissingThumbnails: async () => true,
+    checkDbIntegrity: async () => true,
+    scaleDatabaseBenchmark: async (count: number) => ({
+      totalPhotos: count,
+      insertSec: 1.2,
+      timelineMs: 12,
+      pageMs: 5,
+      searchMs: 8,
+      countMs: 3,
+      rssMb: 150,
+      heapUsedMb: 90
+    }),
+    cleanupSyntheticData: async () => true
   }
 }

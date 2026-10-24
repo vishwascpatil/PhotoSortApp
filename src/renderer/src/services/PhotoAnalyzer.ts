@@ -142,6 +142,8 @@ export async function analyzePhotos(
       } finally {
         analyzedCount++
         onProgress?.({ analyzedCount, totalCount, isAnalyzing: true })
+        // Yield to browser event loop so UI stays 60 FPS
+        await new Promise((r) => setTimeout(r, 15))
       }
     }
   } catch (err) {

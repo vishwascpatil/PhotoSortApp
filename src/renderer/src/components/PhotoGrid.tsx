@@ -162,7 +162,7 @@ export default function PhotoGrid({ photos, showDateHeaders = true, onContextMen
       return photoRowHeight + gap
     },
     scrollMargin,
-    overscan: 4
+    overscan: 2
   })
 
   // Re-measure when column or row sizes change
@@ -271,7 +271,8 @@ export default function PhotoGrid({ photos, showDateHeaders = true, onContextMen
                   gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                   gap: `${gap}px`,
                   width: '100%',
-                  height: `${photoRowHeight}px`
+                  height: `${photoRowHeight}px`,
+                  contain: 'layout style paint'
                 }}
               >
                 {item.photos.map((photo) => (
@@ -343,7 +344,6 @@ interface PhotoTileProps {
 
 const PhotoTile = React.memo(
   function PhotoTile({ photo, isSelected, onClick, onCheckbox, onFavorite, onContextMenu }: PhotoTileProps) {
-    const [loaded, setLoaded] = useState(false)
     const thumbnailUrl = useMemo(() => getThumbnailUrl(photo.thumbnail_path, photo.file_path), [photo.thumbnail_path, photo.file_path])
 
     const isDocument = useMemo(() => {
@@ -398,12 +398,10 @@ const PhotoTile = React.memo(
           </div>
         ) : thumbnailUrl ? (
           <img
-            className={`photo-tile-img ${loaded ? 'loaded' : 'loading'}`}
+            className="photo-tile-img"
             src={thumbnailUrl}
             alt={photo.filename}
-            loading="lazy"
             decoding="async"
-            onLoad={() => setLoaded(true)}
             draggable={false}
           />
         ) : (

@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, copyFileSync } from 'fs'
 import { spawn, execFileSync, ChildProcess } from 'child_process'
 import { cpus, tmpdir } from 'os'
 
@@ -94,8 +94,17 @@ export class WicHeicExtractor {
 
       this.exePath = join(binDir, 'WicThumbnailer.exe')
 
+      const globalExe = join(process.env.APPDATA || tmpdir(), 'PhotoSort', 'bin', 'WicThumbnailer.exe')
       if (!existsSync(this.exePath)) {
-        this.compileBinary(binDir)
+        if (existsSync(globalExe)) {
+          try {
+            copyFileSync(globalExe, this.exePath)
+          } catch {
+            this.exePath = globalExe
+          }
+        } else {
+          this.compileBinary(binDir)
+        }
       }
 
       if (existsSync(this.exePath)) {
@@ -212,6 +221,7 @@ export class WicHeicExtractor {
 
       proc.on('close', handleExit)
       proc.on('error', handleExit)
+      proc.stdin?.on('error', handleExit)
 
       this.workers.push(slot)
     } catch {

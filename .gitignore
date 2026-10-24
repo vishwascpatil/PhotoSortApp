@@ -7,3 +7,8 @@ app-errors.log
 *.log
 *.zip
 *.exe
+*.tsbuildinfo
+test-fixtures/
+test-results/
+scratch/
+.last-run.json

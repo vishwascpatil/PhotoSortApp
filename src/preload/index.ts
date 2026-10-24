@@ -71,10 +71,14 @@ export interface ExifData {
 
 const api = {
   // Photos
-  importFolder: (): Promise<{ success: boolean; count: number; message?: string }> =>
-    ipcRenderer.invoke('photos:import-folder'),
-  importFiles: (): Promise<{ success: boolean; count: number }> =>
+  importFolder: (folderPath?: string): Promise<{ success: boolean; count: number; message?: string; cancelled?: boolean }> =>
+    ipcRenderer.invoke('photos:import-folder', folderPath),
+  importFiles: (): Promise<{ success: boolean; count: number; cancelled?: boolean }> =>
     ipcRenderer.invoke('photos:import-files'),
+  cancelImport: (): Promise<boolean> =>
+    ipcRenderer.invoke('photos:cancel-import'),
+  recoverMissingThumbnails: (): Promise<{ recovered: number; total: number }> =>
+    ipcRenderer.invoke('photos:recover-thumbnails'),
   getPhotos: (filter?: PhotoFilter): Promise<PhotoRow[]> =>
     ipcRenderer.invoke('photos:get-all', filter || {}),
   getGeoPhotos: (): Promise<any[]> =>
@@ -175,7 +179,7 @@ const api = {
   getAllFaceDescriptors: (): Promise<{ id: number, photo_id: number, person_id: number, descriptor: string }[]> =>
     ipcRenderer.invoke('faces:get-all'),
   saveFaceDescriptor: (photoId: number, personId: number, descriptor: number[]): Promise<boolean> => ipcRenderer.invoke('faces:save', photoId, personId, descriptor),
-  getUnscannedPhotos: (): Promise<any[]> => ipcRenderer.invoke('faces:get-unscanned'),
+  getUnscannedPhotos: (limit?: number): Promise<any[]> => ipcRenderer.invoke('faces:get-unscanned', limit),
   markPhotoScanned: (photoId: number) => ipcRenderer.invoke('faces:mark-scanned', photoId),
   resetFaceScanData: () => ipcRenderer.invoke('faces:reset'),
   getMergeSuggestions: (): Promise<any[]> => ipcRenderer.invoke('faces:get-merge-suggestions'),
@@ -386,7 +390,27 @@ const api = {
     }
     ipcRenderer.on('organizer:progress', handler)
     return () => ipcRenderer.removeListener('organizer:progress', handler)
-  }
+  },
+
+  // ─── Benchmark API ───────────────────────────────────────────────────
+  getBenchmarkMemory: (): Promise<{ rss: number; heapUsed: number; heapTotal: number }> =>
+    ipcRenderer.invoke('benchmark:get-memory'),
+  simulateMissingThumbnails: (count?: number): Promise<boolean> =>
+    ipcRenderer.invoke('benchmark:simulate-missing-thumbnails', count),
+  checkDbIntegrity: (): Promise<boolean> =>
+    ipcRenderer.invoke('benchmark:check-db-integrity'),
+  scaleDatabaseBenchmark: (targetCount: number): Promise<{
+    totalPhotos: number
+    insertSec: number
+    timelineMs: number
+    pageMs: number
+    searchMs: number
+    countMs: number
+    rssMb: number
+    heapUsedMb: number
+  }> => ipcRenderer.invoke('benchmark:scale-database', targetCount),
+  cleanupSyntheticData: (): Promise<boolean> =>
+    ipcRenderer.invoke('benchmark:cleanup-synthetic')
 }
 
 contextBridge.exposeInMainWorld('photoVault', api)

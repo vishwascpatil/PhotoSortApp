@@ -191,7 +191,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_LOADING', payload: true })
     dispatch({ type: 'SET_ACTIVE_FILTER', payload: filter })
     try {
-      const photos = await window.photoVault.getPhotos(filter as any)
+      const queryFilter = { limit: 1000, ...filter }
+      const photos = await window.photoVault.getPhotos(queryFilter as any)
       dispatch({ type: 'SET_PHOTOS', payload: photos })
       const count = await window.photoVault.getPhotoCount(filter as any)
       dispatch({ type: 'SET_TOTAL_COUNT', payload: count })

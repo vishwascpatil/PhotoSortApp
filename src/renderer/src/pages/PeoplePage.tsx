@@ -62,7 +62,10 @@ export default function PeoplePage() {
       setHasScanned(false)
     }
     window.addEventListener('photosort:library-imported', handleImported)
-    return () => window.removeEventListener('photosort:library-imported', handleImported)
+    return () => {
+      window.removeEventListener('photosort:library-imported', handleImported)
+      stopScanning()
+    }
   }, [])
 
   // Modals & Renaming
@@ -158,8 +161,12 @@ export default function PeoplePage() {
 
   // Subscribe to live face scanning progress
   useEffect(() => {
+    let debounceTimer: any = null
     setOnPersonFound(() => {
-      loadPeople()
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        loadPeople()
+      }, 500)
     })
     const unsubscribe = subscribeToFaceScan((progress) => {
       setScanProgress(progress)
@@ -170,6 +177,7 @@ export default function PeoplePage() {
       }
     })
     return () => {
+      clearTimeout(debounceTimer)
       unsubscribe()
       setOnPersonFound(null)
     }

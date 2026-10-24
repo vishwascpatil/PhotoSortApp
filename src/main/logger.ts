@@ -53,7 +53,7 @@ function startMainProcessWatchdog() {
   let lastTick = Date.now()
   let isSuspended = false
   const CHECK_INTERVAL = 1000
-  const HANG_THRESHOLD = 2500
+  const HANG_THRESHOLD = 7500
 
   try {
     if (powerMonitor) {

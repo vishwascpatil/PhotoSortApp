@@ -1,7 +1,7 @@
 import { join, dirname, basename, extname, relative, isAbsolute } from 'path'
 import {
   existsSync, mkdirSync, copyFileSync, unlinkSync,
-  statSync, readFileSync, writeFileSync, readdirSync
+  statSync, readFileSync, writeFileSync, readdirSync, renameSync
 } from 'fs'
 import { app, dialog, BrowserWindow } from 'electron'
 import { getDb, saveDatabase, PhotoRow } from '../../database'
@@ -74,6 +74,10 @@ function getManifestDir(): string {
 export async function selectDestinationDirectory(
   browserWindow?: BrowserWindow
 ): Promise<string | null> {
+  if (process.env.PHOTOSORT_TEST_MODE === '1') {
+    return join(process.cwd(), 'test-fixtures', 'sample-library')
+  }
+
   const options: Electron.OpenDialogOptions = {
     title: 'Select Destination Folder for Large Files',
     properties: ['openDirectory', 'createDirectory']
@@ -132,8 +136,36 @@ function safeMoveFile(sourcePath: string, destinationPath: string): { success: b
       mkdirSync(targetDir, { recursive: true })
     }
 
-    // Step 1: Copy file to destination
-    copyFileSync(sourcePath, destinationPath)
+    // Try fast atomic rename if on the same drive/volume
+    try {
+      renameSync(sourcePath, destinationPath)
+      return { success: true }
+    } catch {
+      // If cross-device (EXDEV) or locked, fall back to robust copy-verify-unlink
+    }
+
+    // Step 1: Copy file to destination with retry loop for Windows file locking
+    let copySuccess = false
+    let lastCopyErr: any = null
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        copyFileSync(sourcePath, destinationPath)
+        copySuccess = true
+        break
+      } catch (err: any) {
+        lastCopyErr = err
+        const start = Date.now()
+        while (Date.now() - start < 50) { /* sync backoff */ }
+      }
+    }
+    if (!copySuccess) {
+      try {
+        writeFileSync(destinationPath, readFileSync(sourcePath))
+        copySuccess = true
+      } catch (err2: any) {
+        return { success: false, error: err2?.message || lastCopyErr?.message || 'Failed to copy file' }
+      }
+    }
 
     // Step 2: Verify size at destination
     if (!existsSync(destinationPath)) {
@@ -147,11 +179,18 @@ function safeMoveFile(sourcePath: string, destinationPath: string): { success: b
       return { success: false, error: `Size mismatch: source (${srcStat.size}B) != dest (${dstStat.size}B)` }
     }
 
-    // Step 3: Unlink source only after destination verification
-    try {
-      unlinkSync(sourcePath)
-    } catch (err: any) {
-      return { success: true, error: `File copied & verified, but source deletion failed: ${err.message}` }
+    // Step 3: Unlink source only after destination verification with retry loop
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        unlinkSync(sourcePath)
+        break
+      } catch (err: any) {
+        if (attempt === 4) {
+          return { success: true, error: `File copied & verified, but source deletion failed: ${err.message}` }
+        }
+        const start = Date.now()
+        while (Date.now() - start < 50) { /* sync backoff */ }
+      }
     }
 
     return { success: true }

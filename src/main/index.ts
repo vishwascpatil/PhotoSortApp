@@ -1,5 +1,7 @@
 import { app, shell, BrowserWindow, Menu, dialog, nativeTheme } from 'electron'
 import { join } from 'path'
+import sharp from 'sharp'
+sharp.cache(false)
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase, closeDatabase } from './database'
 import { registerIpcHandlers } from './ipc-handlers'

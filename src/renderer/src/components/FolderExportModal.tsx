@@ -27,7 +27,52 @@ export default function FolderExportModal({
   specificFolderFilter
 }: FolderExportModalProps) {
   const { state: photoState, refreshPhotos } = usePhotos()
-  const { showToast } = useApp()
+  const { state: appState, showToast } = useApp()
+  const isDark = appState.theme === 'dark'
+
+  const t = useMemo(() => ({
+    isDark,
+    overlayBg: isDark ? 'rgba(0, 0, 0, 0.78)' : 'rgba(0, 0, 0, 0.45)',
+    modalBg: isDark ? '#18181b' : '#ffffff',
+    modalBorder: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)',
+    modalShadow: isDark ? '0 30px 70px rgba(0, 0, 0, 0.8)' : '0 20px 60px rgba(0, 0, 0, 0.15)',
+    headerBg: isDark
+      ? 'linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 100%)'
+      : '#f8fafc',
+    headerBorder: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+    footerBg: isDark ? 'rgba(0, 0, 0, 0.2)' : '#f8fafc',
+    footerBorder: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+    cardBg: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc',
+    cardBgHover: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9',
+    cardBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+    cardBorderStrong: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.14)',
+    subtleBg: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f1f5f9',
+    subtleBorder: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+    inputBg: isDark ? 'rgba(0, 0, 0, 0.3)' : '#ffffff',
+    inputBorder: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)',
+    inputText: isDark ? '#ffffff' : '#0f172a',
+    text: isDark ? '#ffffff' : '#0f172a',
+    textSecondary: isDark ? 'rgba(255, 255, 255, 0.65)' : '#475569',
+    textTertiary: isDark ? 'rgba(255, 255, 255, 0.45)' : '#94a3b8',
+    textMuted: isDark ? 'rgba(255, 255, 255, 0.55)' : '#64748b',
+    btnGhostBg: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+    btnGhostBorder: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)',
+    btnGhostText: isDark ? '#ffffff' : '#1e293b',
+    submodalBg: isDark ? '#202024' : '#ffffff',
+    submodalBorder: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)',
+    submodalOverlay: isDark ? 'rgba(0, 0, 0, 0.82)' : 'rgba(0, 0, 0, 0.45)',
+    sheetBg: isDark ? '#18181b' : '#ffffff',
+    sheetHeaderBg: isDark ? 'rgba(255, 255, 255, 0.02)' : '#f8fafc',
+    sheetBorder: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+    treeContainerBg: isDark ? 'rgba(0, 0, 0, 0.25)' : '#f8fafc',
+    treeHeaderBg: isDark ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+    treeSubfolderBg: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+    auditTableBg: isDark ? 'rgba(0, 0, 0, 0.25)' : '#ffffff',
+    auditRowBg: isDark ? 'rgba(255, 255, 255, 0.02)' : '#f8fafc',
+    imagePlaceholderBg: isDark ? '#09090b' : '#e2e8f0',
+    avatarBg: isDark ? '#27272a' : '#e2e8f0',
+    codeBg: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)'
+  }), [isDark])
 
   // Steps: 1 = Destination & Mode, 2 = Choose Folders, 3 = Preview Folders, 4 = Exporting Progress, 5 = All Done!
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1)
@@ -183,7 +228,11 @@ export default function FolderExportModal({
     let unscannedPlaces = 0
     let unscannedDocs = 0
 
-    for (const p of photos) {
+    for (let i = 0; i < photos.length; i++) {
+      const p = photos[i]
+      if (i > 0 && i % 40 === 0) {
+        await new Promise(r => setTimeout(r, 0))
+      }
       const hasGps = p.gps_lat !== undefined && p.gps_lat !== null && typeof p.gps_lat === 'number' && !isNaN(p.gps_lat)
       if (hasGps && p.location_name && p.location_name.trim()) {
         placesCount++
@@ -1145,10 +1194,12 @@ export default function FolderExportModal({
 
   return (
     <div
+      className={`folder-export-modal-overlay ${isDark ? 'dark' : 'light'}`}
+      data-theme={appState.theme}
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.78)',
+        backgroundColor: t.overlayBg,
         backdropFilter: 'blur(16px)',
         display: 'flex',
         alignItems: 'center',
@@ -1159,15 +1210,16 @@ export default function FolderExportModal({
       onClick={isExecuting ? undefined : onClose}
     >
       <div
+        className="folder-export-modal-container"
         style={{
           width: '760px',
           maxWidth: '96vw',
           maxHeight: '90vh',
-          backgroundColor: '#18181b', // Apple Dark Slate
+          backgroundColor: t.modalBg,
           borderRadius: '24px',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 30px 70px rgba(0, 0, 0, 0.8)',
-          color: '#ffffff',
+          border: `1px solid ${t.modalBorder}`,
+          boxShadow: t.modalShadow,
+          color: t.text,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -1179,11 +1231,11 @@ export default function FolderExportModal({
         <div
           style={{
             padding: '20px 28px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: `1px solid ${t.headerBorder}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 100%)'
+            background: t.headerBg
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -1203,10 +1255,10 @@ export default function FolderExportModal({
               <FolderTree size={22} />
             </div>
             <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, letterSpacing: '-0.01em' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, letterSpacing: '-0.01em', color: t.text }}>
                 Organize & Export
               </h2>
-              <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', margin: '2px 0 0 0' }}>
+              <p style={{ fontSize: '12px', color: t.textSecondary, margin: '2px 0 0 0' }}>
                 {step === 1 ? 'Step 1: Choose Where to Save' : step === 2 ? 'Step 2: Pick Your Magic Folders' : step === 3 ? 'Step 3: Preview & Confirm' : step === 4 ? 'Organizing your photos...' : 'All done! 🎉'}
               </p>
             </div>
@@ -1243,12 +1295,13 @@ export default function FolderExportModal({
           {!isExecuting && (
             <button
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-ghost modal-close-btn"
+              aria-label="Close modal"
               onClick={onClose}
               style={{
                 padding: '8px',
                 borderRadius: '50%',
-                color: 'rgba(255, 255, 255, 0.6)',
+                color: t.textSecondary,
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer'
@@ -1260,13 +1313,13 @@ export default function FolderExportModal({
         </div>
 
         {/* ── Step Content ──────────────────────────────────────────────── */}
-        <div style={{ padding: '24px 28px', overflowY: 'auto', flex: 1 }}>
+        <div style={{ padding: '24px 28px', overflowY: 'auto', flex: 1, backgroundColor: t.modalBg, color: t.text }}>
           {/* ── STEP 1: Options & Category Selection ─────────────────────── */}
           {step === 1 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
               {/* 1. Operation Mode */}
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: t.textSecondary, display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   1. Choose How to Export
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -1276,8 +1329,8 @@ export default function FolderExportModal({
                     style={{
                       padding: '16px',
                       borderRadius: '16px',
-                      border: mode === 'copy' ? '2px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.1)',
-                      background: mode === 'copy' ? 'rgba(14, 165, 233, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                      border: mode === 'copy' ? '2px solid #0ea5e9' : `1px solid ${t.cardBorder}`,
+                      background: mode === 'copy' ? (isDark ? 'rgba(14, 165, 233, 0.12)' : 'rgba(14, 165, 233, 0.08)') : t.cardBg,
                       cursor: 'pointer',
                       transition: 'all 0.15s ease'
                     }}
@@ -1285,13 +1338,13 @@ export default function FolderExportModal({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Download size={18} color="#0ea5e9" />
-                        <strong style={{ fontSize: '14.5px', fontWeight: 700 }}>Copy to a New Folder</strong>
+                        <strong style={{ fontSize: '14.5px', fontWeight: 700, color: t.text }}>Copy to a New Folder</strong>
                       </div>
                       <span style={{ fontSize: '10px', fontWeight: 800, background: '#0ea5e9', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>
                         RECOMMENDED
                       </span>
                     </div>
-                    <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', margin: 0, lineHeight: '1.4' }}>
+                    <p style={{ fontSize: '12px', color: t.textSecondary, margin: 0, lineHeight: '1.4' }}>
                       Makes a clean copy in any folder or external drive. Your original photos stay 100% safe and untouched.
                     </p>
                   </div>
@@ -1302,8 +1355,8 @@ export default function FolderExportModal({
                     style={{
                       padding: '16px',
                       borderRadius: '16px',
-                      border: mode === 'move' ? '2px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.1)',
-                      background: mode === 'move' ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                      border: mode === 'move' ? '2px solid #3b82f6' : `1px solid ${t.cardBorder}`,
+                      background: mode === 'move' ? (isDark ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.08)') : t.cardBg,
                       cursor: 'pointer',
                       transition: 'all 0.15s ease'
                     }}
@@ -1311,13 +1364,13 @@ export default function FolderExportModal({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <RefreshCw size={18} color="#3b82f6" />
-                        <strong style={{ fontSize: '14.5px', fontWeight: 700 }}>Organize Current Folder</strong>
+                        <strong style={{ fontSize: '14.5px', fontWeight: 700, color: t.text }}>Organize Current Folder</strong>
                       </div>
-                      <span style={{ fontSize: '10px', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', padding: '2px 8px', borderRadius: '10px' }}>
+                      <span style={{ fontSize: '10px', fontWeight: 700, background: t.btnGhostBg, color: t.textSecondary, padding: '2px 8px', borderRadius: '10px' }}>
                         IN-PLACE
                       </span>
                     </div>
-                    <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', margin: 0, lineHeight: '1.4' }}>
+                    <p style={{ fontSize: '12px', color: t.textSecondary, margin: 0, lineHeight: '1.4' }}>
                       Sorts files right where they are without taking extra disk space.
                     </p>
                   </div>
@@ -1327,7 +1380,7 @@ export default function FolderExportModal({
               {/* 2. Destination Folder Selector */}
               {mode === 'copy' && (
                 <div>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 700, color: t.textSecondary, display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     2. Where to Save
                   </label>
                   <div style={{ display: 'flex', gap: '10px' }}>
@@ -1340,9 +1393,9 @@ export default function FolderExportModal({
                         flex: 1,
                         padding: '11px 14px',
                         borderRadius: '12px',
-                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                        background: 'rgba(0, 0, 0, 0.3)',
-                        color: '#ffffff',
+                        border: `1px solid ${t.inputBorder}`,
+                        background: t.inputBg,
+                        color: t.inputText,
                         fontSize: '13px',
                         outline: 'none'
                       }}
@@ -1368,7 +1421,7 @@ export default function FolderExportModal({
                       <Folder size={16} /> Choose Folder...
                     </button>
                   </div>
-                  <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: t.textTertiary }}>
                     💡 Tip: Choose an external drive, USB stick, or a folder on your Desktop.
                   </div>
                 </div>
@@ -1377,8 +1430,8 @@ export default function FolderExportModal({
               {/* Zero-Loss Safety Guarantee Notice */}
               <div
                 style={{
-                  background: 'rgba(34, 197, 94, 0.08)',
-                  border: '1px solid rgba(34, 197, 94, 0.25)',
+                  background: isDark ? 'rgba(34, 197, 94, 0.08)' : 'rgba(34, 197, 94, 0.1)',
+                  border: isDark ? '1px solid rgba(34, 197, 94, 0.25)' : '1px solid rgba(34, 197, 94, 0.35)',
                   borderRadius: '14px',
                   padding: '14px 18px',
                   display: 'flex',
@@ -1388,7 +1441,7 @@ export default function FolderExportModal({
                 }}
               >
                 <ShieldCheck size={24} color="#22c55e" style={{ flexShrink: 0 }} />
-                <div style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.75)' }}>
+                <div style={{ fontSize: '12.5px', color: isDark ? 'rgba(255, 255, 255, 0.75)' : '#166534' }}>
                   <strong style={{ color: '#22c55e', display: 'block', marginBottom: '2px' }}>
                     100% Zero-Loss Safe Guarantee
                   </strong>
@@ -1404,10 +1457,10 @@ export default function FolderExportModal({
               {/* Header with Title and Action Bar */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', display: 'block', marginBottom: '3px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 700, color: t.text, display: 'block', marginBottom: '3px' }}>
                     2. Choose Your Magic Folders
                   </label>
-                  <p style={{ margin: 0, fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: t.textSecondary }}>
                     Pick which special folders to create. Everything else will be organized automatically into clean year & month folders!
                   </p>
                 </div>
@@ -1429,9 +1482,9 @@ export default function FolderExportModal({
                       onClick={handleScanAllCategories}
                       disabled={isScanningAll || isScanningPlaces || isScanningDocs || isScanningPeople || isScanningDuplicates}
                       style={{
-                        background: isScanningAll ? 'rgba(14, 165, 233, 0.28)' : 'rgba(14, 165, 233, 0.18)',
+                        background: isScanningAll ? 'rgba(14, 165, 233, 0.28)' : (isDark ? 'rgba(14, 165, 233, 0.18)' : 'rgba(14, 165, 233, 0.12)'),
                         border: '1px solid rgba(14, 165, 233, 0.4)',
-                        color: '#38bdf8',
+                        color: isDark ? '#38bdf8' : '#0284c7',
                         padding: '6px 11px',
                         borderRadius: '9px',
                         fontSize: '11px',
@@ -1471,9 +1524,9 @@ export default function FolderExportModal({
                       setSeparatePeople(true)
                     }}
                     style={{
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      color: 'rgba(255, 255, 255, 0.85)',
+                      background: t.subtleBg,
+                      border: `1px solid ${t.subtleBorder}`,
+                      color: t.text,
                       padding: '6px 12px',
                       borderRadius: '9px',
                       fontSize: '11px',
@@ -1498,9 +1551,9 @@ export default function FolderExportModal({
                       setSeparatePeople(false)
                     }}
                     style={{
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      color: 'rgba(255, 255, 255, 0.85)',
+                      background: t.subtleBg,
+                      border: `1px solid ${t.subtleBorder}`,
+                      color: t.text,
                       padding: '6px 12px',
                       borderRadius: '9px',
                       fontSize: '11px',
@@ -1521,23 +1574,27 @@ export default function FolderExportModal({
                       key={card.id}
                       className={`export-tile ${card.checked ? 'selected' : ''}`}
                       onClick={card.toggle}
+                      style={{
+                        background: card.checked ? (isDark ? 'rgba(14, 165, 233, 0.09)' : 'rgba(14, 165, 233, 0.08)') : t.cardBg,
+                        border: card.checked ? '1.5px solid #0ea5e9' : `1.5px solid ${t.cardBorder}`
+                      }}
                     >
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div className="export-tile-checkbox">
+                            <div className="export-tile-checkbox" style={{ borderColor: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)' }}>
                               {card.checked && <Check size={13} strokeWidth={3} />}
                             </div>
-                            <strong style={{ fontSize: '13.5px', fontWeight: 700 }}>
+                            <strong style={{ fontSize: '13.5px', fontWeight: 700, color: t.text }}>
                               {card.title}
                             </strong>
                           </div>
-                          <div className="export-tile-icon-box" style={{ background: 'rgba(255, 255, 255, 0.05)' }}>
+                          <div className="export-tile-icon-box" style={{ background: t.subtleBg }}>
                             {card.icon}
                           </div>
                         </div>
 
-                        <p style={{ margin: 0, fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.6)', lineHeight: '1.35' }}>
+                        <p style={{ margin: 0, fontSize: '11.5px', color: t.textSecondary, lineHeight: '1.35' }}>
                           {card.desc}
                         </p>
 
@@ -1546,11 +1603,11 @@ export default function FolderExportModal({
                             style={{
                               display: 'flex',
                               alignItems: 'center',
-                              background: 'rgba(0, 0, 0, 0.45)',
+                              background: isDark ? 'rgba(0, 0, 0, 0.45)' : 'rgba(0, 0, 0, 0.05)',
                               borderRadius: '8px',
                               padding: '2px',
                               marginTop: '8px',
-                              border: '1px solid rgba(255, 255, 255, 0.08)',
+                              border: `1px solid ${t.subtleBorder}`,
                               gap: '2px'
                             }}
                             onClick={e => e.stopPropagation()}
@@ -1567,9 +1624,9 @@ export default function FolderExportModal({
                                 borderRadius: '6px',
                                 fontSize: '10.5px',
                                 fontWeight: keepVideosWithPhotos ? 700 : 500,
-                                background: keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.35)' : 'transparent',
+                                background: keepVideosWithPhotos ? (isDark ? 'rgba(139, 92, 246, 0.35)' : 'rgba(139, 92, 246, 0.18)') : 'transparent',
                                 border: keepVideosWithPhotos ? '1px solid #8b5cf6' : '1px solid transparent',
-                                color: keepVideosWithPhotos ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                                color: keepVideosWithPhotos ? (isDark ? '#ffffff' : '#6d28d9') : t.textSecondary,
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
                                 display: 'flex',
@@ -1593,9 +1650,9 @@ export default function FolderExportModal({
                                 borderRadius: '6px',
                                 fontSize: '10.5px',
                                 fontWeight: !keepVideosWithPhotos ? 700 : 500,
-                                background: !keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.35)' : 'transparent',
+                                background: !keepVideosWithPhotos ? (isDark ? 'rgba(139, 92, 246, 0.35)' : 'rgba(139, 92, 246, 0.18)') : 'transparent',
                                 border: !keepVideosWithPhotos ? '1px solid #8b5cf6' : '1px solid transparent',
-                                color: !keepVideosWithPhotos ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                                color: !keepVideosWithPhotos ? (isDark ? '#ffffff' : '#6d28d9') : t.textSecondary,
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
                                 display: 'flex',
@@ -1619,12 +1676,12 @@ export default function FolderExportModal({
                           gap: '6px',
                           marginTop: '10px',
                           paddingTop: '8px',
-                          borderTop: '1px solid rgba(255, 255, 255, 0.06)'
+                          borderTop: `1px solid ${t.cardBorder}`
                         }}
                         onClick={e => e.stopPropagation()}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: t.textSecondary }}>
                             {card.countLabel}
                           </span>
 
@@ -1633,9 +1690,9 @@ export default function FolderExportModal({
                               style={{
                                 fontSize: '10.5px',
                                 fontWeight: 700,
-                                color: '#34d399',
-                                background: 'rgba(52, 211, 153, 0.12)',
-                                border: '1px solid rgba(52, 211, 153, 0.25)',
+                                color: '#16a34a',
+                                background: isDark ? 'rgba(52, 211, 153, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                                border: isDark ? '1px solid rgba(52, 211, 153, 0.25)' : '1px solid rgba(34, 197, 94, 0.25)',
                                 padding: '2px 7px',
                                 borderRadius: '6px',
                                 display: 'inline-flex',
@@ -1651,8 +1708,8 @@ export default function FolderExportModal({
                               style={{
                                 fontSize: '10.5px',
                                 fontWeight: 600,
-                                color: '#fbbf24',
-                                background: 'rgba(245, 158, 11, 0.12)',
+                                color: isDark ? '#fbbf24' : '#d97706',
+                                background: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.1)',
                                 border: '1px solid rgba(245, 158, 11, 0.25)',
                                 padding: '2px 7px',
                                 borderRadius: '6px',
@@ -1674,9 +1731,9 @@ export default function FolderExportModal({
                               onClick={card.onScan}
                               disabled={card.isScanning}
                               style={{
-                                background: card.isScanning ? 'rgba(14, 165, 233, 0.28)' : 'rgba(14, 165, 233, 0.18)',
+                                background: card.isScanning ? 'rgba(14, 165, 233, 0.28)' : (isDark ? 'rgba(14, 165, 233, 0.18)' : 'rgba(14, 165, 233, 0.12)'),
                                 border: '1px solid rgba(14, 165, 233, 0.35)',
-                                color: '#38bdf8',
+                                color: isDark ? '#38bdf8' : '#0284c7',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
                                 fontSize: '10.5px',
@@ -1707,9 +1764,9 @@ export default function FolderExportModal({
                               setReviewingCategory(card.id)
                             }}
                             style={{
-                              background: card.isEligible ? 'rgba(255, 255, 255, 0.06)' : 'rgba(14, 165, 233, 0.2)',
-                              border: card.isEligible ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(14, 165, 233, 0.45)',
-                              color: card.isEligible ? 'rgba(255, 255, 255, 0.85)' : '#38bdf8',
+                              background: card.isEligible ? t.btnGhostBg : (isDark ? 'rgba(14, 165, 233, 0.2)' : 'rgba(14, 165, 233, 0.12)'),
+                              border: card.isEligible ? `1px solid ${t.btnGhostBorder}` : '1px solid rgba(14, 165, 233, 0.45)',
+                              color: card.isEligible ? t.text : (isDark ? '#38bdf8' : '#0284c7'),
                               padding: '3px 9px',
                               borderRadius: '6px',
                               fontSize: '10.5px',
@@ -1733,7 +1790,7 @@ export default function FolderExportModal({
                           style={{
                             width: '100%',
                             height: '3px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
                             borderRadius: '3px',
                             overflow: 'hidden',
                             marginTop: '6px'
@@ -1760,8 +1817,8 @@ export default function FolderExportModal({
                 style={{
                   marginTop: '8px',
                   borderRadius: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: `1px solid ${t.cardBorder}`,
+                  background: t.cardBg,
                   overflow: 'hidden'
                 }}
               >
@@ -1776,7 +1833,7 @@ export default function FolderExportModal({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    color: 'rgba(255, 255, 255, 0.75)',
+                    color: t.textSecondary,
                     fontSize: '12.5px',
                     fontWeight: 600,
                     cursor: 'pointer'
@@ -1784,9 +1841,9 @@ export default function FolderExportModal({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Settings size={15} color="#0ea5e9" />
-                    <span>Advanced Options (Folder Structure & Review Tools)</span>
+                    <span style={{ color: t.text }}>Advanced Options (Folder Structure & Review Tools)</span>
                   </div>
-                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                  <span style={{ fontSize: '11px', color: t.textTertiary }}>
                     {showAdvancedSettings ? 'Hide ▲' : 'Show ▼'}
                   </span>
                 </button>
@@ -1795,7 +1852,7 @@ export default function FolderExportModal({
                   <div style={{ padding: '4px 18px 18px 18px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     {/* Folder Structure Preset */}
                     <div>
-                      <label style={{ fontSize: '11.5px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: 700, color: t.textSecondary, display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         Folder Structure
                       </label>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -1804,15 +1861,15 @@ export default function FolderExportModal({
                           style={{
                             padding: '12px 14px',
                             borderRadius: '12px',
-                            border: folderLayout === 'category-first' ? '2px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.1)',
-                            background: folderLayout === 'category-first' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                            border: folderLayout === 'category-first' ? '2px solid #0ea5e9' : `1px solid ${t.cardBorder}`,
+                            background: folderLayout === 'category-first' ? (isDark ? 'rgba(14, 165, 233, 0.1)' : 'rgba(14, 165, 233, 0.08)') : t.subtleBg,
                             cursor: 'pointer'
                           }}
                         >
-                          <strong style={{ fontSize: '12.5px', display: 'block', marginBottom: '2px' }}>
+                          <strong style={{ fontSize: '12.5px', display: 'block', marginBottom: '2px', color: t.text }}>
                             Folders by Category First (Recommended)
                           </strong>
-                          <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.55)' }}>
+                          <span style={{ fontSize: '11px', color: t.textSecondary }}>
                             Creates clean root folders: Places, Documents, WhatsApp, Videos, Photos...
                           </span>
                         </div>
@@ -1822,15 +1879,15 @@ export default function FolderExportModal({
                           style={{
                             padding: '12px 14px',
                             borderRadius: '12px',
-                            border: folderLayout === 'year-first' ? '2px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.1)',
-                            background: folderLayout === 'year-first' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                            border: folderLayout === 'year-first' ? '2px solid #0ea5e9' : `1px solid ${t.cardBorder}`,
+                            background: folderLayout === 'year-first' ? (isDark ? 'rgba(14, 165, 233, 0.1)' : 'rgba(14, 165, 233, 0.08)') : t.subtleBg,
                             cursor: 'pointer'
                           }}
                         >
-                          <strong style={{ fontSize: '12.5px', display: 'block', marginBottom: '2px' }}>
+                          <strong style={{ fontSize: '12.5px', display: 'block', marginBottom: '2px', color: t.text }}>
                             Folders by Year First
                           </strong>
-                          <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.55)' }}>
+                          <span style={{ fontSize: '11px', color: t.textSecondary }}>
                             Groups by year first, then creates category folders inside each year.
                           </span>
                         </div>
@@ -1839,7 +1896,7 @@ export default function FolderExportModal({
 
                     {/* Direct Review Hub */}
                     <div>
-                      <label style={{ fontSize: '11.5px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.6)', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: 700, color: t.textSecondary, display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         Deep Review Hub
                       </label>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -1852,9 +1909,9 @@ export default function FolderExportModal({
                           style={{
                             padding: '6px 12px',
                             borderRadius: '8px',
-                            background: 'rgba(236, 72, 153, 0.12)',
-                            border: '1px solid rgba(236, 72, 153, 0.3)',
-                            color: '#f472b6',
+                            background: isDark ? 'rgba(236, 72, 153, 0.12)' : 'rgba(236, 72, 153, 0.1)',
+                            border: isDark ? '1px solid rgba(236, 72, 153, 0.3)' : '1px solid rgba(236, 72, 153, 0.35)',
+                            color: isDark ? '#f472b6' : '#db2777',
                             fontSize: '11.5px',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -1871,9 +1928,9 @@ export default function FolderExportModal({
                           style={{
                             padding: '6px 12px',
                             borderRadius: '8px',
-                            background: 'rgba(14, 165, 233, 0.12)',
-                            border: '1px solid rgba(14, 165, 233, 0.3)',
-                            color: '#38bdf8',
+                            background: isDark ? 'rgba(14, 165, 233, 0.12)' : 'rgba(14, 165, 233, 0.1)',
+                            border: isDark ? '1px solid rgba(14, 165, 233, 0.3)' : '1px solid rgba(14, 165, 233, 0.35)',
+                            color: isDark ? '#38bdf8' : '#0284c7',
                             fontSize: '11.5px',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -1890,9 +1947,9 @@ export default function FolderExportModal({
                           style={{
                             padding: '6px 12px',
                             borderRadius: '8px',
-                            background: 'rgba(59, 130, 246, 0.12)',
-                            border: '1px solid rgba(59, 130, 246, 0.3)',
-                            color: '#60a5fa',
+                            background: isDark ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.1)',
+                            border: isDark ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(59, 130, 246, 0.35)',
+                            color: isDark ? '#60a5fa' : '#2563eb',
                             fontSize: '11.5px',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -1909,9 +1966,9 @@ export default function FolderExportModal({
                           style={{
                             padding: '6px 12px',
                             borderRadius: '8px',
-                            background: 'rgba(99, 102, 241, 0.12)',
-                            border: '1px solid rgba(99, 102, 241, 0.3)',
-                            color: '#818cf8',
+                            background: isDark ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.1)',
+                            border: isDark ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid rgba(99, 102, 241, 0.35)',
+                            color: isDark ? '#818cf8' : '#4f46e5',
                             fontSize: '11.5px',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -1939,27 +1996,27 @@ export default function FolderExportModal({
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
                   gap: '10px',
-                  background: 'rgba(255, 255, 255, 0.03)',
+                  background: t.cardBg,
                   padding: '14px',
                   borderRadius: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                  border: `1px solid ${t.cardBorder}`
                 }}
               >
                 <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: 600 }}>TOTAL FILES</span>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', marginTop: '2px' }}>
+                  <span style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600 }}>TOTAL FILES</span>
+                  <div style={{ fontSize: '18px', fontWeight: 800, color: t.text, marginTop: '2px' }}>
                     {previewPlan.totalFiles.toLocaleString()}
                   </div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: 600 }}>TOTAL SIZE</span>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', marginTop: '2px' }}>
+                  <span style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600 }}>TOTAL SIZE</span>
+                  <div style={{ fontSize: '18px', fontWeight: 800, color: t.text, marginTop: '2px' }}>
                     {formatFileSize(previewPlan.totalBytes)}
                   </div>
                 </div>
                 {previewPlan.categoryBreakdown.places > 0 && (
                   <div style={{ textAlign: 'center' }}>
-                    <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: 600 }}>PLACES</span>
+                    <span style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600 }}>PLACES</span>
                     <div style={{ fontSize: '18px', fontWeight: 800, color: '#0ea5e9', marginTop: '2px' }}>
                       {previewPlan.categoryBreakdown.places}
                     </div>
@@ -1967,7 +2024,7 @@ export default function FolderExportModal({
                 )}
                 {previewPlan.categoryBreakdown.documents > 0 && (
                   <div style={{ textAlign: 'center' }}>
-                    <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: 600 }}>DOCUMENTS</span>
+                    <span style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600 }}>DOCUMENTS</span>
                     <div style={{ fontSize: '18px', fontWeight: 800, color: '#3b82f6', marginTop: '2px' }}>
                       {previewPlan.categoryBreakdown.documents}
                     </div>
@@ -1975,7 +2032,7 @@ export default function FolderExportModal({
                 )}
                 {previewPlan.categoryBreakdown.whatsapp > 0 && (
                   <div style={{ textAlign: 'center' }}>
-                    <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', fontWeight: 600 }}>WHATSAPP</span>
+                    <span style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600 }}>WHATSAPP</span>
                     <div style={{ fontSize: '18px', fontWeight: 800, color: '#10b981', marginTop: '2px' }}>
                       {previewPlan.categoryBreakdown.whatsapp}
                     </div>
@@ -1985,7 +2042,7 @@ export default function FolderExportModal({
 
               {/* View Switcher & Actions Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', gap: '6px', background: 'rgba(255, 255, 255, 0.05)', padding: '3px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', gap: '6px', background: t.subtleBg, padding: '3px', borderRadius: '12px' }}>
                   <button
                     type="button"
                     onClick={() => setActivePreviewTab('folders')}
@@ -1993,14 +2050,15 @@ export default function FolderExportModal({
                       padding: '6px 14px',
                       borderRadius: '9px',
                       border: 'none',
-                      background: activePreviewTab === 'folders' ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-                      color: activePreviewTab === 'folders' ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                      background: activePreviewTab === 'folders' ? (isDark ? 'rgba(255, 255, 255, 0.15)' : '#ffffff') : 'transparent',
+                      color: activePreviewTab === 'folders' ? (isDark ? '#ffffff' : '#0ea5e9') : t.textSecondary,
                       fontWeight: activePreviewTab === 'folders' ? 700 : 500,
                       fontSize: '12.5px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px'
+                      gap: '6px',
+                      boxShadow: (!isDark && activePreviewTab === 'folders') ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                     }}
                   >
                     <FolderTree size={14} color={activePreviewTab === 'folders' ? '#0ea5e9' : 'currentColor'} />
@@ -2017,14 +2075,15 @@ export default function FolderExportModal({
                       padding: '6px 14px',
                       borderRadius: '9px',
                       border: 'none',
-                      background: activePreviewTab === 'validation' ? 'rgba(14, 165, 233, 0.22)' : 'transparent',
-                      color: activePreviewTab === 'validation' ? '#38bdf8' : 'rgba(255, 255, 255, 0.6)',
+                      background: activePreviewTab === 'validation' ? (isDark ? 'rgba(14, 165, 233, 0.22)' : '#e0f2fe') : 'transparent',
+                      color: activePreviewTab === 'validation' ? (isDark ? '#38bdf8' : '#0284c7') : t.textSecondary,
                       fontWeight: activePreviewTab === 'validation' ? 700 : 500,
                       fontSize: '12.5px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px'
+                      gap: '6px',
+                      boxShadow: (!isDark && activePreviewTab === 'validation') ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                     }}
                   >
                     <ShieldCheck size={14} color={activePreviewTab === 'validation' ? '#38bdf8' : '#22c55e'} />
@@ -2047,9 +2106,9 @@ export default function FolderExportModal({
                       alignItems: 'center',
                       gap: '6px',
                       fontSize: '12px',
-                      color: '#38bdf8',
-                      background: 'rgba(14, 165, 233, 0.1)',
-                      border: '1px solid rgba(14, 165, 233, 0.25)',
+                      color: isDark ? '#38bdf8' : '#0284c7',
+                      background: isDark ? 'rgba(14, 165, 233, 0.1)' : 'rgba(14, 165, 233, 0.08)',
+                      border: isDark ? '1px solid rgba(14, 165, 233, 0.25)' : '1px solid rgba(14, 165, 233, 0.3)',
                       padding: '6px 13px',
                       borderRadius: '10px',
                       cursor: isValidating ? 'not-allowed' : 'pointer',
@@ -2067,6 +2126,7 @@ export default function FolderExportModal({
                 <div>
                   {/* Quick Verification Banner */}
                   <div
+                    className="export-validation-banner"
                     onClick={() => {
                       setActivePreviewTab('validation')
                       if (!validationReport) handleValidatePlan()
@@ -2075,8 +2135,8 @@ export default function FolderExportModal({
                       marginBottom: '10px',
                       padding: '10px 14px',
                       borderRadius: '12px',
-                      background: 'rgba(34, 197, 94, 0.08)',
-                      border: '1px solid rgba(34, 197, 94, 0.2)',
+                      background: isDark ? 'rgba(34, 197, 94, 0.08)' : 'rgba(34, 197, 94, 0.1)',
+                      border: isDark ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid rgba(34, 197, 94, 0.3)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -2085,11 +2145,11 @@ export default function FolderExportModal({
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <ShieldCheck size={16} color="#22c55e" />
-                      <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                      <span style={{ fontSize: '12px', color: t.text }}>
                         <strong>File & Size Validation:</strong> {previewPlan.totalFiles.toLocaleString()} original media files match converted output ({formatFileSize(previewPlan.totalBytes)})
                       </span>
                     </div>
-                    <span style={{ fontSize: '11.5px', color: '#38bdf8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ fontSize: '11.5px', color: isDark ? '#38bdf8' : '#0284c7', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                       Compare Side-by-Side <ChevronRight size={14} />
                     </span>
                   </div>
@@ -2098,9 +2158,9 @@ export default function FolderExportModal({
                     style={{
                       maxHeight: '340px',
                       overflowY: 'auto',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      border: `1px solid ${t.cardBorder}`,
                       borderRadius: '16px',
-                      background: 'rgba(0, 0, 0, 0.25)',
+                      background: t.treeContainerBg,
                       padding: '12px'
                     }}
                   >
@@ -2109,6 +2169,7 @@ export default function FolderExportModal({
                       return (
                         <div key={group.year} style={{ marginBottom: '6px' }}>
                           <div
+                            className="export-folder-tree-header"
                             onClick={() => toggleFolderExpanded(group.year)}
                             style={{
                               display: 'flex',
@@ -2116,17 +2177,18 @@ export default function FolderExportModal({
                               justifyContent: 'space-between',
                               padding: '8px 12px',
                               borderRadius: '10px',
-                              background: 'rgba(255, 255, 255, 0.05)',
+                              background: t.treeHeaderBg,
+                              border: !isDark ? `1px solid ${t.cardBorder}` : 'none',
                               cursor: 'pointer',
                               transition: 'background 0.15s ease'
                             }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: t.text }}>
                               {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                               <Folder size={18} color="#0ea5e9" />
                               <strong style={{ fontSize: '13.5px' }}>{group.year}</strong>
                             </div>
-                            <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.55)' }}>
+                            <span style={{ fontSize: '12px', color: t.textSecondary }}>
                               {group.fileCount} items • {formatFileSize(group.totalBytes)}
                             </span>
                           </div>
@@ -2142,15 +2204,16 @@ export default function FolderExportModal({
                                     justifyContent: 'space-between',
                                     padding: '6px 10px',
                                     borderRadius: '8px',
-                                    background: 'rgba(255, 255, 255, 0.02)',
-                                    fontSize: '12px'
+                                    background: t.treeSubfolderBg,
+                                    fontSize: '12px',
+                                    color: t.text
                                   }}
                                 >
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Folder size={14} color="rgba(255, 255, 255, 0.5)" />
+                                    <Folder size={14} color={isDark ? 'rgba(255, 255, 255, 0.5)' : '#94a3b8'} />
                                     <span>{sub.name}</span>
                                   </div>
-                                  <span style={{ color: 'rgba(255, 255, 255, 0.45)' }}>
+                                  <span style={{ color: t.textTertiary }}>
                                     {sub.fileCount} files ({formatFileSize(sub.totalBytes)})
                                   </span>
                                 </div>
@@ -2172,8 +2235,8 @@ export default function FolderExportModal({
                     {/* Left: Original Source */}
                     <div
                       style={{
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: t.cardBg,
+                        border: `1px solid ${t.cardBorder}`,
                         borderRadius: '16px',
                         padding: '14px',
                         display: 'flex',
@@ -2184,12 +2247,12 @@ export default function FolderExportModal({
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                           <Folder size={18} color="#f59e0b" />
-                          <strong style={{ fontSize: '13px', color: '#ffffff' }}>Original Source Folder</strong>
+                          <strong style={{ fontSize: '13px', color: t.text }}>Original Source Folder</strong>
                         </div>
                         <div
                           style={{
                             fontSize: '11px',
-                            color: 'rgba(255, 255, 255, 0.5)',
+                            color: t.textSecondary,
                             marginBottom: '12px',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -2203,25 +2266,25 @@ export default function FolderExportModal({
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Files on Disk:</span>
-                          <strong style={{ color: '#ffffff' }}>
+                          <span style={{ color: t.textSecondary }}>Files on Disk:</span>
+                          <strong style={{ color: t.text }}>
                             {(validationReport?.sourceInfo?.totalDiskFiles || previewPlan.totalFiles).toLocaleString()}
                           </strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Photos & Videos to Convert:</span>
-                          <strong style={{ color: '#38bdf8' }}>
+                          <span style={{ color: t.textSecondary }}>Photos & Videos to Convert:</span>
+                          <strong style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>
                             {(validationReport?.originalMedia?.count || previewPlan.totalFiles).toLocaleString()}
                           </strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Total Media Size:</span>
-                          <strong style={{ color: '#ffffff' }}>
+                          <span style={{ color: t.textSecondary }}>Total Media Size:</span>
+                          <strong style={{ color: t.text }}>
                             {formatFileSize(validationReport?.originalMedia?.totalBytes || previewPlan.totalBytes)}
                           </strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Non-Media Files:</span>
+                          <span style={{ color: t.textSecondary }}>Non-Media Files:</span>
                           <span style={{ color: (validationReport?.sourceInfo?.nonMediaFilesCount || 0) > 0 ? '#f59e0b' : '#22c55e', fontWeight: 600 }}>
                             {(validationReport?.sourceInfo?.nonMediaFilesCount || 0) > 0
                               ? `${validationReport.sourceInfo.nonMediaFilesCount} (Preserved Untouched)`
@@ -2238,8 +2301,8 @@ export default function FolderExportModal({
                           width: '40px',
                           height: '40px',
                           borderRadius: '50%',
-                          background: validationReport?.comparison?.isCountMatched ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                          border: `1px solid ${validationReport?.comparison?.isCountMatched ? 'rgba(34, 197, 94, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                          background: validationReport?.comparison?.isCountMatched ? (isDark ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.12)') : 'rgba(245, 158, 11, 0.15)',
+                          border: `1px solid ${validationReport?.comparison?.isCountMatched ? (isDark ? 'rgba(34, 197, 94, 0.35)' : 'rgba(34, 197, 94, 0.4)') : 'rgba(245, 158, 11, 0.35)'}`,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -2257,8 +2320,8 @@ export default function FolderExportModal({
                     {/* Right: Converted Target */}
                     <div
                       style={{
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: t.cardBg,
+                        border: `1px solid ${t.cardBorder}`,
                         borderRadius: '16px',
                         padding: '14px',
                         display: 'flex',
@@ -2269,12 +2332,12 @@ export default function FolderExportModal({
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                           <FolderTree size={18} color="#0ea5e9" />
-                          <strong style={{ fontSize: '13px', color: '#ffffff' }}>Converted Output Folders</strong>
+                          <strong style={{ fontSize: '13px', color: t.text }}>Converted Output Folders</strong>
                         </div>
                         <div
                           style={{
                             fontSize: '11px',
-                            color: 'rgba(255, 255, 255, 0.5)',
+                            color: t.textSecondary,
                             marginBottom: '12px',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -2288,25 +2351,25 @@ export default function FolderExportModal({
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Total Converted Files:</span>
-                          <strong style={{ color: '#ffffff' }}>
+                          <span style={{ color: t.textSecondary }}>Total Converted Files:</span>
+                          <strong style={{ color: t.text }}>
                             {(validationReport?.convertedPlan?.count || previewPlan.totalFiles).toLocaleString()}
                           </strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Count Match Status:</span>
+                          <span style={{ color: t.textSecondary }}>Count Match Status:</span>
                           <strong style={{ color: validationReport?.comparison?.isCountMatched ? '#22c55e' : '#f59e0b' }}>
                             {validationReport?.comparison?.isCountMatched ? '✓ Exact 1:1 Match' : 'Mismatch Found'}
                           </strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Total Output Size:</span>
-                          <strong style={{ color: '#ffffff' }}>
+                          <span style={{ color: t.textSecondary }}>Total Output Size:</span>
+                          <strong style={{ color: t.text }}>
                             {formatFileSize(validationReport?.convertedPlan?.totalBytes || previewPlan.totalBytes)}
                           </strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Byte Loss Guarantee:</span>
+                          <span style={{ color: t.textSecondary }}>Byte Loss Guarantee:</span>
                           <span style={{ color: '#22c55e', fontWeight: 600 }}>0 Bytes Lost (Zero-Loss)</span>
                         </div>
                       </div>
@@ -2318,8 +2381,8 @@ export default function FolderExportModal({
                     style={{
                       padding: '12px 16px',
                       borderRadius: '14px',
-                      background: validationReport?.comparison?.isCountMatched ? 'rgba(34, 197, 94, 0.08)' : 'rgba(245, 158, 11, 0.08)',
-                      border: `1px solid ${validationReport?.comparison?.isCountMatched ? 'rgba(34, 197, 94, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+                      background: validationReport?.comparison?.isCountMatched ? (isDark ? 'rgba(34, 197, 94, 0.08)' : 'rgba(34, 197, 94, 0.1)') : (isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(245, 158, 11, 0.1)'),
+                      border: `1px solid ${validationReport?.comparison?.isCountMatched ? (isDark ? 'rgba(34, 197, 94, 0.25)' : 'rgba(34, 197, 94, 0.3)') : (isDark ? 'rgba(245, 158, 11, 0.25)' : 'rgba(245, 158, 11, 0.3)')}`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -2333,12 +2396,12 @@ export default function FolderExportModal({
                         <AlertTriangle size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
                       )}
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: validationReport?.comparison?.isCountMatched ? '#4ade80' : '#fbbf24' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: validationReport?.comparison?.isCountMatched ? (isDark ? '#4ade80' : '#15803d') : (isDark ? '#fbbf24' : '#b45309') }}>
                           {validationReport?.comparison?.isCountMatched
                             ? `100% File & Size Verification Passed (${(validationReport?.convertedPlan?.count || previewPlan.totalFiles).toLocaleString()} Files Verified)`
                             : `Validation Notice: ${validationReport?.comparison?.missingFiles?.length || 0} File(s) Cannot Be Converted`}
                         </div>
-                        <div style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.65)', marginTop: '2px' }}>
+                        <div style={{ fontSize: '11.5px', color: t.textSecondary, marginTop: '2px' }}>
                           Original: {formatFileSize(validationReport?.originalMedia?.totalBytes || previewPlan.totalBytes)} ── Converted Target: {formatFileSize(validationReport?.convertedPlan?.totalBytes || previewPlan.totalBytes)} (Exact byte match)
                         </div>
                       </div>
@@ -2350,7 +2413,7 @@ export default function FolderExportModal({
                         padding: '4px 10px',
                         borderRadius: '20px',
                         background: validationReport?.comparison?.isCountMatched ? 'rgba(34, 197, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                        color: validationReport?.comparison?.isCountMatched ? '#4ade80' : '#fbbf24',
+                        color: validationReport?.comparison?.isCountMatched ? (isDark ? '#4ade80' : '#15803d') : (isDark ? '#fbbf24' : '#b45309'),
                         whiteSpace: 'nowrap'
                       }}
                     >
@@ -2363,16 +2426,16 @@ export default function FolderExportModal({
                     style={{
                       padding: '10px 14px',
                       borderRadius: '12px',
-                      background: 'rgba(14, 165, 233, 0.06)',
-                      border: '1px solid rgba(14, 165, 233, 0.18)',
+                      background: isDark ? 'rgba(14, 165, 233, 0.06)' : 'rgba(14, 165, 233, 0.08)',
+                      border: isDark ? '1px solid rgba(14, 165, 233, 0.18)' : '1px solid rgba(14, 165, 233, 0.25)',
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: '10px'
                     }}
                   >
-                    <Info size={16} color="#38bdf8" style={{ marginTop: '2px', flexShrink: 0 }} />
-                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.75)', lineHeight: '1.45', flex: 1 }}>
-                      <strong style={{ color: '#ffffff' }}>Non-Media Files Policy: </strong>
+                    <Info size={16} color={isDark ? '#38bdf8' : '#0284c7'} style={{ marginTop: '2px', flexShrink: 0 }} />
+                    <div style={{ fontSize: '12px', color: t.textSecondary, lineHeight: '1.45', flex: 1 }}>
+                      <strong style={{ color: t.text }}>Non-Media Files Policy: </strong>
                       {validationReport?.nonMediaNotice ||
                         'Only photos and videos are organized into folders. Any non-media files (such as .txt, .pdf, .zip, or system files) remain safely untouched in your original folder and will not be converted or modified.'}
                       {(validationReport?.sourceInfo?.nonMediaFilesCount || 0) > 0 && (
@@ -2383,7 +2446,7 @@ export default function FolderExportModal({
                             marginLeft: '8px',
                             background: 'transparent',
                             border: 'none',
-                            color: '#38bdf8',
+                            color: isDark ? '#38bdf8' : '#0284c7',
                             textDecoration: 'underline',
                             cursor: 'pointer',
                             fontSize: '11.5px',
@@ -2402,13 +2465,13 @@ export default function FolderExportModal({
                       style={{
                         padding: '10px 12px',
                         borderRadius: '12px',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: t.cardBg,
+                        border: `1px solid ${t.cardBorder}`,
                         maxHeight: '140px',
                         overflowY: 'auto'
                       }}
                     >
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.5)', textTransform: 'uppercase', marginBottom: '6px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: t.textTertiary, textTransform: 'uppercase', marginBottom: '6px' }}>
                         Non-Media Files Preserved Untouched in Original Folder
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2422,11 +2485,11 @@ export default function FolderExportModal({
                               fontSize: '11.5px',
                               padding: '4px 8px',
                               borderRadius: '6px',
-                              background: 'rgba(255, 255, 255, 0.02)'
+                              background: t.subtleBg
                             }}
                           >
-                            <span style={{ color: 'rgba(255, 255, 255, 0.8)', fontFamily: 'monospace' }}>{item.filename}</span>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.45)' }}>
+                            <span style={{ color: t.text, fontFamily: 'monospace' }}>{item.filename}</span>
+                            <span style={{ color: t.textSecondary }}>
                               {item.extension} • {formatFileSize(item.size)}
                             </span>
                           </div>
@@ -2441,22 +2504,22 @@ export default function FolderExportModal({
                       style={{
                         padding: '12px',
                         borderRadius: '12px',
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                        background: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.08)',
+                        border: isDark ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(239, 68, 68, 0.3)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '6px'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontWeight: 700, fontSize: '12.5px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: isDark ? '#f87171' : '#dc2626', fontWeight: 700, fontSize: '12.5px' }}>
                         <ShieldAlert size={16} />
                         {validationReport.comparison.missingFiles.length} File(s) Cannot Be Converted:
                       </div>
                       <div style={{ maxHeight: '90px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {validationReport.comparison.missingFiles.map((f: any) => (
-                          <div key={f.id || f.filename} style={{ fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.7)', display: 'flex', justifyContent: 'space-between' }}>
+                          <div key={f.id || f.filename} style={{ fontSize: '11.5px', color: t.textSecondary, display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ fontFamily: 'monospace' }}>{f.filename}</span>
-                            <span style={{ color: '#f87171' }}>{f.reason}</span>
+                            <span style={{ color: isDark ? '#f87171' : '#dc2626' }}>{f.reason}</span>
                           </div>
                         ))}
                       </div>
@@ -2466,9 +2529,9 @@ export default function FolderExportModal({
                   {/* File-by-File Verification Audit Explorer */}
                   <div
                     style={{
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      border: `1px solid ${t.cardBorder}`,
                       borderRadius: '16px',
-                      background: 'rgba(0, 0, 0, 0.25)',
+                      background: t.auditTableBg,
                       padding: '12px',
                       display: 'flex',
                       flexDirection: 'column',
@@ -2476,13 +2539,13 @@ export default function FolderExportModal({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'rgba(255, 255, 255, 0.7)' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: t.textSecondary }}>
                         File-by-File Size & Match Audit
                       </div>
 
                       {/* Filter Search */}
                       <div style={{ position: 'relative', minWidth: '180px' }}>
-                        <Search size={13} style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255, 255, 255, 0.4)' }} />
+                        <Search size={13} style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', color: t.textTertiary }} />
                         <input
                           type="text"
                           value={validationSearch}
@@ -2490,12 +2553,12 @@ export default function FolderExportModal({
                           placeholder="Filter files..."
                           style={{
                             width: '100%',
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            background: t.inputBg,
+                            border: `1px solid ${t.inputBorder}`,
                             borderRadius: '8px',
                             padding: '5px 8px 5px 28px',
                             fontSize: '11.5px',
-                            color: '#ffffff',
+                            color: t.inputText,
                             outline: 'none'
                           }}
                         />
@@ -2508,11 +2571,11 @@ export default function FolderExportModal({
                         display: 'grid',
                         gridTemplateColumns: '2fr 1fr 2.5fr 1fr 1fr',
                         padding: '6px 10px',
-                        background: 'rgba(255, 255, 255, 0.04)',
+                        background: t.subtleBg,
                         borderRadius: '8px',
                         fontSize: '11px',
                         fontWeight: 700,
-                        color: 'rgba(255, 255, 255, 0.5)',
+                        color: t.textTertiary,
                         textTransform: 'uppercase'
                       }}
                     >
@@ -2533,30 +2596,31 @@ export default function FolderExportModal({
                             gridTemplateColumns: '2fr 1fr 2.5fr 1fr 1fr',
                             padding: '6px 10px',
                             borderRadius: '6px',
-                            background: 'rgba(255, 255, 255, 0.02)',
+                            background: t.auditRowBg,
+                            border: !isDark ? `1px solid ${t.cardBorder}` : 'none',
                             fontSize: '11.5px',
                             alignItems: 'center'
                           }}
                         >
-                          <span style={{ color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
+                          <span style={{ color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
                             {audit.filename}
                           </span>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                          <span style={{ color: t.textSecondary }}>
                             {formatFileSize(audit.originalSize)}
                           </span>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ color: t.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {audit.targetRelativePath}
                           </span>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                          <span style={{ color: t.textSecondary }}>
                             {formatFileSize(audit.targetExpectedSize)}
                           </span>
                           <span>
                             {audit.isMatched ? (
-                              <span style={{ color: '#4ade80', fontWeight: 600, fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ color: isDark ? '#4ade80' : '#16a34a', fontWeight: 600, fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Check size={12} /> 1:1 Match
                               </span>
                             ) : (
-                              <span style={{ color: '#f87171', fontWeight: 600, fontSize: '11px' }}>
+                              <span style={{ color: isDark ? '#f87171' : '#dc2626', fontWeight: 600, fontSize: '11px' }}>
                                 {audit.status}
                               </span>
                             )}
@@ -2564,7 +2628,7 @@ export default function FolderExportModal({
                         </div>
                       ))}
                       {filteredAuditList.length > 150 && (
-                        <div style={{ textAlign: 'center', padding: '6px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.4)' }}>
+                        <div style={{ textAlign: 'center', padding: '6px', fontSize: '11px', color: t.textTertiary }}>
                           Showing first 150 of {filteredAuditList.length.toLocaleString()} matching verified files.
                         </div>
                       )}
@@ -2594,10 +2658,10 @@ export default function FolderExportModal({
               </div>
 
               <div>
-                <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 6px 0' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 6px 0', color: t.text }}>
                   Organizing Your Photos...
                 </h3>
-                <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.65)', margin: 0, maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <p style={{ fontSize: '13px', color: t.textSecondary, margin: 0, maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {progress.currentFile || 'Transferring files...'}
                 </p>
               </div>
@@ -2608,7 +2672,7 @@ export default function FolderExportModal({
                   style={{
                     width: '100%',
                     height: '10px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
                     borderRadius: '6px',
                     overflow: 'hidden',
                     marginBottom: '10px'
@@ -2625,7 +2689,7 @@ export default function FolderExportModal({
                   />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: t.textSecondary }}>
                   <span>{progress.completed} of {progress.total} files ({progress.percentage}%)</span>
                   <span>{formatFileSize(progress.bytesTransferred)} of {formatFileSize(progress.totalBytes)}</span>
                 </div>
@@ -2640,9 +2704,9 @@ export default function FolderExportModal({
                   padding: '8px 22px',
                   fontSize: '13px',
                   borderRadius: '10px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#ffffff',
+                  background: t.btnGhostBg,
+                  border: `1px solid ${t.btnGhostBorder}`,
+                  color: t.btnGhostText,
                   cursor: 'pointer'
                 }}
               >
@@ -2670,10 +2734,10 @@ export default function FolderExportModal({
               </div>
 
               <div>
-                <h3 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 6px 0', color: '#ffffff' }}>
+                <h3 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 6px 0', color: t.text }}>
                   All Done!
                 </h3>
-                <p style={{ fontSize: '13.5px', color: 'rgba(255, 255, 255, 0.7)', margin: 0 }}>
+                <p style={{ fontSize: '13.5px', color: t.textSecondary, margin: 0 }}>
                   {result.processedCount} photos and videos were successfully organized.
                 </p>
               </div>
@@ -2686,22 +2750,22 @@ export default function FolderExportModal({
                   gap: '12px',
                   width: '100%',
                   maxWidth: '540px',
-                  background: 'rgba(255, 255, 255, 0.03)',
+                  background: t.cardBg,
                   padding: '16px',
                   borderRadius: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                  border: `1px solid ${t.cardBorder}`
                 }}
               >
                 <div>
-                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', fontWeight: 600 }}>TOTAL FILES</span>
-                  <div style={{ fontSize: '18px', fontWeight: 800, marginTop: '2px' }}>{result.totalFiles}</div>
+                  <span style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600 }}>TOTAL FILES</span>
+                  <div style={{ fontSize: '18px', fontWeight: 800, marginTop: '2px', color: t.text }}>{result.totalFiles}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', fontWeight: 600 }}>ORGANIZED</span>
+                  <span style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600 }}>ORGANIZED</span>
                   <div style={{ fontSize: '18px', fontWeight: 800, color: '#22c55e', marginTop: '2px' }}>{result.processedCount}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', fontWeight: 600 }}>SKIPPED / ERRORS</span>
+                  <span style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600 }}>SKIPPED / ERRORS</span>
                   <div style={{ fontSize: '18px', fontWeight: 800, color: result.failedCount === 0 ? '#22c55e' : '#ef4444', marginTop: '2px' }}>
                     {result.failedCount}
                   </div>
@@ -2709,8 +2773,8 @@ export default function FolderExportModal({
               </div>
 
               {/* Location path */}
-              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', maxWidth: '540px' }}>
-                Saved at: <code>{result.destinationDir}</code>
+              <div style={{ fontSize: '12px', color: t.textSecondary, maxWidth: '540px' }}>
+                Saved at: <code style={{ background: t.codeBg, color: t.text, padding: '2px 6px', borderRadius: '4px' }}>{result.destinationDir}</code>
               </div>
 
               {/* Action Buttons */}
@@ -2727,9 +2791,9 @@ export default function FolderExportModal({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    background: postExportAudit ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-                    border: `1px solid ${postExportAudit ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255, 255, 255, 0.15)'}`,
-                    color: postExportAudit ? '#4ade80' : '#ffffff',
+                    background: postExportAudit ? (isDark ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.12)') : t.btnGhostBg,
+                    border: `1px solid ${postExportAudit ? (isDark ? 'rgba(34, 197, 94, 0.3)' : 'rgba(34, 197, 94, 0.4)') : t.btnGhostBorder}`,
+                    color: postExportAudit ? (isDark ? '#4ade80' : '#15803d') : t.btnGhostText,
                     cursor: isAuditingPostExport ? 'not-allowed' : 'pointer'
                   }}
                 >
@@ -2774,9 +2838,9 @@ export default function FolderExportModal({
                     borderRadius: '12px',
                     fontSize: '13.5px',
                     fontWeight: 600,
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#ffffff',
+                    background: t.btnGhostBg,
+                    border: `1px solid ${t.btnGhostBorder}`,
+                    color: t.btnGhostText,
                     cursor: 'pointer'
                   }}
                 >
@@ -2792,11 +2856,11 @@ export default function FolderExportModal({
           <div
             style={{
               padding: '16px 28px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              borderTop: `1px solid ${t.footerBorder}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: 'rgba(0, 0, 0, 0.2)'
+              background: t.footerBg
             }}
           >
             {step === 1 && (
@@ -2809,7 +2873,7 @@ export default function FolderExportModal({
                     fontWeight: 600,
                     background: 'transparent',
                     border: 'none',
-                    color: 'rgba(255, 255, 255, 0.65)',
+                    color: t.textSecondary,
                     cursor: 'pointer'
                   }}
                 >
@@ -2828,9 +2892,9 @@ export default function FolderExportModal({
                     alignItems: 'center',
                     gap: '8px',
                     background: (!destinationDir && mode === 'copy')
-                      ? 'rgba(255, 255, 255, 0.1)'
+                      ? (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)')
                       : 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)',
-                    color: (!destinationDir && mode === 'copy') ? 'rgba(255, 255, 255, 0.4)' : '#ffffff',
+                    color: (!destinationDir && mode === 'copy') ? (isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.35)') : '#ffffff',
                     border: 'none',
                     cursor: (!destinationDir && mode === 'copy') ? 'not-allowed' : 'pointer',
                     boxShadow: (!destinationDir && mode === 'copy') ? 'none' : '0 4px 14px rgba(14, 165, 233, 0.35)'
@@ -2854,7 +2918,7 @@ export default function FolderExportModal({
                     gap: '6px',
                     background: 'transparent',
                     border: 'none',
-                    color: 'rgba(255, 255, 255, 0.7)',
+                    color: t.textSecondary,
                     cursor: 'pointer'
                   }}
                 >
@@ -2905,7 +2969,7 @@ export default function FolderExportModal({
                     gap: '6px',
                     background: 'transparent',
                     border: 'none',
-                    color: 'rgba(255, 255, 255, 0.7)',
+                    color: t.textSecondary,
                     cursor: 'pointer'
                   }}
                 >
@@ -2930,9 +2994,9 @@ export default function FolderExportModal({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '7px',
-                      background: activePreviewTab === 'validation' ? 'rgba(14, 165, 233, 0.18)' : 'rgba(255, 255, 255, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      color: activePreviewTab === 'validation' ? '#38bdf8' : '#ffffff',
+                      background: activePreviewTab === 'validation' ? (isDark ? 'rgba(14, 165, 233, 0.18)' : '#e0f2fe') : t.btnGhostBg,
+                      border: `1px solid ${activePreviewTab === 'validation' ? (isDark ? 'rgba(14, 165, 233, 0.3)' : 'rgba(14, 165, 233, 0.35)') : t.btnGhostBorder}`,
+                      color: activePreviewTab === 'validation' ? (isDark ? '#38bdf8' : '#0284c7') : t.btnGhostText,
                       cursor: 'pointer'
                     }}
                   >
@@ -2976,10 +3040,12 @@ export default function FolderExportModal({
 
           return (
             <div
+              className="category-review-sheet"
               style={{
                 position: 'absolute',
                 inset: 0,
-                backgroundColor: '#18181b',
+                backgroundColor: t.sheetBg,
+                color: t.text,
                 zIndex: 100,
                 display: 'flex',
                 flexDirection: 'column',
@@ -2993,11 +3059,11 @@ export default function FolderExportModal({
               <div
                 style={{
                   padding: '18px 26px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderBottom: `1px solid ${t.sheetBorder}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  background: 'rgba(255, 255, 255, 0.02)'
+                  background: t.sheetHeaderBg
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -3005,9 +3071,9 @@ export default function FolderExportModal({
                     type="button"
                     onClick={() => setReviewingCategory(null)}
                     style={{
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: '#ffffff',
+                      background: t.btnGhostBg,
+                      border: `1px solid ${t.btnGhostBorder}`,
+                      color: t.btnGhostText,
                       borderRadius: '8px',
                       padding: '6px',
                       display: 'flex',
@@ -3021,7 +3087,7 @@ export default function FolderExportModal({
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {catObj?.icon}
-                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700 }}>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: t.text }}>
                       Review & Confirm: {title}
                     </h3>
                   </div>
@@ -3031,9 +3097,9 @@ export default function FolderExportModal({
                       style={{
                         fontSize: '11px',
                         fontWeight: 700,
-                        color: '#34d399',
-                        background: 'rgba(52, 211, 153, 0.12)',
-                        border: '1px solid rgba(52, 211, 153, 0.3)',
+                        color: isDark ? '#34d399' : '#059669',
+                        background: isDark ? 'rgba(52, 211, 153, 0.12)' : 'rgba(5, 150, 105, 0.12)',
+                        border: isDark ? '1px solid rgba(52, 211, 153, 0.3)' : '1px solid rgba(5, 150, 105, 0.3)',
                         padding: '3px 8px',
                         borderRadius: '6px',
                         display: 'inline-flex',
@@ -3048,9 +3114,9 @@ export default function FolderExportModal({
                       style={{
                         fontSize: '11px',
                         fontWeight: 600,
-                        color: '#fbbf24',
-                        background: 'rgba(245, 158, 11, 0.12)',
-                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        color: isDark ? '#fbbf24' : '#d97706',
+                        background: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.1)',
+                        border: isDark ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(245, 158, 11, 0.35)',
                         padding: '3px 8px',
                         borderRadius: '6px',
                         display: 'inline-flex',
@@ -3069,7 +3135,7 @@ export default function FolderExportModal({
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: 'rgba(255, 255, 255, 0.5)',
+                    color: t.textTertiary,
                     cursor: 'pointer',
                     padding: '4px'
                   }}
@@ -3082,48 +3148,48 @@ export default function FolderExportModal({
               <div
                 style={{
                   padding: '12px 26px',
-                  background: 'rgba(14, 165, 233, 0.08)',
-                  borderBottom: '1px solid rgba(14, 165, 233, 0.15)',
+                  background: isDark ? 'rgba(14, 165, 233, 0.08)' : 'rgba(14, 165, 233, 0.07)',
+                  borderBottom: isDark ? '1px solid rgba(14, 165, 233, 0.15)' : '1px solid rgba(14, 165, 233, 0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px'
                 }}
               >
                 <Info size={18} color="#38bdf8" style={{ flexShrink: 0 }} />
-                <p style={{ margin: 0, fontSize: '12px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4' }}>
+                <p style={{ margin: 0, fontSize: '12px', color: t.textSecondary, lineHeight: '1.4' }}>
                   {reviewingCategory === 'people' && (
                     <>
-                      <strong>Assign names to recognized people</strong> so your photos are organized into personal folders (e.g. <em>Mom</em>, <em>Alex</em>) instead of <em>"Unknown Person"</em>. You can name people below, or keep unnamed people routed safely into regular date albums.
+                      <strong style={{ color: t.text }}>Assign names to recognized people</strong> so your photos are organized into personal folders (e.g. <em style={{ color: t.text }}>Mom</em>, <em style={{ color: t.text }}>Alex</em>) instead of <em style={{ color: t.text }}>"Unknown Person"</em>. You can name people below, or keep unnamed people routed safely into regular date albums.
                     </>
                   )}
                   {reviewingCategory === 'documents' && (
                     <>
-                      <strong>Check detected documents & receipts.</strong> If any family photos or memories were falsely classified as documents, click <em>Exclude</em> so they remain in your main photo collection.
+                      <strong style={{ color: t.text }}>Check detected documents & receipts.</strong> If any family photos or memories were falsely classified as documents, click <em>Exclude</em> so they remain in your main photo collection.
                     </>
                   )}
                   {reviewingCategory === 'places' && (
                     <>
-                      <strong>Review recognized cities & trip locations.</strong> When confirmed, photos taken in these destinations will be sorted into dedicated place folders.
+                      <strong style={{ color: t.text }}>Review recognized cities & trip locations.</strong> When confirmed, photos taken in these destinations will be sorted into dedicated place folders.
                     </>
                   )}
                   {reviewingCategory === 'duplicates' && (
                     <>
-                      <strong>Duplicate photos will be placed in a dedicated Review folder.</strong> Your main library stays clean while ensuring no extra copies are permanently lost.
+                      <strong style={{ color: t.text }}>Duplicate photos will be placed in a dedicated Review folder.</strong> Your main library stays clean while ensuring no extra copies are permanently lost.
                     </>
                   )}
                   {reviewingCategory === 'whatsapp' && (
                     <>
-                      <strong>Review WhatsApp media.</strong> Confirming eligibility permits WhatsApp forwarded clips and photos to be segregated away from your original camera pictures.
+                      <strong style={{ color: t.text }}>Review WhatsApp media.</strong> Confirming eligibility permits WhatsApp forwarded clips and photos to be segregated away from your original camera pictures.
                     </>
                   )}
                   {reviewingCategory === 'videos' && (
                     <>
-                      <strong>Video & Photo Placement Choice:</strong> Choose whether videos should stay together in the same date/trip folders with photos, or be organized into a separate dedicated "Videos" folder.
+                      <strong style={{ color: t.text }}>Video & Photo Placement Choice:</strong> Choose whether videos should stay together in the same date/trip folders with photos, or be organized into a separate dedicated "Videos" folder.
                     </>
                   )}
                   {['social', 'socialMedia', 'screenshots', 'favorites'].includes(reviewingCategory) && (
                     <>
-                      <strong>Review detected items in this category.</strong> Confirm eligibility to create segregated folders for these files during export.
+                      <strong style={{ color: t.text }}>Review detected items in this category.</strong> Confirm eligibility to create segregated folders for these files during export.
                     </>
                   )}
                 </p>
@@ -3151,8 +3217,8 @@ export default function FolderExportModal({
                         justifyContent: 'space-between',
                         padding: '12px 16px',
                         borderRadius: '12px',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: t.cardBg,
+                        border: `1px solid ${t.cardBorder}`,
                         marginBottom: '16px',
                         flexWrap: 'wrap',
                         gap: '10px'
@@ -3165,7 +3231,7 @@ export default function FolderExportModal({
                           onChange={e => setOnlyNamedPeople(e.target.checked)}
                           style={{ accentColor: '#0ea5e9', width: '15px', height: '15px' }}
                         />
-                        <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#ffffff' }}>
+                        <span style={{ fontSize: '12.5px', fontWeight: 600, color: t.text }}>
                           Only create folders for named people (skip "Unknown Person" folders)
                         </span>
                       </label>
@@ -3179,9 +3245,9 @@ export default function FolderExportModal({
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 700,
-                            background: 'rgba(14, 165, 233, 0.15)',
-                            border: '1px solid rgba(14, 165, 233, 0.3)',
-                            color: '#38bdf8',
+                            background: isDark ? 'rgba(14, 165, 233, 0.15)' : 'rgba(14, 165, 233, 0.12)',
+                            border: isDark ? '1px solid rgba(14, 165, 233, 0.3)' : '1px solid rgba(14, 165, 233, 0.35)',
+                            color: isDark ? '#38bdf8' : '#0284c7',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -3198,9 +3264,9 @@ export default function FolderExportModal({
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                            color: 'rgba(255, 255, 255, 0.75)',
+                            background: t.btnGhostBg,
+                            border: `1px solid ${t.btnGhostBorder}`,
+                            color: t.btnGhostText,
                             cursor: 'pointer'
                           }}
                         >
@@ -3210,24 +3276,24 @@ export default function FolderExportModal({
                     </div>
 
                     {/* Notice bar */}
-                    <div style={{ marginBottom: '14px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
+                    <div style={{ marginBottom: '14px', fontSize: '12px', color: t.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
                       <span>
-                        Exporting <strong style={{ color: '#38bdf8' }}>{selectedPersonNames.size}</strong> of <strong style={{ color: '#ffffff' }}>{namedPeopleCount}</strong> people to dedicated folders. Unselected & unnamed people's photos will export as normal photos under Year/Month.
+                        Exporting <strong style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>{selectedPersonNames.size}</strong> of <strong style={{ color: t.text }}>{namedPeopleCount}</strong> people to dedicated folders. Unselected & unnamed people's photos will export as normal photos under Year/Month.
                       </span>
                     </div>
 
                     {isLoadingPeople ? (
-                      <div style={{ textAlign: 'center', padding: '40px 0', color: 'rgba(255, 255, 255, 0.6)' }}>
+                      <div style={{ textAlign: 'center', padding: '40px 0', color: t.textSecondary }}>
                         <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 10px auto' }} />
                         <p style={{ fontSize: '13px' }}>Loading recognized people...</p>
                       </div>
                     ) : peopleProfiles.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: t.textTertiary }}>
                         <Users size={36} style={{ margin: '0 auto 10px auto', opacity: 0.4 }} />
-                        <p style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)' }}>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: t.text }}>
                           No people detected yet
                         </p>
-                        <p style={{ fontSize: '12px' }}>
+                        <p style={{ fontSize: '12px', color: t.textSecondary }}>
                           Click "Scan People" on the main screen to recognize faces in your photos.
                         </p>
                       </div>
@@ -3260,8 +3326,8 @@ export default function FolderExportModal({
                               style={{
                                 padding: '12px 14px',
                                 borderRadius: '14px',
-                                background: isSelected ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
-                                border: isSelected ? '1.5px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.08)',
+                                background: isSelected ? (isDark ? 'rgba(14, 165, 233, 0.1)' : 'rgba(14, 165, 233, 0.08)') : t.cardBg,
+                                border: isSelected ? '1.5px solid #0ea5e9' : `1px solid ${t.cardBorder}`,
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '12px',
@@ -3276,7 +3342,7 @@ export default function FolderExportModal({
                                     width: '20px',
                                     height: '20px',
                                     borderRadius: '6px',
-                                    border: isSelected ? '2px solid #0ea5e9' : '1.5px solid rgba(255, 255, 255, 0.3)',
+                                    border: isSelected ? '2px solid #0ea5e9' : (isDark ? '1.5px solid rgba(255, 255, 255, 0.3)' : '1.5px solid rgba(0, 0, 0, 0.25)'),
                                     background: isSelected ? '#0ea5e9' : 'transparent',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -3292,7 +3358,7 @@ export default function FolderExportModal({
                                     width: '20px',
                                     height: '20px',
                                     borderRadius: '6px',
-                                    border: '1.5px dashed rgba(255, 255, 255, 0.2)',
+                                    border: isDark ? '1.5px dashed rgba(255, 255, 255, 0.2)' : '1.5px dashed rgba(0, 0, 0, 0.2)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -3300,7 +3366,7 @@ export default function FolderExportModal({
                                   }}
                                   title="Name this person to export as a personal folder"
                                 >
-                                  <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.3)' }}>—</span>
+                                  <span style={{ fontSize: '10px', color: t.textTertiary }}>—</span>
                                 </div>
                               )}
 
@@ -3311,9 +3377,9 @@ export default function FolderExportModal({
                                   height: '44px',
                                   borderRadius: '50%',
                                   overflow: 'hidden',
-                                  backgroundColor: '#27272a',
+                                  backgroundColor: t.avatarBg,
                                   flexShrink: 0,
-                                  border: isSelected ? '2px solid #0ea5e9' : '1.5px solid rgba(255, 255, 255, 0.15)',
+                                  border: isSelected ? '2px solid #0ea5e9' : `1.5px solid ${t.cardBorderStrong}`,
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center'
@@ -3357,8 +3423,8 @@ export default function FolderExportModal({
                                         padding: '4px 8px',
                                         borderRadius: '6px',
                                         border: '1.5px solid #0ea5e9',
-                                        background: 'rgba(0, 0, 0, 0.5)',
-                                        color: '#ffffff',
+                                        background: t.inputBg,
+                                        color: t.inputText,
                                         fontSize: '12px',
                                         outline: 'none'
                                       }}
@@ -3387,8 +3453,8 @@ export default function FolderExportModal({
                                           padding: '2px 8px',
                                           borderRadius: '5px',
                                           fontSize: '10.5px',
-                                          background: 'rgba(255, 255, 255, 0.08)',
-                                          color: 'rgba(255, 255, 255, 0.7)',
+                                          background: t.btnGhostBg,
+                                          color: t.btnGhostText,
                                           border: 'none',
                                           cursor: 'pointer'
                                         }}
@@ -3404,7 +3470,7 @@ export default function FolderExportModal({
                                         style={{
                                           fontSize: '13px',
                                           fontWeight: 700,
-                                          color: isUnknown ? 'rgba(255, 255, 255, 0.7)' : '#ffffff',
+                                          color: isUnknown ? t.textSecondary : t.text,
                                           overflow: 'hidden',
                                           textOverflow: 'ellipsis',
                                           whiteSpace: 'nowrap'
@@ -3435,22 +3501,22 @@ export default function FolderExportModal({
                                     </div>
 
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '3px' }}>
-                                      <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                      <span style={{ fontSize: '11px', color: t.textTertiary }}>
                                         {person.photo_count || 0} photos
                                       </span>
                                     </div>
 
                                     <div style={{ marginTop: '4px' }}>
                                       {isUnknown ? (
-                                        <span style={{ fontSize: '10px', color: '#fbbf24', fontWeight: 600 }}>
+                                        <span style={{ fontSize: '10px', color: isDark ? '#fbbf24' : '#d97706', fontWeight: 600 }}>
                                           📁 Route under Year/Month (Unnamed)
                                         </span>
                                       ) : isSelected ? (
-                                        <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 700 }}>
+                                        <span style={{ fontSize: '10px', color: isDark ? '#38bdf8' : '#0284c7', fontWeight: 700 }}>
                                           ✓ Export to People/{person.name}
                                         </span>
                                       ) : (
-                                        <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.45)', fontWeight: 500 }}>
+                                        <span style={{ fontSize: '10px', color: t.textTertiary, fontWeight: 500 }}>
                                           📁 Route under Year/Month (Unselected)
                                         </span>
                                       )}
@@ -3477,15 +3543,15 @@ export default function FolderExportModal({
                         justifyContent: 'space-between',
                         padding: '12px 16px',
                         borderRadius: '12px',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: t.cardBg,
+                        border: `1px solid ${t.cardBorder}`,
                         marginBottom: '16px',
                         flexWrap: 'wrap',
                         gap: '10px'
                       }}
                     >
-                      <div style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.85)' }}>
-                        Select documents to export into <code>Documents</code> folders. Excluded items will export as normal photos under Year/Month.
+                      <div style={{ fontSize: '12.5px', color: t.textSecondary }}>
+                        Select documents to export into <code style={{ background: t.codeBg, color: t.text, padding: '2px 5px', borderRadius: '4px' }}>Documents</code> folders. Excluded items will export as normal photos under Year/Month.
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <button
@@ -3496,9 +3562,9 @@ export default function FolderExportModal({
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 700,
-                            background: 'rgba(14, 165, 233, 0.15)',
-                            border: '1px solid rgba(14, 165, 233, 0.3)',
-                            color: '#38bdf8',
+                            background: isDark ? 'rgba(14, 165, 233, 0.15)' : 'rgba(14, 165, 233, 0.12)',
+                            border: isDark ? '1px solid rgba(14, 165, 233, 0.3)' : '1px solid rgba(14, 165, 233, 0.35)',
+                            color: isDark ? '#38bdf8' : '#0284c7',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -3515,9 +3581,9 @@ export default function FolderExportModal({
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                            color: 'rgba(255, 255, 255, 0.75)',
+                            background: t.btnGhostBg,
+                            border: `1px solid ${t.btnGhostBorder}`,
+                            color: t.btnGhostText,
                             cursor: 'pointer'
                           }}
                         >
@@ -3526,14 +3592,14 @@ export default function FolderExportModal({
                       </div>
                     </div>
 
-                    <div style={{ marginBottom: '14px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', padding: '0 4px' }}>
-                      Exporting <strong style={{ color: '#38bdf8' }}>{categoryReviewItems.length - (excludedFromCategory.documents?.size || 0)}</strong> of <strong style={{ color: '#ffffff' }}>{categoryReviewItems.length}</strong> documents. Excluded items will route safely into regular Year/Month date albums.
+                    <div style={{ marginBottom: '14px', fontSize: '12px', color: t.textSecondary, padding: '0 4px' }}>
+                      Exporting <strong style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>{categoryReviewItems.length - (excludedFromCategory.documents?.size || 0)}</strong> of <strong style={{ color: t.text }}>{categoryReviewItems.length}</strong> documents. Excluded items will route safely into regular Year/Month date albums.
                     </div>
 
                     {categoryReviewItems.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: t.textTertiary }}>
                         <FileText size={36} style={{ margin: '0 auto 10px auto', opacity: 0.4 }} />
-                        <p style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)' }}>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: t.text }}>
                           No documents detected in your loaded photos
                         </p>
                       </div>
@@ -3555,8 +3621,8 @@ export default function FolderExportModal({
                               onClick={() => toggleExcludePhoto('documents', doc.id)}
                               style={{
                                 borderRadius: '12px',
-                                background: isExcluded ? 'rgba(255, 255, 255, 0.02)' : 'rgba(14, 165, 233, 0.08)',
-                                border: isExcluded ? '1px solid rgba(255, 255, 255, 0.08)' : '1.5px solid #0ea5e9',
+                                background: isExcluded ? t.cardBg : (isDark ? 'rgba(14, 165, 233, 0.08)' : 'rgba(14, 165, 233, 0.06)'),
+                                border: isExcluded ? `1px solid ${t.cardBorder}` : '1.5px solid #0ea5e9',
                                 overflow: 'hidden',
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -3564,7 +3630,7 @@ export default function FolderExportModal({
                                 transition: 'all 0.15s ease'
                               }}
                             >
-                              <div style={{ height: '110px', backgroundColor: '#09090b', position: 'relative' }}>
+                              <div style={{ height: '110px', backgroundColor: t.imagePlaceholderBg, position: 'relative' }}>
                                 {thumbUrl ? (
                                   <img
                                     src={thumbUrl}
@@ -3573,7 +3639,7 @@ export default function FolderExportModal({
                                   />
                                 ) : (
                                   <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <FileText size={28} color="rgba(255, 255, 255, 0.3)" />
+                                    <FileText size={28} color={isDark ? 'rgba(255, 255, 255, 0.3)' : '#94a3b8'} />
                                   </div>
                                 )}
                                 <div
@@ -3584,8 +3650,8 @@ export default function FolderExportModal({
                                     width: '18px',
                                     height: '18px',
                                     borderRadius: '5px',
-                                    background: isExcluded ? 'rgba(0,0,0,0.6)' : '#0ea5e9',
-                                    border: isExcluded ? '1.5px solid rgba(255,255,255,0.3)' : '1.5px solid #0ea5e9',
+                                    background: isExcluded ? (isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)') : '#0ea5e9',
+                                    border: isExcluded ? (isDark ? '1.5px solid rgba(255,255,255,0.3)' : '1.5px solid rgba(255,255,255,0.8)') : '1.5px solid #0ea5e9',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center'
@@ -3618,7 +3684,7 @@ export default function FolderExportModal({
                                   style={{
                                     fontSize: '11px',
                                     fontWeight: 600,
-                                    color: '#ffffff',
+                                    color: t.text,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap'
@@ -3633,7 +3699,7 @@ export default function FolderExportModal({
                                     style={{
                                       fontSize: '10px',
                                       fontWeight: 600,
-                                      color: isExcluded ? '#fbbf24' : '#38bdf8',
+                                      color: isExcluded ? (isDark ? '#fbbf24' : '#d97706') : (isDark ? '#38bdf8' : '#0284c7'),
                                       display: 'block'
                                     }}
                                   >
@@ -3660,15 +3726,15 @@ export default function FolderExportModal({
                         justifyContent: 'space-between',
                         padding: '12px 16px',
                         borderRadius: '12px',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: t.cardBg,
+                        border: `1px solid ${t.cardBorder}`,
                         marginBottom: '16px',
                         flexWrap: 'wrap',
                         gap: '10px'
                       }}
                     >
-                      <div style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.85)' }}>
-                        Select which destinations to export into dedicated <code>Places/{'{City}'}</code> folders. Unselected places will export as normal photos under Year/Month.
+                      <div style={{ fontSize: '12.5px', color: t.textSecondary }}>
+                        Select which destinations to export into dedicated <code style={{ background: t.codeBg, color: t.text, padding: '2px 5px', borderRadius: '4px' }}>Places/{'{City}'}</code> folders. Unselected places will export as normal photos under Year/Month.
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <button
@@ -3679,9 +3745,9 @@ export default function FolderExportModal({
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 700,
-                            background: 'rgba(14, 165, 233, 0.15)',
-                            border: '1px solid rgba(14, 165, 233, 0.3)',
-                            color: '#38bdf8',
+                            background: isDark ? 'rgba(14, 165, 233, 0.15)' : 'rgba(14, 165, 233, 0.12)',
+                            border: isDark ? '1px solid rgba(14, 165, 233, 0.3)' : '1px solid rgba(14, 165, 233, 0.35)',
+                            color: isDark ? '#38bdf8' : '#0284c7',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -3698,9 +3764,9 @@ export default function FolderExportModal({
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                            color: 'rgba(255, 255, 255, 0.75)',
+                            background: t.btnGhostBg,
+                            border: `1px solid ${t.btnGhostBorder}`,
+                            color: t.btnGhostText,
                             cursor: 'pointer'
                           }}
                         >
@@ -3709,17 +3775,17 @@ export default function FolderExportModal({
                       </div>
                     </div>
 
-                    <div style={{ marginBottom: '14px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', padding: '0 4px' }}>
-                      Exporting <strong style={{ color: '#38bdf8' }}>{selectedPlaces.size}</strong> of <strong style={{ color: '#ffffff' }}>{reviewPlaceGroups.length}</strong> destinations. Only photos with verified camera EXIF GPS coordinates are eligible for Places folders.
+                    <div style={{ marginBottom: '14px', fontSize: '12px', color: t.textSecondary, padding: '0 4px' }}>
+                      Exporting <strong style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>{selectedPlaces.size}</strong> of <strong style={{ color: t.text }}>{reviewPlaceGroups.length}</strong> destinations. Only photos with verified camera EXIF GPS coordinates are eligible for Places folders.
                     </div>
 
                     {reviewPlaceGroups.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: t.textTertiary }}>
                         <MapPin size={36} style={{ margin: '0 auto 10px auto', opacity: 0.4 }} />
-                        <p style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)' }}>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: t.text }}>
                           No location tags detected in your library
                         </p>
-                        <p style={{ fontSize: '12px' }}>
+                        <p style={{ fontSize: '12px', color: t.textSecondary }}>
                           Click "Scan Places" on the main screen to recognize GPS and city coordinates.
                         </p>
                       </div>
@@ -3742,8 +3808,8 @@ export default function FolderExportModal({
                               style={{
                                 padding: '12px 14px',
                                 borderRadius: '14px',
-                                background: isSelected ? 'rgba(14, 165, 233, 0.1)' : 'rgba(255, 255, 255, 0.02)',
-                                border: isSelected ? '1.5px solid #0ea5e9' : '1px solid rgba(255, 255, 255, 0.08)',
+                                background: isSelected ? (isDark ? 'rgba(14, 165, 233, 0.1)' : 'rgba(14, 165, 233, 0.08)') : t.cardBg,
+                                border: isSelected ? '1.5px solid #0ea5e9' : `1px solid ${t.cardBorder}`,
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '12px',
@@ -3756,7 +3822,7 @@ export default function FolderExportModal({
                                   width: '20px',
                                   height: '20px',
                                   borderRadius: '6px',
-                                  border: isSelected ? '2px solid #0ea5e9' : '1.5px solid rgba(255, 255, 255, 0.3)',
+                                  border: isSelected ? '2px solid #0ea5e9' : (isDark ? '1.5px solid rgba(255, 255, 255, 0.3)' : '1.5px solid rgba(0, 0, 0, 0.25)'),
                                   background: isSelected ? '#0ea5e9' : 'transparent',
                                   display: 'flex',
                                   alignItems: 'center',
@@ -3773,7 +3839,7 @@ export default function FolderExportModal({
                                   height: '44px',
                                   borderRadius: '10px',
                                   overflow: 'hidden',
-                                  backgroundColor: '#27272a',
+                                  backgroundColor: t.imagePlaceholderBg,
                                   flexShrink: 0
                                 }}
                               >
@@ -3791,7 +3857,7 @@ export default function FolderExportModal({
                                     margin: 0,
                                     fontSize: '13px',
                                     fontWeight: 700,
-                                    color: '#ffffff',
+                                    color: t.text,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap'
@@ -3801,17 +3867,17 @@ export default function FolderExportModal({
                                   {group.location}
                                 </h4>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '3px' }}>
-                                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                  <span style={{ fontSize: '11px', color: t.textTertiary }}>
                                     {group.count} photos
                                   </span>
                                 </div>
                                 <div style={{ marginTop: '3px' }}>
                                   {isSelected ? (
-                                    <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 700 }}>
+                                    <span style={{ fontSize: '10px', color: isDark ? '#38bdf8' : '#0284c7', fontWeight: 700 }}>
                                       ✓ Export to Places
                                     </span>
                                   ) : (
-                                    <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.45)', fontWeight: 500 }}>
+                                    <span style={{ fontSize: '10px', color: t.textTertiary, fontWeight: 500 }}>
                                       📁 Route to Year/Month
                                     </span>
                                   )}
@@ -3834,8 +3900,8 @@ export default function FolderExportModal({
                         style={{
                           padding: '16px 18px',
                           borderRadius: '16px',
-                          background: 'rgba(139, 92, 246, 0.08)',
-                          border: '1.5px solid rgba(139, 92, 246, 0.25)',
+                          background: isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(139, 92, 246, 0.06)',
+                          border: isDark ? '1.5px solid rgba(139, 92, 246, 0.25)' : '1.5px solid rgba(139, 92, 246, 0.3)',
                           marginBottom: '16px',
                           display: 'flex',
                           flexDirection: 'column',
@@ -3843,10 +3909,10 @@ export default function FolderExportModal({
                         }}
                       >
                         <div>
-                          <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: '#ffffff' }}>
+                          <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: t.text }}>
                             Where should your videos and photos be organized?
                           </h4>
-                          <p style={{ margin: '3px 0 0 0', fontSize: '11.5px', color: 'rgba(255, 255, 255, 0.65)' }}>
+                          <p style={{ margin: '3px 0 0 0', fontSize: '11.5px', color: t.textSecondary }}>
                             Choose whether videos stay together in the same date/trip folders with your photos, or are moved into a separate dedicated folder.
                           </p>
                         </div>
@@ -3860,8 +3926,8 @@ export default function FolderExportModal({
                             style={{
                               padding: '12px 14px',
                               borderRadius: '12px',
-                              border: keepVideosWithPhotos ? '2px solid #8b5cf6' : '1px solid rgba(255, 255, 255, 0.1)',
-                              background: keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.18)' : 'rgba(255, 255, 255, 0.03)',
+                              border: keepVideosWithPhotos ? '2px solid #8b5cf6' : `1px solid ${t.cardBorder}`,
+                              background: keepVideosWithPhotos ? (isDark ? 'rgba(139, 92, 246, 0.18)' : '#ede9fe') : t.cardBg,
                               cursor: 'pointer',
                               transition: 'all 0.15s ease',
                               display: 'flex',
@@ -3872,14 +3938,14 @@ export default function FolderExportModal({
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span style={{ fontSize: '16px' }}>📸</span>
-                                <strong style={{ fontSize: '12.5px', color: '#ffffff' }}>
+                                <strong style={{ fontSize: '12.5px', color: t.text }}>
                                   Stay Together (Same Folder)
                                 </strong>
                               </div>
-                              {keepVideosWithPhotos && <CheckCircle2 size={15} color="#a78bfa" strokeWidth={2.5} />}
+                              {keepVideosWithPhotos && <CheckCircle2 size={15} color="#8b5cf6" strokeWidth={2.5} />}
                             </div>
-                            <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: '1.3' }}>
-                              Videos & photos stay together in <code>Photos & Videos / Year / Month</code> and trip folders.
+                            <span style={{ fontSize: '11px', color: t.textSecondary, lineHeight: '1.3' }}>
+                              Videos & photos stay together in <code style={{ background: t.codeBg, color: t.text, padding: '1px 4px', borderRadius: '4px' }}>Photos & Videos / Year / Month</code> and trip folders.
                             </span>
                           </div>
 
@@ -3891,8 +3957,8 @@ export default function FolderExportModal({
                             style={{
                               padding: '12px 14px',
                               borderRadius: '12px',
-                              border: !keepVideosWithPhotos ? '2px solid #8b5cf6' : '1px solid rgba(255, 255, 255, 0.1)',
-                              background: !keepVideosWithPhotos ? 'rgba(139, 92, 246, 0.18)' : 'rgba(255, 255, 255, 0.03)',
+                              border: !keepVideosWithPhotos ? '2px solid #8b5cf6' : `1px solid ${t.cardBorder}`,
+                              background: !keepVideosWithPhotos ? (isDark ? 'rgba(139, 92, 246, 0.18)' : '#ede9fe') : t.cardBg,
                               cursor: 'pointer',
                               transition: 'all 0.15s ease',
                               display: 'flex',
@@ -3903,14 +3969,14 @@ export default function FolderExportModal({
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span style={{ fontSize: '16px' }}>🎞️</span>
-                                <strong style={{ fontSize: '12.5px', color: '#ffffff' }}>
+                                <strong style={{ fontSize: '12.5px', color: t.text }}>
                                   Separate "Videos" Folder
                                 </strong>
                               </div>
-                              {!keepVideosWithPhotos && <CheckCircle2 size={15} color="#a78bfa" strokeWidth={2.5} />}
+                              {!keepVideosWithPhotos && <CheckCircle2 size={15} color="#8b5cf6" strokeWidth={2.5} />}
                             </div>
-                            <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.65)', lineHeight: '1.3' }}>
-                              All videos are extracted into a dedicated <code>Videos / Year</code> folder.
+                            <span style={{ fontSize: '11px', color: t.textSecondary, lineHeight: '1.3' }}>
+                              All videos are extracted into a dedicated <code style={{ background: t.codeBg, color: t.text, padding: '1px 4px', borderRadius: '4px' }}>Videos / Year</code> folder.
                             </span>
                           </div>
                         </div>
@@ -3924,14 +3990,14 @@ export default function FolderExportModal({
                         justifyContent: 'space-between',
                         padding: '12px 16px',
                         borderRadius: '12px',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: t.cardBg,
+                        border: `1px solid ${t.cardBorder}`,
                         marginBottom: '16px',
                         flexWrap: 'wrap',
                         gap: '10px'
                       }}
                     >
-                      <div style={{ fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                      <div style={{ fontSize: '12.5px', color: t.textSecondary }}>
                         Select which {title} items to export into dedicated folders. Excluded items will export as regular photos under Year/Month.
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -3943,9 +4009,9 @@ export default function FolderExportModal({
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 700,
-                            background: 'rgba(14, 165, 233, 0.15)',
-                            border: '1px solid rgba(14, 165, 233, 0.3)',
-                            color: '#38bdf8',
+                            background: isDark ? 'rgba(14, 165, 233, 0.15)' : 'rgba(14, 165, 233, 0.12)',
+                            border: isDark ? '1px solid rgba(14, 165, 233, 0.3)' : '1px solid rgba(14, 165, 233, 0.35)',
+                            color: isDark ? '#38bdf8' : '#0284c7',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -3962,9 +4028,9 @@ export default function FolderExportModal({
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                            color: 'rgba(255, 255, 255, 0.75)',
+                            background: t.btnGhostBg,
+                            border: `1px solid ${t.btnGhostBorder}`,
+                            color: t.btnGhostText,
                             cursor: 'pointer'
                           }}
                         >
@@ -3973,22 +4039,22 @@ export default function FolderExportModal({
                       </div>
                     </div>
 
-                    <div style={{ marginBottom: '14px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.65)', padding: '0 4px' }}>
+                    <div style={{ marginBottom: '14px', fontSize: '12px', color: t.textSecondary, padding: '0 4px' }}>
                       {(() => {
                         const catKey = (reviewingCategory === 'social' || reviewingCategory === 'socialMedia') ? 'socialMedia' : reviewingCategory
                         const exCount = excludedFromCategory[catKey]?.size || 0
                         const incCount = Math.max(0, categoryReviewItems.length - exCount)
                         return (
                           <span>
-                            Exporting <strong style={{ color: '#38bdf8' }}>{incCount}</strong> of <strong style={{ color: '#ffffff' }}>{categoryReviewItems.length}</strong> items to {title} folders. Excluded items route safely into regular Year/Month date albums.
+                            Exporting <strong style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>{incCount}</strong> of <strong style={{ color: t.text }}>{categoryReviewItems.length}</strong> items to {title} folders. Excluded items route safely into regular Year/Month date albums.
                           </span>
                         )
                       })()}
                     </div>
 
                     {categoryReviewItems.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                        <p style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)' }}>
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: t.textTertiary }}>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: t.text }}>
                           No items detected for {title}
                         </p>
                       </div>
@@ -4013,15 +4079,15 @@ export default function FolderExportModal({
                                 style={{
                                   borderRadius: '12px',
                                   overflow: 'hidden',
-                                  background: isExcluded ? 'rgba(255, 255, 255, 0.02)' : 'rgba(14, 165, 233, 0.08)',
-                                  border: isExcluded ? '1px solid rgba(255, 255, 255, 0.08)' : '1.5px solid #0ea5e9',
+                                  background: isExcluded ? t.cardBg : (isDark ? 'rgba(14, 165, 233, 0.08)' : 'rgba(14, 165, 233, 0.06)'),
+                                  border: isExcluded ? `1px solid ${t.cardBorder}` : '1.5px solid #0ea5e9',
                                   display: 'flex',
                                   flexDirection: 'column',
                                   cursor: 'pointer',
                                   transition: 'all 0.15s ease'
                                 }}
                               >
-                                <div style={{ height: '95px', backgroundColor: '#09090b', position: 'relative' }}>
+                                <div style={{ height: '95px', backgroundColor: t.imagePlaceholderBg, position: 'relative' }}>
                                   {thumbUrl ? (
                                     <img
                                       src={thumbUrl}
@@ -4030,7 +4096,7 @@ export default function FolderExportModal({
                                     />
                                   ) : (
                                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      <Film size={24} color="rgba(255, 255, 255, 0.3)" />
+                                      <Film size={24} color={isDark ? 'rgba(255, 255, 255, 0.3)' : '#94a3b8'} />
                                     </div>
                                   )}
                                   <div
@@ -4041,8 +4107,8 @@ export default function FolderExportModal({
                                       width: '18px',
                                       height: '18px',
                                       borderRadius: '5px',
-                                      background: isExcluded ? 'rgba(0,0,0,0.6)' : '#0ea5e9',
-                                      border: isExcluded ? '1.5px solid rgba(255,255,255,0.3)' : '1.5px solid #0ea5e9',
+                                      background: isExcluded ? (isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)') : '#0ea5e9',
+                                      border: isExcluded ? (isDark ? '1.5px solid rgba(255,255,255,0.3)' : '1.5px solid rgba(255,255,255,0.8)') : '1.5px solid #0ea5e9',
                                       display: 'flex',
                                       alignItems: 'center',
                                       justifyContent: 'center'
@@ -4055,7 +4121,7 @@ export default function FolderExportModal({
                                   <span
                                     style={{
                                       fontSize: '10.5px',
-                                      color: '#ffffff',
+                                      color: t.text,
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
@@ -4065,7 +4131,7 @@ export default function FolderExportModal({
                                   >
                                     {item.filename}
                                   </span>
-                                  <span style={{ fontSize: '9.5px', color: isExcluded ? '#fbbf24' : '#38bdf8', fontWeight: 600 }}>
+                                  <span style={{ fontSize: '9.5px', color: isExcluded ? (isDark ? '#fbbf24' : '#d97706') : (isDark ? '#38bdf8' : '#0284c7'), fontWeight: 600 }}>
                                     {isExcluded ? '📁 Route under Year/Month' : `✓ In ${title}`}
                                   </span>
                                 </div>
@@ -4083,11 +4149,11 @@ export default function FolderExportModal({
               <div
                 style={{
                   padding: '16px 26px',
-                  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderTop: `1px solid ${t.footerBorder}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  background: 'rgba(0, 0, 0, 0.25)'
+                  background: t.footerBg
                 }}
               >
                 <button
@@ -4098,9 +4164,9 @@ export default function FolderExportModal({
                     borderRadius: '10px',
                     fontSize: '13px',
                     fontWeight: 600,
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#ffffff',
+                    background: t.btnGhostBg,
+                    border: `1px solid ${t.btnGhostBorder}`,
+                    color: t.btnGhostText,
                     cursor: 'pointer'
                   }}
                 >
@@ -4147,10 +4213,11 @@ export default function FolderExportModal({
 
           return (
             <div
+              className="eligibility-gate-modal-overlay"
               style={{
                 position: 'absolute',
                 inset: 0,
-                backgroundColor: 'rgba(0, 0, 0, 0.82)',
+                backgroundColor: t.submodalOverlay,
                 backdropFilter: 'blur(16px)',
                 zIndex: 200,
                 display: 'flex',
@@ -4165,10 +4232,10 @@ export default function FolderExportModal({
                 style={{
                   width: '520px',
                   maxWidth: '100%',
-                  backgroundColor: '#202024',
+                  backgroundColor: t.submodalBg,
                   borderRadius: '20px',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  boxShadow: '0 24px 50px rgba(0, 0, 0, 0.7)',
+                  border: `1px solid ${t.submodalBorder}`,
+                  boxShadow: t.modalShadow,
                   padding: '28px',
                   display: 'flex',
                   flexDirection: 'column',
@@ -4181,8 +4248,8 @@ export default function FolderExportModal({
                       width: '42px',
                       height: '42px',
                       borderRadius: '12px',
-                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.12)',
+                      border: isDark ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(245, 158, 11, 0.35)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -4192,10 +4259,10 @@ export default function FolderExportModal({
                     <AlertTriangle size={22} color="#fbbf24" />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#ffffff' }}>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: t.text }}>
                       Review Categories Before Export
                     </h3>
-                    <p style={{ margin: '3px 0 0 0', fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                    <p style={{ margin: '3px 0 0 0', fontSize: '12.5px', color: t.textSecondary }}>
                       {unconfirmedList.length} selected categor{unconfirmedList.length === 1 ? 'y has' : 'ies have'} not been confirmed yet.
                     </p>
                   </div>
@@ -4205,11 +4272,11 @@ export default function FolderExportModal({
                   style={{
                     padding: '12px 14px',
                     borderRadius: '12px',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    border: '1px solid rgba(255, 255, 255, 0.06)'
+                    background: t.cardBg,
+                    border: `1px solid ${t.cardBorder}`
                   }}
                 >
-                  <p style={{ margin: 0, fontSize: '12.5px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.45' }}>
+                  <p style={{ margin: 0, fontSize: '12.5px', color: t.text, lineHeight: '1.45' }}>
                     Without reviewing, unrecognized items like untagged faces will either create folders named <strong>"Unknown Person"</strong> or be sorted automatically. You can confirm them now, review them one-by-one, or export with confirmed categories only.
                   </p>
 
@@ -4220,9 +4287,9 @@ export default function FolderExportModal({
                         style={{
                           fontSize: '11px',
                           fontWeight: 600,
-                          color: '#fbbf24',
-                          background: 'rgba(245, 158, 11, 0.1)',
-                          border: '1px solid rgba(245, 158, 11, 0.25)',
+                          color: isDark ? '#fbbf24' : '#d97706',
+                          background: isDark ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.08)',
+                          border: isDark ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid rgba(245, 158, 11, 0.3)',
                           padding: '2px 8px',
                           borderRadius: '6px'
                         }}
@@ -4284,9 +4351,9 @@ export default function FolderExportModal({
                       borderRadius: '11px',
                       fontSize: '12.5px',
                       fontWeight: 600,
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      color: '#ffffff',
+                      background: t.btnGhostBg,
+                      border: `1px solid ${t.btnGhostBorder}`,
+                      color: t.btnGhostText,
                       cursor: 'pointer',
                       textAlign: 'center'
                     }}
@@ -4301,7 +4368,7 @@ export default function FolderExportModal({
                       padding: '8px',
                       background: 'transparent',
                       border: 'none',
-                      color: 'rgba(255, 255, 255, 0.5)',
+                      color: t.textTertiary,
                       fontSize: '12px',
                       cursor: 'pointer',
                       textAlign: 'center'

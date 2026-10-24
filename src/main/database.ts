@@ -83,7 +83,7 @@ export async function initDatabase(): Promise<void> {
   if (dbInitPromise) return dbInitPromise
 
   dbInitPromise = (async () => {
-    const dbDir = app.getPath('userData')
+    const dbDir = process.env.PHOTOSORT_USER_DATA || app.getPath('userData')
     if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true })
 
     dbPath = join(dbDir, 'photovault.db')
@@ -334,7 +334,9 @@ function createTables(): void {
   database.run(`
     CREATE TABLE IF NOT EXISTS tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
+      name TEXT NOT NULL UNIQUE,
+      color TEXT DEFAULT '#3b82f6',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `)
 
@@ -354,6 +356,7 @@ function createTables(): void {
       name TEXT NOT NULL,
       cover_photo_id INTEGER,
       cover_face_base64 TEXT,
+      is_favorite INTEGER DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `)
@@ -402,10 +405,17 @@ function createTables(): void {
   // Create indexes (IF NOT EXISTS not supported for indexes in all versions, use try/catch)
   const indexes = [
     'CREATE INDEX IF NOT EXISTS idx_photos_created_at ON photos(created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_photos_trashed_created ON photos(is_trashed, created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_photos_browse ON photos(is_trashed, is_archived, is_locked, created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_photos_timeline ON photos(is_trashed, created_at)',
     'CREATE INDEX IF NOT EXISTS idx_photos_is_favorite ON photos(is_favorite)',
     'CREATE INDEX IF NOT EXISTS idx_photos_is_archived ON photos(is_archived)',
     'CREATE INDEX IF NOT EXISTS idx_photos_is_trashed ON photos(is_trashed)',
     'CREATE INDEX IF NOT EXISTS idx_photos_filename ON photos(filename)',
+    'CREATE INDEX IF NOT EXISTS idx_photos_faces_scanned ON photos(faces_scanned, is_trashed)',
+    'CREATE INDEX IF NOT EXISTS idx_photos_is_document ON photos(is_document, is_trashed)',
+    'CREATE INDEX IF NOT EXISTS idx_photos_blur_score ON photos(blur_score, is_trashed)',
+    'CREATE INDEX IF NOT EXISTS idx_photos_source_folder ON photos(source_folder_path)',
     'CREATE INDEX IF NOT EXISTS idx_album_photos_album ON album_photos(album_id)',
     'CREATE INDEX IF NOT EXISTS idx_album_photos_photo ON album_photos(photo_id)',
     'CREATE INDEX IF NOT EXISTS idx_exif_model ON exif_data(model)',
@@ -417,6 +427,12 @@ function createTables(): void {
   for (const sql of indexes) {
     try { database.run(sql) } catch { }
   }
+
+  // Column migrations
+  try { database.run('ALTER TABLE people ADD COLUMN is_favorite INTEGER DEFAULT 0') } catch { }
+  try { database.run("ALTER TABLE tags ADD COLUMN color TEXT DEFAULT '#3b82f6'") } catch { }
+  try { database.run("ALTER TABLE tags ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP") } catch { }
+  try { database.run("ALTER TABLE photo_tags ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP") } catch { }
 }
 
 export async function rebuildExifData(): Promise<void> {
@@ -662,27 +678,90 @@ export function insertExif(exif: ExifInsert): void {
 }
 
 export function insertPhotoBatch(photos: { photo: PhotoInsert; exif?: ExifInsert }[]): { id: number; filePath: string }[] {
+  if (!photos || photos.length === 0) return []
   const database = getDb()
   const inserted: { id: number; filePath: string }[] = []
 
-  database.run('BEGIN TRANSACTION')
   try {
+    database.run('BEGIN TRANSACTION')
+
+    const findStmt = database.prepare('SELECT id FROM photos WHERE file_path = ?')
+    const updateFolderStmt = database.prepare('UPDATE photos SET source_folder_path = ? WHERE id = ?')
+    const insertPhotoStmt = database.prepare(`
+      INSERT INTO photos (file_path, thumbnail_path, preview_path, filename, mime_type, width, height, file_size, created_at, orientation, source_folder_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    const insertExifStmt = database.prepare(`
+      INSERT OR REPLACE INTO exif_data (photo_id, make, model, iso, f_number, exposure_time, focal_length, gps_lat, gps_lon, date_taken, lens_model)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
     for (const { photo, exif } of photos) {
-      const id = insertPhoto(photo)
+      findStmt.bind([photo.file_path])
+      let existingId = 0
+      if (findStmt.step()) {
+        const obj = findStmt.getAsObject() as any
+        existingId = obj?.id || 0
+      }
+      findStmt.reset()
+
+      if (existingId > 0) {
+        if (photo.source_folder_path) {
+          updateFolderStmt.run([photo.source_folder_path, existingId])
+        }
+        inserted.push({ id: existingId, filePath: photo.file_path })
+        continue
+      }
+
+      insertPhotoStmt.run([
+        photo.file_path,
+        photo.thumbnail_path || null,
+        photo.preview_path || null,
+        photo.filename,
+        photo.mime_type,
+        photo.width || 0,
+        photo.height || 0,
+        photo.file_size || 0,
+        photo.created_at,
+        photo.orientation || 1,
+        photo.source_folder_path || null
+      ])
+
+      const lastIdRes = database.exec('SELECT last_insert_rowid() as id')
+      const id = (lastIdRes[0]?.values[0]?.[0] as number) || 0
       if (id > 0) {
         if (exif) {
-          insertExif({ ...exif, photo_id: id })
+          insertExifStmt.run([
+            id,
+            exif.make || null,
+            exif.model || null,
+            exif.iso || null,
+            exif.f_number || null,
+            exif.exposure_time || null,
+            exif.focal_length || null,
+            exif.gps_lat || null,
+            exif.gps_lon || null,
+            exif.date_taken || null,
+            exif.lens_model || null
+          ])
         }
         inserted.push({ id, filePath: photo.file_path })
       }
     }
+
+    findStmt.free()
+    updateFolderStmt.free()
+    insertPhotoStmt.free()
+    insertExifStmt.free()
+
     database.run('COMMIT')
   } catch (err) {
-    database.run('ROLLBACK')
+    try { database.run('ROLLBACK') } catch {}
     console.error('Batch insert failed:', err)
   }
 
-  saveDatabase()
+  invalidateUtilitiesCache()
+  scheduleSave()
   return inserted
 }
 
@@ -771,6 +850,9 @@ export function getPhotos(filter: PhotoFilter = {}): PhotoRow[] {
   if (filter.search) {
     conditions.push(`(
       p.filename LIKE ? 
+      OR p.description LIKE ? 
+      OR p.location_name LIKE ? 
+      OR p.extracted_text LIKE ? 
       OR e.model LIKE ? 
       OR e.make LIKE ? 
       OR EXISTS (
@@ -780,7 +862,7 @@ export function getPhotos(filter: PhotoFilter = {}): PhotoRow[] {
       )
     )`)
     const searchTerm = `%${filter.search}%`
-    params.push(searchTerm, searchTerm, searchTerm, searchTerm)
+    params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm)
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -839,6 +921,7 @@ export function updatePhotoMetadata(id: number, data: { description?: string; cr
   } else if (data.created_at !== undefined) {
     runSql('UPDATE photos SET created_at = ? WHERE id = ?', [data.created_at, id])
   }
+  saveDatabase()
 }
 
 export function setTrashed(ids: number[], trashed: boolean): void {
@@ -1670,8 +1753,9 @@ export function saveFaceDescriptor(photoId: number, personId: number, descriptor
   addPhotoToPerson(personId, photoId)
 }
 
-export function getUnscannedPhotos(): PhotoRow[] {
-  return queryAll<PhotoRow>('SELECT * FROM photos WHERE faces_scanned = 0 AND is_trashed = 0 ORDER BY created_at DESC')
+export function getUnscannedPhotos(limit?: number): PhotoRow[] {
+  const limitClause = limit && limit > 0 ? `LIMIT ${limit}` : ''
+  return queryAll<PhotoRow>(`SELECT * FROM photos WHERE faces_scanned = 0 AND is_trashed = 0 ORDER BY created_at DESC ${limitClause}`)
 }
 
 export function markPhotoScanned(photoId: number): void {
