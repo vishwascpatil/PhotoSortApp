@@ -18,6 +18,7 @@ app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
 
 export { generateThumbnailBatch, ensureThumbnailDir }
+export { scanDirectory, processFiles } from './importer'
 export { getOrGenerateHighResPreview, prefetchHighResPreviews } from './highres'
 
 let mainWindow: BrowserWindow | null = null

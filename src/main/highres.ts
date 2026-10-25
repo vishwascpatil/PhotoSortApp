@@ -25,14 +25,19 @@ export function isHeicFile(filePath: string): boolean {
   if (!filePath) return false
   const ext = extname(filePath).toLowerCase()
   if (ext === '.heic' || ext === '.heif') return true
+  if (ext === '.jpg' || ext === '.jpeg' || ext === '.png' || ext === '.webp' || ext === '.gif' || ext === '.bmp' || ext === '.dng') return false
+  let fd: number | null = null
   try {
-    const fd = openSync(filePath, 'r')
+    fd = openSync(filePath, 'r')
     const buf = Buffer.alloc(16)
     readSync(fd, buf, 0, 16, 0)
-    closeSync(fd)
     return buf.toString('ascii').includes('ftyp')
   } catch {
     return false
+  } finally {
+    if (fd !== null) {
+      try { closeSync(fd) } catch {}
+    }
   }
 }
 

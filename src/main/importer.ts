@@ -3,6 +3,7 @@ import { join, extname, basename } from 'path'
 import { statSync, existsSync } from 'fs'
 import sharp from 'sharp'
 sharp.cache(false)
+sharp.concurrency(1)
 import exifReader from 'exif-reader'
 import exifr from 'exifr'
 import { PhotoInsert, ExifInsert } from './database'
@@ -76,8 +77,9 @@ export async function processFile(filePath: string): Promise<ImportedFile> {
   let createdAt = fileStat.birthtime.toISOString()
   let exifData: ExifInsert | undefined
   const isVideoOrDoc = isVideoFile(filePath) || isDocFile(filePath)
+  const isHeic = ext === '.heic' || ext === '.heif'
 
-  if (!isVideoOrDoc) {
+  if (!isVideoOrDoc && !isHeic) {
     try {
       const metadata = await sharp(filePath).metadata()
       width = metadata.width || 0

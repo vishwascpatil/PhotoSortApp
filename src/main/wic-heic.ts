@@ -110,7 +110,7 @@ export class WicHeicExtractor {
       if (existsSync(this.exePath)) {
         this.isAvailable = true
         const coreCount = cpus().length
-        this.numWorkers = Math.max(2, Math.min(8, Math.floor(coreCount / 2)))
+        this.numWorkers = Math.min(8, Math.max(4, cpus().length))
         for (let i = 0; i < this.numWorkers; i++) {
           this.spawnWorker()
         }
@@ -242,28 +242,27 @@ export class WicHeicExtractor {
   }
 
   private processQueue(): void {
-    if (this.queue.length === 0) return
+    while (this.queue.length > 0) {
+      const freeSlot = this.workers.find((w) => !w.busy)
+      if (!freeSlot || !freeSlot.proc.stdin) break
 
-    const freeSlot = this.workers.find((w) => !w.busy)
-    if (!freeSlot || !freeSlot.proc.stdin) return
+      const task = this.queue.shift()!
+      freeSlot.busy = true
+      freeSlot.currentTask = task
 
-    const task = this.queue.shift()!
-    freeSlot.busy = true
-    freeSlot.currentTask = task
+      freeSlot.timer = setTimeout(() => {
+        try {
+          freeSlot.proc.kill()
+        } catch {}
+      }, 4000)
 
-    freeSlot.timer = setTimeout(() => {
       try {
-        freeSlot.proc.kill()
-      } catch {}
-    }, 4000)
-
-    try {
-      freeSlot.proc.stdin.write(`${task.inPath}\t${task.outPath}\n`)
-    } catch {
-      freeSlot.busy = false
-      freeSlot.currentTask = null
-      task.resolve({ success: false, thumbnailPath: '' })
-      this.processQueue()
+        freeSlot.proc.stdin.write(`${task.inPath}\t${task.outPath}\n`)
+      } catch {
+        freeSlot.busy = false
+        freeSlot.currentTask = null
+        task.resolve({ success: false, thumbnailPath: '' })
+      }
     }
   }
 

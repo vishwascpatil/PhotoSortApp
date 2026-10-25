@@ -4,6 +4,8 @@ import { cpus } from 'os'
 import { existsSync, mkdirSync, statSync, writeFileSync, readFileSync, openSync, readSync, closeSync } from 'fs'
 import { readFile } from 'fs/promises'
 import sharp from 'sharp'
+sharp.cache(false)
+sharp.concurrency(1)
 import heicConvert from 'heic-convert'
 import { isVideoFile } from './services/duplicate/mediaTypes'
 import { isRawPhotoFile, isCinemaRawFile } from './mediaRegistry'
@@ -25,21 +27,26 @@ const CONCURRENCY = Math.max(16, cpus().length * 2)
 
 try {
   sharp.cache(false)
-  sharp.concurrency(cpus().length)
+  sharp.concurrency(1)
 } catch {}
 
 export function isHeicFileHeader(filePath: string): boolean {
   if (!filePath) return false
   const ext = extname(filePath).toLowerCase()
   if (ext === '.heic' || ext === '.heif') return true
+  if (ext === '.jpg' || ext === '.jpeg' || ext === '.png' || ext === '.webp' || ext === '.gif' || ext === '.bmp' || ext === '.dng') return false
+  let fd: number | null = null
   try {
-    const fd = openSync(filePath, 'r')
+    fd = openSync(filePath, 'r')
     const buf = Buffer.alloc(16)
     readSync(fd, buf, 0, 16, 0)
-    closeSync(fd)
     return buf.toString('ascii').includes('ftyp')
   } catch {
     return false
+  } finally {
+    if (fd !== null) {
+      try { closeSync(fd) } catch {}
+    }
   }
 }
 
@@ -205,7 +212,8 @@ function extractHeicFrameFast(heicPath: string, thumbnailPath: string): Promise<
  */
 export async function extractRawEmbeddedThumbnail(filePath: string, targetPath: string): Promise<boolean> {
   try {
-    const thumbBuf = await exifr.thumbnail(filePath)
+    const fileBuf = await readFile(filePath)
+    const thumbBuf = await exifr.thumbnail(fileBuf)
     if (thumbBuf && thumbBuf.length > 0) {
       await sharp(Buffer.from(thumbBuf))
         .rotate()
@@ -337,12 +345,12 @@ export async function generateThumbnail(
       return { thumbnailPath, previewPath, width: 0, height: 0 }
     }
 
-    // Try heicConvert fallback
+    // Try native WIC hardware extractor first for disguised HEIC files (~250ms vs 11s blocking JS)
     try {
-      const buf = await readFile(filePath)
-      const converted = await heicConvert({ buffer: buf, format: 'JPEG', quality: 0.65 })
-      writeFileSync(thumbnailPath, converted)
-      return { thumbnailPath, previewPath, width: 0, height: 0 }
+      const wicRes = await wicHeicExtractor.extract(filePath, thumbnailPath)
+      if (wicRes.success && existsSync(thumbnailPath) && statSync(thumbnailPath).size > 0) {
+        return { thumbnailPath, previewPath, width: 0, height: 0 }
+      }
     } catch {}
 
     // Final fallback: generate a sleek badge card so thumbnail NEVER fails
@@ -363,22 +371,28 @@ export async function generateThumbnailBatch(
   const total = files.length
   if (total === 0) return
 
-  const photoFiles: { id: number; filePath: string }[] = []
+  const standardPhotoFiles: { id: number; filePath: string }[] = []
+  const heicFiles: { id: number; filePath: string }[] = []
   const videoFiles: { id: number; filePath: string }[] = []
 
   for (const f of files) {
     if (isVideoFile(f.filePath)) {
       videoFiles.push(f)
     } else {
-      photoFiles.push(f)
+      const ext = extname(f.filePath).toLowerCase()
+      if (ext === '.heic' || ext === '.heif') {
+        heicFiles.push(f)
+      } else {
+        standardPhotoFiles.push(f)
+      }
     }
   }
 
-  // Batch process photos with high concurrency and setImmediate yielding
-  const PHOTO_CONCURRENCY = Math.min(24, Math.max(8, cpus().length * 2))
-  for (let i = 0; i < photoFiles.length; i += PHOTO_CONCURRENCY) {
+  // 1. Process standard photos (JPG, PNG) with 6-way Sharp pipeline
+  const PHOTO_CONCURRENCY = Math.max(4, Math.min(6, cpus().length - 1))
+  for (let i = 0; i < standardPhotoFiles.length; i += PHOTO_CONCURRENCY) {
     if (isCancelled && isCancelled()) return
-    const batch = photoFiles.slice(i, i + PHOTO_CONCURRENCY)
+    const batch = standardPhotoFiles.slice(i, i + PHOTO_CONCURRENCY)
     await Promise.allSettled(
       batch.map(async (file) => {
         if (isCancelled && isCancelled()) return
@@ -387,7 +401,6 @@ export async function generateThumbnailBatch(
           completed++
           onProgress?.(completed, total, file.id, result.thumbnailPath, result.previewPath)
         } catch {
-          // Zero-error guarantee: fallback to badge thumbnail so every single photo has a valid thumbnail
           try {
             const hash = getHashName(file.filePath)
             const fallbackPath = join(getUserDataPath(), 'thumbnails', `${hash}.jpg`)
@@ -401,11 +414,40 @@ export async function generateThumbnailBatch(
         }
       })
     )
-    await new Promise(r => setImmediate(r))
+    await new Promise(r => setTimeout(r, 10))
   }
 
-  // Batch process videos with 8-way parallel FFmpeg keyframe extraction
-  const VIDEO_CONCURRENCY = Math.min(8, Math.max(4, cpus().length))
+  // 2. Process HEIC photos with 8-way Native WIC Hardware Extractor
+  const HEIC_CONCURRENCY = Math.min(8, Math.max(4, cpus().length))
+  for (let i = 0; i < heicFiles.length; i += HEIC_CONCURRENCY) {
+    if (isCancelled && isCancelled()) return
+    const batch = heicFiles.slice(i, i + HEIC_CONCURRENCY)
+    await Promise.allSettled(
+      batch.map(async (file) => {
+        if (isCancelled && isCancelled()) return
+        try {
+          const result = await generateThumbnail(file.filePath)
+          completed++
+          onProgress?.(completed, total, file.id, result.thumbnailPath, result.previewPath)
+        } catch {
+          try {
+            const hash = getHashName(file.filePath)
+            const fallbackPath = join(getUserDataPath(), 'thumbnails', `${hash}.jpg`)
+            await generateFormatBadgeThumbnail(file.filePath, fallbackPath)
+            completed++
+            onProgress?.(completed, total, file.id, fallbackPath, fallbackPath)
+          } catch {
+            completed++
+            onProgress?.(completed, total, file.id, '', '')
+          }
+        }
+      })
+    )
+    await new Promise(r => setTimeout(r, 10))
+  }
+
+  // Batch process videos with 16-way parallel FFmpeg keyframe extraction
+  const VIDEO_CONCURRENCY = Math.min(16, Math.max(8, cpus().length * 2))
   for (let i = 0; i < videoFiles.length; i += VIDEO_CONCURRENCY) {
     if (isCancelled && isCancelled()) return
     const batch = videoFiles.slice(i, i + VIDEO_CONCURRENCY)
@@ -431,7 +473,7 @@ export async function generateThumbnailBatch(
         }
       })
     )
-    await new Promise(r => setImmediate(r))
+    await new Promise(r => setTimeout(r, 10))
   }
 }
 
