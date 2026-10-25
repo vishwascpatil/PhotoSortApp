@@ -331,8 +331,7 @@ export async function generateThumbnail(
       .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
         fit: 'cover',
         position: 'centre',
-        fastShrinkOnLoad: true,
-        kernel: 'nearest'
+        fastShrinkOnLoad: true
       })
       .jpeg({ quality: THUMBNAIL_QUALITY, mozjpeg: false })
       .toFile(thumbnailPath)
@@ -388,8 +387,8 @@ export async function generateThumbnailBatch(
     }
   }
 
-  // 1. Process standard photos (JPG, PNG) with 6-way Sharp pipeline
-  const PHOTO_CONCURRENCY = Math.max(4, Math.min(6, cpus().length - 1))
+  // 1. Process standard photos (JPG, PNG) with 16-way Sharp pipeline
+  const PHOTO_CONCURRENCY = Math.min(16, Math.max(8, cpus().length * 2))
   for (let i = 0; i < standardPhotoFiles.length; i += PHOTO_CONCURRENCY) {
     if (isCancelled && isCancelled()) return
     const batch = standardPhotoFiles.slice(i, i + PHOTO_CONCURRENCY)

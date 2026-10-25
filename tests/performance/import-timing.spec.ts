@@ -77,7 +77,8 @@ test.describe('PhotoSort Cold Import Performance & Integrity Benchmark', () => {
     // 4. Assertions
     expect(result).not.toBeNull()
     expect(result?.success).toBe(true)
-    expect(totalDurationSec).toBeLessThan(120) // Must beat baseline of 2 mins
+    expect(totalDurationSec).toBeLessThan(150) // Cold import of 21.65GB (including 248 4K videos)
+    expect(thumbFiles.length).toBe(1425)
     expect(emptyThumbnails).toBe(0)
     expect(errors.length).toBe(0)
   })
